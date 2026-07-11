@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from typing import list
+from typing import List
 import os
 import tempfile
 from src.models.document import Document

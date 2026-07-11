@@ -4,14 +4,16 @@ from contextlib import asynccontextmanager
 from src.config import settings
 from src.utils.logger import logger
 from src.api.middleware import error_handler_middleware
-from src.agents.init_agents import initialize_agents
 from src.api.routes import chat, documents, agents as agents_route, knowledge
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    initialize_agents()
+    # Initialize the ADK orchestrator eagerly
+    from src.adk.runner import get_orchestrator
+    get_orchestrator()
+    logger.info("ADK multi-agent system initialized")
     yield
     logger.info("Shutting down")
 

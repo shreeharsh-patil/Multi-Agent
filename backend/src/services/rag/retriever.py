@@ -1,6 +1,6 @@
 from typing import Optional
 from src.services.rag.embeddings import embedding_service
-from src.services.vector_store.factory import vector_store
+from src.services.vector_store.factory import get_vector_store
 from src.utils.logger import logger
 
 
@@ -20,7 +20,8 @@ class Retriever:
         if user_id:
             filter_dict = {"user_id": user_id}
 
-        results = await vector_store.search(
+        vs = get_vector_store()
+        results = await vs.search(
             collection=self.collection,
             query_embedding=query_embedding,
             top_k=top_k,
@@ -54,7 +55,8 @@ class Retriever:
             for c in chunks
         ]
 
-        await vector_store.store_embeddings(
+        vs = get_vector_store()
+        await vs.store_embeddings(
             collection=self.collection,
             ids=ids,
             embeddings=embeddings,

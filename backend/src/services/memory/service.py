@@ -2,7 +2,7 @@ from typing import Optional
 from datetime import datetime
 from src.models.memory import MemoryItem
 from src.services.rag.embeddings import embedding_service
-from src.services.vector_store.factory import vector_store
+from src.services.vector_store.factory import get_vector_store
 from src.utils.logger import logger
 
 
@@ -31,7 +31,8 @@ class MemoryService:
 
         await memory.insert()
 
-        await vector_store.store_embeddings(
+        vs = get_vector_store()
+        await vs.store_embeddings(
             collection=self.collection,
             ids=[str(memory.id)],
             embeddings=[embedding],
@@ -54,7 +55,8 @@ class MemoryService:
     ) -> list[dict]:
         query_embedding = await embedding_service.embed_text(query)
 
-        results = await vector_store.search(
+        vs = get_vector_store()
+        results = await vs.search(
             collection=self.collection,
             query_embedding=query_embedding,
             top_k=top_k,
@@ -78,7 +80,8 @@ class MemoryService:
         memory = await MemoryItem.get(memory_id)
         if memory:
             await memory.delete()
-            await vector_store.delete(self.collection, [memory_id])
+            vs = get_vector_store()
+            await vs.delete(self.collection, [memory_id])
             return True
         return False
 

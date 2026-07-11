@@ -1,16 +1,28 @@
-from google import genai
+from typing import Optional
 from src.config import settings
 from src.utils.logger import logger
 
 
 class EmbeddingService:
     def __init__(self):
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = None
         self.model = settings.embedding_model
-        logger.info(f"Embedding service initialized with model: {self.model}")
+
+    def _get_client(self):
+        if self._client is None:
+            if not settings.gemini_api_key:
+                raise ValueError(
+                    "GEMINI_API_KEY not configured. "
+                    "Set it in .env or environment variables."
+                )
+            from google import genai
+            self._client = genai.Client(api_key=settings.gemini_api_key)
+            logger.info(f"Embedding service initialized with model: {self.model}")
+        return self._client
 
     async def embed_text(self, text: str) -> list[float]:
-        result = self.client.models.embed_content(
+        client = self._get_client()
+        result = client.models.embed_content(
             model=self.model,
             contents=text,
         )
