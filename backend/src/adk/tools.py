@@ -4,6 +4,7 @@ Each tool wraps a service call as a Google ADK FunctionTool
 so agents can invoke them via function calling.
 """
 
+import json
 from google.adk.tools import FunctionTool
 from src.utils.logger import logger
 
@@ -36,7 +37,6 @@ async def knowledge_search(query: str, user_id: str = "default") -> str:
                     "score": round(doc.get("score", 0), 4),
                 }
             )
-        import json
         return json.dumps(results, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Knowledge search tool error: {e}")
@@ -115,7 +115,6 @@ async def web_search(query: str) -> str:
     Returns:
         Search result summary
     """
-    import json
 
     try:
         import httpx

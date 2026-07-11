@@ -87,7 +87,16 @@ export default function DocumentsPage() {
     try {
       const res = await api.drive.listFiles(accessToken)
       if (res.success && res.data) {
-        const docs = res.data.files.filter((f) => !f.isFolder)
+        const supportedMimes = [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'text/plain',
+          'text/markdown',
+        ]
+        const docs = res.data.files.filter(
+          (f) => !f.isFolder && supportedMimes.includes(f.mimeType),
+        )
         let imported = 0
         for (const doc of docs) {
           const downloadRes = await fetch(

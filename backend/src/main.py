@@ -6,7 +6,7 @@ from beanie import init_beanie
 from src.config import settings
 from src.utils.logger import logger
 from src.api.middleware import error_handler_middleware
-from src.api.routes import chat, documents, agents as agents_route, knowledge, drive
+from src.api.routes import chat, documents, agents as agents_route, knowledge, drive_api, drive, notes
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
         from src.models.conversation import Conversation, Message
         from src.models.memory import MemoryItem
         from src.models.agent import AgentConfig, AgentTask, ActivityLog
+        from src.models.note import Note
 
         await init_beanie(
             database=mongo_client[settings.mongodb_db_name],
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
                 AgentConfig,
                 AgentTask,
                 ActivityLog,
+                Note,
             ],
         )
         logger.info("Beanie models initialized")
@@ -79,7 +81,9 @@ app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(agents_route.router)
 app.include_router(knowledge.router)
+app.include_router(drive_api.router)
 app.include_router(drive.router)
+app.include_router(notes.router)
 
 
 @app.get("/api/health")

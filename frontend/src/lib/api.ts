@@ -83,6 +83,31 @@ export const api = {
     },
   },
 
+  notes: {
+    list: (userId?: string) =>
+      fetchApi<Array<{ id: string; title: string; preview: string; tags: string[]; createdAt: string; updatedAt: string }>>(
+        `/api/notes${userId ? `?user_id=${userId}` : ''}`,
+      ),
+    get: (id: string) =>
+      fetchApi<{ id: string; title: string; content: string; tags: string[]; sourceDocumentId?: string; createdAt: string; updatedAt: string }>(
+        `/api/notes/${id}`,
+      ),
+    create: (data: { title: string; content: string; tags?: string[]; user_id?: string }) =>
+      fetchApi<{ id: string; title: string; content: string; tags: string[] }>(
+        '/api/notes',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+    update: (id: string, data: { title?: string; content?: string; tags?: string[] }) =>
+      fetchApi<{ id: string; title: string; content: string; tags: string[] }>(
+        `/api/notes/${id}`,
+        { method: 'PUT', body: JSON.stringify(data) },
+      ),
+    delete: (id: string) =>
+      fetchApi<{ success: boolean }>(`/api/notes/${id}`, { method: 'DELETE' }),
+    exportUrl: (id: string, format: 'pdf' | 'docx' | 'markdown') =>
+      `${BACKEND_URL}/api/notes/${id}/export?format=${format}`,
+  },
+
   agents: {
     list: () =>
       fetchApi<Array<{ id: string; name: string; description: string }>>('/api/agents'),

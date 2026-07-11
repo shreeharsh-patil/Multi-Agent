@@ -1,14 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signIn } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
 import {
-  DriveFolder,
+  Folder,
   File,
   FileText,
   Image,
@@ -21,7 +19,6 @@ import {
   Loader2,
   LogIn,
   HardDrive,
-  FolderPlus,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
@@ -150,7 +147,7 @@ export default function DrivePage() {
                 Sign in with Google to access, upload, and manage your Drive files
                 directly from this platform.
               </p>
-              <Button size="lg" className="gap-3" onClick={() => window.location.href = '/api/auth/signin/google'}>
+              <Button size="lg" className="gap-3" onClick={() => signIn('google', { callbackUrl: '/drive' })}>
                 <LogIn className="h-5 w-5" />
                 Sign in with Google
               </Button>
@@ -235,7 +232,7 @@ export default function DrivePage() {
                 >
                   <div className="p-2 rounded-lg bg-secondary shrink-0">
                     {file.isFolder ? (
-                      <DriveFolder className="h-5 w-5 text-amber-500" />
+                      <Folder className="h-5 w-5 text-amber-500" />
                     ) : file.mimeType.startsWith('image/') ? (
                       <Image className="h-5 w-5 text-purple-500" />
                     ) : file.mimeType.includes('spreadsheet') || file.mimeType.includes('csv') ? (
