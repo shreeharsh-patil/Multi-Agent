@@ -166,20 +166,132 @@ async def web_search(query: str) -> str:
         return f"Web search encountered an error: {e}. Please try again later."
 
 
+import json
+
+
+async def find_user_access_token(user_id: str) -> str:
+    """Retrieve the user's Google Drive access token from the database."""
+    from src.models.user import User
+
+    user = await User.find_one(User.email == user_id)
+    if user and user.access_token:
+        return user.access_token
+
+    # Also try by matching user_id to _id or other fields
+    user = await User.get(user_id)
+    if user and hasattr(user, 'access_token') and user.access_token:
+        return user.access_token
+
+    return ""
+
+
 async def drive_list(user_id: str = "default") -> str:
-    """List Google Drive files.
+    """List Google Drive files for the authenticated user.
 
     Args:
-        user_id: The user ID
+        user_id: The user ID or email
 
     Returns:
-        List of Drive files
+        JSON string of files in Drive
     """
-    return (
-        "Google Drive integration is configured. "
-        "To access files, the user needs to authenticate with Google OAuth. "
-        "Please ask the user to connect their Google Drive in Settings."
-    )
+    from src.services.drive.service import drive_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return (
+                "You need to connect Google Drive first. "
+                "Please ask the user to go to Settings > Integrations > Google Drive "
+                "and sign in with Google to grant Drive access."
+            )
+
+        files = await drive_service.list_files(access_token=access_token)
+        if not files:
+            return "Your Google Drive is empty. You can upload files to get started."
+
+        results = []
+        for f in files:
+            results.append({
+                "id": f.get("id"),
+                "name": f.get("name"),
+                "type": "folder" if f.get("mimeType") == "application/vnd.google-apps.folder" else "file",
+                "size": int(f.get("size", 0)),
+                "modified": f.get("modifiedTime"),
+            })
+
+        return json.dumps(results, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Drive list tool error: {e}")
+        return f"Failed to list Drive files: {e}"
+
+
+async def drive_upload(user_id: str, file_name: str, file_content: str) -> str:
+    """Upload content as a file to Google Drive.
+
+    Args:
+        user_id: The user identifier
+        file_name: The name for the file in Drive
+        file_content: Text content to upload
+
+    Returns:
+        Confirmation message with file details
+    """
+    import tempfile
+    from src.services.drive.service import drive_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return "Please connect Google Drive first from Settings."
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write(file_content)
+            tmp_path = f.name
+
+        try:
+            result = await drive_service.upload_file(
+                access_token=access_token,
+                file_path=tmp_path,
+                file_name=file_name,
+                mime_type="text/plain",
+            )
+            return json.dumps({
+                "success": True,
+                "file_id": result.get("id"),
+                "file_name": result.get("name"),
+                "web_link": result.get("webViewLink"),
+            }, indent=2)
+        finally:
+            import os
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    except Exception as e:
+        logger.error(f"Drive upload tool error: {e}")
+        return f"Failed to upload to Drive: {e}"
+
+
+async def drive_delete(user_id: str, file_id: str) -> str:
+    """Delete a file from Google Drive.
+
+    Args:
+        user_id: The user identifier
+        file_id: The ID of the file to delete
+
+    Returns:
+        Confirmation message
+    """
+    from src.services.drive.service import drive_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return "Please connect Google Drive first from Settings."
+
+        await drive_service.delete_file(access_token=access_token, file_id=file_id)
+        return json.dumps({"success": True, "message": f"File {file_id} deleted from Drive"})
+    except Exception as e:
+        logger.error(f"Drive delete tool error: {e}")
+        return f"Failed to delete Drive file: {e}"
 
 
 # Export all tools as FunctionTool instances for ADK agents
@@ -189,3 +301,5 @@ memory_search_tool = FunctionTool(func=memory_search)
 calculator_tool = FunctionTool(func=calculator)
 web_search_tool = FunctionTool(func=web_search)
 drive_list_tool = FunctionTool(func=drive_list)
+drive_upload_tool = FunctionTool(func=drive_upload)
+drive_delete_tool = FunctionTool(func=drive_delete)

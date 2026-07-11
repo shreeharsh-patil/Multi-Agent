@@ -49,6 +49,40 @@ export const api = {
       fetchApi<null>(`/api/documents/${id}`, { method: 'DELETE' }),
   },
 
+  drive: {
+    listFiles: (accessToken: string) =>
+      fetchApi<{ files: Array<{ id: string; name: string; mimeType: string; size: number; modifiedTime: string; webViewLink: string; isFolder: boolean }>; total: number }>(
+        `/api/drive/files?access_token=${encodeURIComponent(accessToken)}`,
+      ),
+    uploadToDrive: (file: File, accessToken: string, folderId?: string) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const params = new URLSearchParams({ access_token: accessToken })
+      if (folderId) params.append('folder_id', folderId)
+      return fetchApi<{ id: string; name: string }>(
+        `/api/drive/upload?${params.toString()}`,
+        { method: 'POST', body: formData },
+      )
+    },
+    deleteFile: (fileId: string, accessToken: string) =>
+      fetchApi<{ success: boolean }>(
+        `/api/drive/files/${fileId}?access_token=${encodeURIComponent(accessToken)}`,
+        { method: 'DELETE' },
+      ),
+    getStorage: (accessToken: string) =>
+      fetchApi<{ limit: number; usage: number; usageInDrive: number; usageInDriveTrash: number }>(
+        `/api/drive/storage?access_token=${encodeURIComponent(accessToken)}`,
+      ),
+    createFolder: (name: string, accessToken: string, parentId?: string) => {
+      const params = new URLSearchParams({ name, access_token: accessToken })
+      if (parentId) params.append('parent_id', parentId)
+      return fetchApi<{ id: string; name: string }>(
+        `/api/drive/folders?${params.toString()}`,
+        { method: 'POST' },
+      )
+    },
+  },
+
   agents: {
     list: () =>
       fetchApi<Array<{ id: string; name: string; description: string }>>('/api/agents'),

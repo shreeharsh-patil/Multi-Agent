@@ -6,12 +6,20 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
     }),
   ],
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token
+        token.refreshToken = account.refresh_token
       }
       return token
     },
@@ -19,7 +27,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         ;(session.user as { id: string }).id = token.sub!
       }
-      ;(session as { accessToken?: string }).accessToken = token.accessToken as string
+      ;(session as unknown as Record<string, unknown>).accessToken = token.accessToken
       return session
     },
   },

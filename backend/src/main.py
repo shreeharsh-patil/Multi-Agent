@@ -6,7 +6,7 @@ from beanie import init_beanie
 from src.config import settings
 from src.utils.logger import logger
 from src.api.middleware import error_handler_middleware
-from src.api.routes import chat, documents, agents as agents_route, knowledge
+from src.api.routes import chat, documents, agents as agents_route, knowledge, drive
 
 
 @asynccontextmanager
@@ -79,6 +79,7 @@ app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(agents_route.router)
 app.include_router(knowledge.router)
+app.include_router(drive.router)
 
 
 @app.get("/api/health")

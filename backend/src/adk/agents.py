@@ -19,6 +19,8 @@ from src.adk.tools import (
     calculator_tool,
     web_search_tool,
     drive_list_tool,
+    drive_upload_tool,
+    drive_delete_tool,
 )
 
 MODEL = settings.gemini_model
@@ -47,10 +49,17 @@ def create_drive_agent() -> LlmAgent:
         model=MODEL,
         instruction=(
             "You are the Drive Agent. You help users manage their Google Drive files. "
-            "You can list files, explain folder structures, and help with Drive organization. "
-            "Guide users on how to upload, download, and sync files."
+            "You have the following capabilities:\n"
+            "1. drive_list - List files in the user's Google Drive\n"
+            "2. drive_upload - Upload text content as a file to Drive\n"
+            "3. drive_delete - Delete a file from Drive\n\n"
+            "To list files: call drive_list with the user's email/ID.\n"
+            "To upload: call drive_upload with the user's ID, file name, and content.\n"
+            "To delete: call drive_delete with the user's ID and file ID.\n\n"
+            "If the user hasn't connected their Google Drive, guide them to "
+            "Settings > Google Drive to sign in and grant access."
         ),
-        tools=[drive_list_tool],
+        tools=[drive_list_tool, drive_upload_tool, drive_delete_tool],
         description="Manages Google Drive files, uploads, downloads, and folder organization.",
     )
 

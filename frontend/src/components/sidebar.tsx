@@ -14,6 +14,7 @@ import {
   StickyNote,
   Search,
   Calendar,
+  HardDrive,
   Settings,
   Sparkles,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Chat', href: '/chat', icon: MessageSquare },
   { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'Drive', href: '/drive', icon: HardDrive },
   { name: 'Notes', href: '/notes', icon: StickyNote },
   { name: 'Research', href: '/research', icon: Search },
   { name: 'Planner', href: '/planner', icon: Calendar },

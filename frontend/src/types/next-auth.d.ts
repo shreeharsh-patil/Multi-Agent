@@ -13,6 +13,7 @@ declare module 'next-auth' {
 
   interface Token {
     accessToken?: string
+    refreshToken?: string
     sub?: string
   }
 }
@@ -20,6 +21,7 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     accessToken?: string
+    refreshToken?: string
     sub?: string
   }
 }

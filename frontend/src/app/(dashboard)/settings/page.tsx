@@ -1,14 +1,19 @@
 'use client'
 
+import { useSession, signIn } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { User, Bell, Palette, Key, Globe, Database } from 'lucide-react'
+import { User, Bell, Palette, Key, Globe, Database, HardDrive, CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
+  const accessToken = (session as any)?.accessToken
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -30,13 +35,77 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" defaultValue="User" />
+              <Input id="name" defaultValue={session?.user?.name || 'User'} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" defaultValue="user@example.com" />
+              <Input id="email" type="email" defaultValue={session?.user?.email || 'user@example.com'} />
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              Signed in with Google
             </div>
             <Button>Save Changes</Button>
+          </CardContent>
+        </Card>
+
+        {/* Google Drive Integration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HardDrive className="h-5 w-5" />
+              Google Drive
+            </CardTitle>
+            <CardDescription>Connect and manage your Google Drive</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
+              <HardDrive className="h-8 w-8 text-green-500" />
+              <div className="flex-1">
+                <p className="font-medium">Google Drive</p>
+                <p className="text-sm text-muted-foreground">
+                  {accessToken
+                    ? 'Connected — you can access your Drive files'
+                    : 'Sign in to access, upload, and manage Drive files'}
+                </p>
+              </div>
+              <Badge variant={accessToken ? 'default' : 'secondary'}>
+                {accessToken ? (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Connected
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <XCircle className="h-3 w-3" />
+                    Disconnected
+                  </span>
+                )}
+              </Badge>
+            </div>
+            {!accessToken ? (
+              <Button
+                variant="default"
+                className="w-full gap-2"
+                onClick={() => signIn('google', { callbackUrl: '/drive' })}
+              >
+                <HardDrive className="h-4 w-4" />
+                Connect Google Drive
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  You have Drive access through your Google authentication.
+                  Visit the Drive page to manage your files.
+                </p>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 gap-2" onClick={() => window.location.href = '/drive'}>
+                    <ExternalLink className="h-4 w-4" />
+                    Open Drive
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

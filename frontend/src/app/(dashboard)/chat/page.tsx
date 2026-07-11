@@ -186,7 +186,7 @@ export default function ChatPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Chat</h1>
             <p className="text-muted-foreground mt-1">
-              Upload PDFs and chat with your AI agents
+              Upload documents, images, and chat with your AI agents
             </p>
           </div>
           <Select value={selectedAgent} onValueChange={setSelectedAgent}>
@@ -209,7 +209,7 @@ export default function ChatPage() {
               <div className="text-center text-muted-foreground">
                 <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p className="text-lg font-medium">Start a conversation</p>
-                <p className="text-sm">Upload a PDF and ask questions about it</p>
+                <p className="text-sm">Upload documents or images and ask questions</p>
               </div>
             </div>
           ) : (
@@ -234,7 +234,7 @@ export default function ChatPage() {
                         <div className="flex flex-wrap gap-2 mb-2">
                           {msg.attachments.map((att, i) => (
                             <Badge key={i} variant="secondary" className="gap-1 text-xs">
-                              <FileText className="h-3 w-3" />
+                              {isImageExt(att.name) ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
                               {att.name} ({formatBytes(att.size)})
                             </Badge>
                           ))}
@@ -267,20 +267,29 @@ export default function ChatPage() {
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {attachments.map((att) => (
-                  <Badge
+                  <div
                     key={att.id}
-                    variant={att.status === 'error' ? 'destructive' : 'secondary'}
-                    className="gap-1 pr-1"
+                    className={`flex items-center gap-2 rounded-md border px-2 py-1 text-xs ${
+                      att.status === 'error' ? 'border-destructive' : ''
+                    }`}
                   >
-                    <FileText className="h-3 w-3" />
-                    {att.file.name}
-                    {att.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                    {att.previewUrl ? (
+                      <img
+                        src={att.previewUrl}
+                        alt={att.file.name}
+                        className="h-8 w-8 rounded object-cover"
+                      />
+                    ) : (
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className="max-w-[120px] truncate">{att.file.name}</span>
+                    {att.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
                     {att.status === 'pending' && (
-                      <button onClick={() => removeAttachment(att.id)} className="ml-1">
-                        <X className="h-3 w-3" />
+                      <button onClick={() => removeAttachment(att.id)} className="shrink-0">
+                        <X className="h-3 w-3 hover:text-destructive" />
                       </button>
                     )}
-                  </Badge>
+                  </div>
                 ))}
               </div>
             )}
@@ -302,7 +311,7 @@ export default function ChatPage() {
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Input
-                placeholder="Ask about your documents..."
+                placeholder="Ask about your documents or images..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -332,7 +341,7 @@ export default function ChatPage() {
               onClick={() => fileInputRef.current?.click()}
             >
               <Paperclip className="h-4 w-4" />
-              Upload PDF
+              Upload Files
             </Button>
           </div>
         </Card>
@@ -362,7 +371,7 @@ export default function ChatPage() {
         <Card className="p-4">
           <h3 className="font-semibold mb-2 text-sm">Supported Formats</h3>
           <p className="text-xs text-muted-foreground">
-            PDF · DOCX · PPTX · TXT · MD
+            PDF · DOCX · PPTX · TXT · MD · PNG · JPG · WEBP
           </p>
         </Card>
       </div>
