@@ -105,8 +105,9 @@ async def delete_document(document_id: str) -> dict:
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    from src.services.vector_store.factory import vector_store
-    await vector_store.delete("documents", [document_id])
+    from src.services.vector_store.factory import get_vector_store
+    vs = get_vector_store()
+    await vs.delete("documents", [document_id])
 
     await doc.delete()
     return {"success": True, "message": "Document deleted"}
