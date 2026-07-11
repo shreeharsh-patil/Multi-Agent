@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { Search, Globe, FileText, Loader2, Sparkles, ExternalLink } from 'lucide-react'
+import { Search, Globe, FileText, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 
@@ -21,20 +21,40 @@ export default function ResearchPage() {
   const [query, setQuery] = useState('')
   const [researching, setResearching] = useState(false)
   const [reports, setReports] = useState<Report[]>([])
-  const [currentReport, setCurrentReport] = useState<string>('')
+  const [currentReport, setCurrentReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const resultsRef = useRef<HTMLDivElement>(null)
+
+  // Fetch existing reports from backend on mount
+  const fetchReports = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await api.research.list()
+      if (res.success && res.data) {
+        setReports(res.data)
+      }
+    } catch {
+      // Silently fail — user sees empty state
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchReports()
+  }, [fetchReports])
 
   useEffect(() => {
     if (resultsRef.current) {
       resultsRef.current.scrollTop = resultsRef.current.scrollHeight
     }
-  }, [currentReport])
+  }, [currentReport?.content])
 
   const handleResearch = async () => {
     if (!query.trim() || researching) return
     setResearching(true)
-    setCurrentReport('')
+    setCurrentReport(null)
     setError(null)
 
     try {
@@ -53,16 +73,23 @@ Make this comprehensive and well-structured.`,
 
       if (res.success && res.data) {
         const content = res.data.output
-        setCurrentReport(content)
-        setReports((prev) => [
-          {
+
+        // Persist to backend
+        const createRes = await api.research.create({ query, content })
+        if (createRes.success && createRes.data) {
+          setCurrentReport(createRes.data)
+          setReports((prev) => [createRes.data!, ...prev])
+        } else {
+          // Save locally even if persistence fails
+          const localReport: Report = {
             id: crypto.randomUUID(),
             query,
             content,
             createdAt: new Date().toISOString(),
-          },
-          ...prev,
-        ])
+          }
+          setCurrentReport(localReport)
+          setReports((prev) => [localReport, ...prev])
+        }
       } else {
         setError(res.error || 'Research failed')
       }
@@ -70,6 +97,22 @@ Make this comprehensive and well-structured.`,
       setError('Failed to complete research. Ensure the backend is running.')
     } finally {
       setResearching(false)
+      setQuery('')
+    }
+  }
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!window.confirm('Delete this report?')) return
+
+    try {
+      await api.research.delete(id)
+      setReports((prev) => prev.filter((r) => r.id !== id))
+      if (currentReport?.id === id) {
+        setCurrentReport(null)
+      }
+    } catch {
+      setError('Failed to delete report')
     }
   }
 
@@ -132,57 +175,76 @@ Make this comprehensive and well-structured.`,
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Research Report: {reports[0]?.query}
+              Research Report: {currentReport.query}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea ref={resultsRef} className="max-h-[600px]">
               <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                {currentReport}
+                {currentReport.content}
               </div>
             </ScrollArea>
           </CardContent>
         </Card>
       )}
 
-      {!currentReport && !researching && reports.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5" />
-              Previous Reports
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {reports.map((report) => (
-                <div
-                  key={report.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer"
-                  onClick={() => setCurrentReport(report.content)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{report.query}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDate(report.createdAt)}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0">Report</Badge>
+      {!currentReport && !researching && (
+        <>
+          {loading ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
+                <p className="font-medium">Loading reports...</p>
+              </CardContent>
+            </Card>
+          ) : reports.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <FileText className="h-5 w-5" />
+                  Previous Reports
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {reports.map((report) => (
+                    <div
+                      key={report.id}
+                      className="group flex items-center justify-between p-3 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer"
+                      onClick={() => setCurrentReport(report)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{report.query}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatDate(report.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="secondary">Report</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => handleDelete(report.id, e)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!currentReport && !researching && reports.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-lg font-medium">No research reports yet</p>
-            <p className="text-sm mt-1">Enter a topic above and click Research to generate a report</p>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p className="text-lg font-medium">No research reports yet</p>
+                <p className="text-sm mt-1">Enter a topic above and click Research to generate a report</p>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
     </div>
   )

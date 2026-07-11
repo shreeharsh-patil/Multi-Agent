@@ -79,17 +79,76 @@ export default function ChatPage() {
   }, [])
 
   const [conversationId, setConversationId] = useState<string>()
+  const [conversations, setConversations] = useState<Array<{
+    id: string
+    title: string
+    agentId?: string
+    messageCount: number
+    lastMessage: string
+    updatedAt: string
+  }>>([])
+  const [loadingConversations, setLoadingConversations] = useState(true)
+  const [chatTitle, setChatTitle] = useState('')
+
+  // Fetch conversations list
+  const fetchConversations = useCallback(async () => {
+    setLoadingConversations(true)
+    try {
+      const res = await api.chat.listConversations()
+      if (res.success && res.data) {
+        setConversations(res.data)
+      }
+    } catch (e) {
+      // Silently fail
+    } finally {
+      setLoadingConversations(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchConversations()
+  }, [fetchConversations])
+
+  // Load a conversation's messages
+  const loadConversation = useCallback(async (id: string) => {
+    try {
+      const res = await api.chat.getConversation(id)
+      if (res.success && res.data) {
+        setConversationId(res.data.id)
+        setChatTitle(res.data.title)
+        setMessages(res.data.messages.map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          agentId: m.agentId,
+        })))
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }, [])
+
+  // Start a new conversation
+  const startNewConversation = useCallback(() => {
+    setConversationId(undefined)
+    setChatTitle('')
+    setMessages([])
+  }, [])
 
   const handleSend = useCallback(async () => {
     if ((!input.trim() && attachments.length === 0) || sending) return
 
+    const text = input.trim()
+    const attachmentCount = attachments.length
+    const currentConvId = conversationId
+    const currentAgent = selectedAgent === 'auto' ? undefined : selectedAgent as AgentId
+
     setSending(true)
 
-    const text = input.trim()
     const userMsg = {
       id: crypto.randomUUID(),
       role: 'user' as const,
-      content: text || `Uploaded ${attachments.length} file(s)`,
+      content: text || `Uploaded ${attachmentCount} file(s)`,
       attachments: attachments.map((a) => ({ name: a.file.name, size: a.file.size })),
     }
     setMessages((prev) => [...prev, userMsg])
@@ -106,27 +165,35 @@ export default function ChatPage() {
     const assistantId = crypto.randomUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }])
 
+    // Try SSE streaming first, fall back to non-streaming
+    let streamingAttempted = false
+
     try {
-      const streamUrl = api.chat.streamUrl({
-        message: text || `Uploaded ${attachments.length} file(s)`,
-        conversation_id: conversationId,
-        agent_id: selectedAgent === 'auto' ? undefined : selectedAgent as AgentId,
+      const streamResponse = await api.chat.stream({
+        message: text || `Uploaded ${attachmentCount} file(s)`,
+        conversation_id: currentConvId,
+        agent_id: currentAgent,
       })
 
-      const response = await fetch(streamUrl)
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+      if (!streamResponse.ok) {
+        throw new Error(`HTTP ${streamResponse.status}`)
       }
 
-      const reader = response.body?.getReader()
+      const contentType = streamResponse.headers.get('content-type') || ''
+      if (!contentType.includes('text/event-stream')) {
+        throw new Error('Not an SSE stream')
+      }
+
+      streamingAttempted = true
+
+      const reader = streamResponse.body?.getReader()
       if (!reader) throw new Error('No reader available')
 
       const decoder = new TextDecoder()
       let buffer = ''
       let accumulatedContent = ''
-      let receivedConversationId = conversationId
+      let newConvId = currentConvId
 
-      // Read the SSE stream
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -135,7 +202,7 @@ export default function ChatPage() {
 
         // Parse SSE messages from buffer
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
+        buffer = lines.pop() || ''
 
         let currentEvent = ''
         for (const line of lines) {
@@ -148,7 +215,6 @@ export default function ChatPage() {
 
               if (currentEvent === 'chunk' && data.text) {
                 accumulatedContent += data.text
-                // Update the assistant message incrementally
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -165,9 +231,8 @@ export default function ChatPage() {
                   ),
                 )
               } else if (currentEvent === 'complete' && data.conversation_id) {
-                receivedConversationId = data.conversation_id
+                newConvId = data.conversation_id
                 setConversationId(data.conversation_id)
-                // Final update with full content
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -191,7 +256,7 @@ export default function ChatPage() {
         }
       }
 
-      // Final update with accumulated content if complete event wasn't processed
+      // Final safety update
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
@@ -199,18 +264,63 @@ export default function ChatPage() {
             : msg,
         ),
       )
+      if (newConvId && newConvId !== currentConvId) {
+        setConversationId(newConvId)
+      }
     } catch (err) {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantId
-            ? { ...msg, content: 'Network error. Ensure the backend is running on port 8000.' }
-            : msg,
-        ),
-      )
+      if (!streamingAttempted) {
+        // Fall back to non-streaming API
+        try {
+          const res = await api.chat.send({
+            message: text || `Uploaded ${attachmentCount} file(s)`,
+            conversation_id: currentConvId,
+            agent_id: currentAgent,
+          })
+          if (res.success && res.data) {
+            setConversationId(res.data.conversation_id)
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? {
+                      ...msg,
+                      content: res.data!.output,
+                      agentId: res.data!.agent_traces?.[0]?.agent_id,
+                    }
+                  : msg,
+              ),
+            )
+          } else {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: res.error || 'Request failed' }
+                  : msg,
+              ),
+            )
+          }
+        } catch (fallbackErr) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? { ...msg, content: 'Network error. Ensure the backend is running on port 8000.' }
+                : msg,
+            ),
+          )
+        }
+      } else {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? { ...msg, content: 'Connection interrupted during streaming.' }
+              : msg,
+          ),
+        )
+      }
     } finally {
       setSending(false)
+      fetchConversations()
     }
-  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent])
+  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, fetchConversations])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -392,26 +502,84 @@ export default function ChatPage() {
 
       <div className="hidden lg:block w-80 space-y-4">
         <Card className="p-4">
-          <h3 className="font-semibold flex items-center gap-2 mb-3">
-            <MessageSquare className="h-4 w-4" />
-            Quick Actions
-          </h3>
-          <div className="space-y-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Conversations
+            </h3>
             <Button
               variant="outline"
-              className="w-full justify-start gap-2 text-sm"
               size="sm"
-              onClick={() => fileInputRef.current?.click()}
+              className="h-7 text-xs gap-1"
+              onClick={startNewConversation}
             >
-              <Paperclip className="h-4 w-4" />
-              Upload Files
+              <MessageSquare className="h-3 w-3" />
+              New
             </Button>
           </div>
+
+          {loadingConversations ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-xs">No conversations yet</p>
+              <p className="text-xs mt-1">Start chatting to see them here</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-[calc(100vh-320px)] -mx-1">
+              <div className="space-y-1 px-1">
+                {conversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className={`group flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition-colors ${
+                      conv.id === conversationId
+                        ? 'bg-primary/10 text-primary'
+                        : 'hover:bg-secondary'
+                    }`}
+                    onClick={() => loadConversation(conv.id)}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium">{conv.title}</p>
+                      {conv.lastMessage && (
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {conv.lastMessage}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (window.confirm('Delete this conversation?')) {
+                          api.chat.deleteConversation(conv.id).then(() => {
+                            fetchConversations()
+                            if (conversationId === conv.id) {
+                              startNewConversation()
+                            }
+                          })
+                        }
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
         </Card>
 
         <Card className="p-4">
-          <h3 className="font-semibold mb-3">Suggestions</h3>
-          <div className="space-y-2">
+          <h3 className="font-semibold mb-3 text-xs uppercase tracking-wider text-muted-foreground">
+            Suggestions
+          </h3>
+          <div className="space-y-1">
             {[
               'Summarize this document',
               'What are the key findings?',
@@ -422,7 +590,7 @@ export default function ChatPage() {
               <Button
                 key={suggestion}
                 variant="ghost"
-                className="w-full justify-start text-sm h-auto py-2"
+                className="w-full justify-start text-xs h-auto py-1.5 font-normal"
                 onClick={() => setInput(suggestion)}
               >
                 {suggestion}
@@ -432,8 +600,10 @@ export default function ChatPage() {
         </Card>
 
         <Card className="p-4">
-          <h3 className="font-semibold mb-2 text-sm">Supported Formats</h3>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="font-semibold mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+            Supported Formats
+          </h3>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
             PDF · DOCX · PPTX · TXT · MD · PNG · JPG · WEBP
           </p>
         </Card>

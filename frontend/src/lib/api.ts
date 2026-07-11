@@ -38,6 +38,27 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
+    listConversations: (userId?: string) =>
+      fetchApi<Array<{
+        id: string
+        title: string
+        agentId?: string
+        messageCount: number
+        lastMessage: string
+        createdAt: string
+        updatedAt: string
+      }>>(`/api/chat/conversations${userId ? `?user_id=${userId}` : ''}`),
+    getConversation: (id: string) =>
+      fetchApi<{
+        id: string
+        title: string
+        agentId?: string
+        messages: Array<{ id: string; role: string; content: string; agentId?: string }>
+        createdAt: string
+        updatedAt: string
+      }>(`/api/chat/conversations/${id}`),
+    deleteConversation: (id: string) =>
+      fetchApi<{ success: boolean }>(`/api/chat/conversations/${id}`, { method: 'DELETE' }),
   },
 
   documents: {
@@ -124,6 +145,42 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ query, user_id: userId, document_ids: documentIds }),
       }),
+  },
+
+  research: {
+    list: (userId?: string) =>
+      fetchApi<Array<{ id: string; query: string; content: string; createdAt: string }>>(
+        `/api/research${userId ? `?user_id=${userId}` : ''}`,
+      ),
+    get: (id: string) =>
+      fetchApi<{ id: string; query: string; content: string; createdAt: string }>(
+        `/api/research/${id}`,
+      ),
+    create: (data: { query: string; content: string; user_id?: string }) =>
+      fetchApi<{ id: string; query: string; content: string; createdAt: string }>(
+        '/api/research',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+    delete: (id: string) =>
+      fetchApi<{ success: boolean }>(`/api/research/${id}`, { method: 'DELETE' }),
+  },
+
+  planner: {
+    list: (userId?: string) =>
+      fetchApi<Array<{ id: string; title: string; content: string; createdAt: string }>>(
+        `/api/planner${userId ? `?user_id=${userId}` : ''}`,
+      ),
+    get: (id: string) =>
+      fetchApi<{ id: string; title: string; content: string; createdAt: string }>(
+        `/api/planner/${id}`,
+      ),
+    create: (data: { title: string; content: string; user_id?: string }) =>
+      fetchApi<{ id: string; title: string; content: string; createdAt: string }>(
+        '/api/planner',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+    delete: (id: string) =>
+      fetchApi<{ success: boolean }>(`/api/planner/${id}`, { method: 'DELETE' }),
   },
 
   agents: {
