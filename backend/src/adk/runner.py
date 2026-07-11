@@ -6,6 +6,7 @@ the multi-agent orchestrator via FastAPI endpoints.
 
 from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import types
 from src.adk.agents import create_orchestrator_agent
 from src.utils.logger import logger
 
@@ -13,9 +14,9 @@ SESSION_SERVICE = InMemorySessionService()
 APP_NAME = "multi-agent-platform"
 
 
-def get_or_create_session(user_id: str, conversation_id: str):
+async def get_or_create_session(user_id: str, conversation_id: str):
     """Get an existing session or create a new one."""
-    session = SESSION_SERVICE.get_session(
+    session = await SESSION_SERVICE.get_session(
         app_name=APP_NAME,
         user_id=user_id,
         session_id=conversation_id,
@@ -30,6 +31,15 @@ def get_or_create_session(user_id: str, conversation_id: str):
     return session
 
 
+def _to_content(message: str) -> types.Content:
+    """Wrap a plain text string into a google.genai.types.Content object.
+
+    The ADK Runner.run_async() expects new_message to be a Content
+    object with a .role attribute, not a raw string.
+    """
+    return types.Content(role="user", parts=[types.Part(text=message)])
+
+
 _orchestrator = None
 
 
@@ -41,9 +51,9 @@ def get_orchestrator():
     return _orchestrator
 
 
-def create_runner(user_id: str, conversation_id: str) -> Runner:
+async def create_runner(user_id: str, conversation_id: str) -> Runner:
     """Create an ADK Runner bound to a user session."""
-    get_or_create_session(user_id, conversation_id)
+    await get_or_create_session(user_id, conversation_id)
     return Runner(
         agent=get_orchestrator(),
         app_name=APP_NAME,
@@ -62,12 +72,13 @@ async def process_message(
     Returns the final response with agent trace information.
     """
     runner = create_runner(user_id, conversation_id)
+    content = _to_content(message)
 
     events = []
     async for event in runner.run_async(
         session_id=conversation_id,
         user_id=user_id,
-        new_message=message,
+        new_message=content,
     ):
         events.append(event)
 
@@ -118,6 +129,7 @@ async def process_message_stream(
     Yields dicts with 'event' and 'data' fields for SSE serialization.
     """
     runner = create_runner(user_id, conversation_id)
+    content = _to_content(message)
 
     accumulated_content = ""
     current_agent = "unknown"
@@ -127,7 +139,7 @@ async def process_message_stream(
     async for event in runner.run_async(
         session_id=conversation_id,
         user_id=user_id,
-        new_message=message,
+        new_message=content,
     ):
         event_type = type(event).__name__
         agent_id = event.node_name if hasattr(event, 'node_name') else "unknown"

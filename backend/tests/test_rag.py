@@ -2,7 +2,7 @@ import pytest
 import tempfile
 import os
 from src.services.rag.parser import document_parser
-from src.services.rag.chunker import text_chunker
+from src.services.rag.chunker import text_chunker, TextChunker
 
 
 class TestDocumentParser:
@@ -36,9 +36,6 @@ class TestDocumentParser:
 
 class TestTextChunker:
     def test_small_text_stays_as_one_chunk(self):
-        result = document_parser._parse_text.__wrapped__ if hasattr(document_parser._parse_text, "__wrapped__") else None
-        parser_result = document_parser._parse_text.__func__(document_parser, "test.txt") if hasattr(document_parser._parse_text, "__func__") else None
-
         class MockParseResult:
             def __init__(self):
                 self.text = "Short text"

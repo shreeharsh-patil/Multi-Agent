@@ -8,13 +8,13 @@ class AgentRouter:
         self.routing_rules = [
             (r"(?i)\b(summarize|summarise|summary|extract|what is|explain|tell me about|find|search)\b.*\b(document|pdf|file|knowledge|upload|note|article|paper)\b", "knowledge"),
             (r"(?i)\b(drive|google drive|upload|download|sync|folder|file)\b.*\b(document|file|folder|upload|download)\b", "drive"),
-            (r"(?i)\b(note|notes|flashcard|revision|study note|anki)\b", "notes"),
+            (r"(?i)\b(note|notes|flashcards?|revision|study note|anki)\b", "notes"),
             (r"(?i)\b(quiz|mcq|multiple choice|exam|practice question|test)\b", "quiz"),
             (r"(?i)\b(plan|schedule|deadline|task|todo|remind|calendar)\b", "planner"),
-            (r"(?i)\b(research|search internet|web search|find online|report on|investigate)\b", "research"),
+            (r"(?i)\b(research|search\s+(the\s+)?internet|web\s+search|find\s+online|report\s+on|investigate)\b", "research"),
             (r"(?i)\b(write code|code|program|debug|function|class|algorithm|implement)\b", "coding"),
             (r"(?i)\b(remember|memory|recall|what did i|my name|my preference)\b", "memory"),
-            (r"(?i)\b(calculate|math|calendar|gmail|email|api|integration)\b", "tool"),
+            (r"(?i)\b(calculate|math|calculator|gmail|email|api|integration)\b", "tool"),
         ]
 
     def route(self, user_input: str) -> Optional[str]:

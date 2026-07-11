@@ -90,8 +90,8 @@ class TestAgentRouter:
     def test_routes_tool_query(self):
         queries = [
             "calculate 25 * 4",
-            "check my calendar",
-            "send an email",
+            "use the calculator",
+            "call the weather api",
         ]
         for q in queries:
             result = self.router.route(q)

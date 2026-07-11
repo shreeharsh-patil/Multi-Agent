@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
         from src.models.user import User
         from src.models.document import Document, DocumentChunk
-        from src.models.conversation import Conversation, Message
+        from src.models.conversation import Conversation
         from src.models.memory import MemoryItem
         from src.models.agent import AgentConfig, AgentTask, ActivityLog
         from src.models.note import Note
@@ -36,7 +36,6 @@ async def lifespan(app: FastAPI):
                 Document,
                 DocumentChunk,
                 Conversation,
-                Message,
                 MemoryItem,
                 AgentConfig,
                 AgentTask,
@@ -48,7 +47,7 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Beanie models initialized")
     except Exception as e:
-        logger.error(f"MongoDB initialization failed: {e}")
+        logger.exception(f"MongoDB initialization failed")
         logger.warning("App will start without database — some features will be unavailable")
 
     # --- Initialize custom agents (fallback) ---
