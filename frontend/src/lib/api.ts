@@ -32,6 +32,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    stream: (data: ChatRequest) =>
+      fetch(`${BACKEND_URL}/api/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
   },
 
   documents: {
@@ -108,8 +114,20 @@ export const api = {
       `${BACKEND_URL}/api/notes/${id}/export?format=${format}`,
   },
 
+  knowledge: {
+    query: (query: string, userId?: string, documentIds?: string[]) =>
+      fetchApi<{
+        results: Array<{ id: string; content: string; metadata: Record<string, unknown>; score: number }>
+        citations: Array<{ file_name: string; page_number?: number; section?: string; text: string }>
+        answer: string
+      }>('/api/knowledge/query', {
+        method: 'POST',
+        body: JSON.stringify({ query, user_id: userId, document_ids: documentIds }),
+      }),
+  },
+
   agents: {
     list: () =>
-      fetchApi<Array<{ id: string; name: string; description: string }>>('/api/agents'),
+      fetchApi<Array<{ id: string; name: string; description: string; icon: string }>>('/api/agents'),
   },
 }

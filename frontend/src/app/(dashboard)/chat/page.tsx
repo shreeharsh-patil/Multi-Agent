@@ -85,57 +85,120 @@ export default function ChatPage() {
 
     setSending(true)
 
+    const text = input.trim()
     const userMsg = {
       id: crypto.randomUUID(),
       role: 'user' as const,
-      content: input.trim() || `Uploaded ${attachments.length} file(s)`,
+      content: text || `Uploaded ${attachments.length} file(s)`,
       attachments: attachments.map((a) => ({ name: a.file.name, size: a.file.size })),
     }
     setMessages((prev) => [...prev, userMsg])
-    const text = input.trim()
     setInput('')
-    setAttachments([])
 
     // Upload attachments if any
     for (const att of attachments) {
       const updated = await uploadAttachment(att)
       setAttachments((prev) => prev.map((a) => a.id === att.id ? updated : a))
     }
+    setAttachments([])
 
-    // Add placeholder assistant message
+    // Add placeholder assistant message (will be updated incrementally via SSE)
     const assistantId = crypto.randomUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }])
 
-    // Call the backend chat API
     try {
-      const res = await api.chat.send({
+      const streamUrl = api.chat.streamUrl({
         message: text || `Uploaded ${attachments.length} file(s)`,
         conversation_id: conversationId,
         agent_id: selectedAgent === 'auto' ? undefined : selectedAgent as AgentId,
       })
 
-      if (res.success && res.data) {
-        setConversationId(res.data.conversation_id)
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantId
-              ? {
-                  ...msg,
-                  content: res.data!.output,
-                  agentId: res.data!.agent_traces?.[0]?.agent_id,
-                }
-              : msg,
-          ),
-        )
-      } else {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantId
-              ? { ...msg, content: res.error || 'Request failed' }
-              : msg,
-          ),
-        )
+      const response = await fetch(streamUrl)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No reader available')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let accumulatedContent = ''
+      let receivedConversationId = conversationId
+
+      // Read the SSE stream
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse SSE messages from buffer
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        let currentEvent = ''
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim()
+          } else if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6)
+            try {
+              const data = JSON.parse(dataStr)
+
+              if (currentEvent === 'chunk' && data.text) {
+                accumulatedContent += data.text
+                // Update the assistant message incrementally
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, content: accumulatedContent }
+                      : msg,
+                  ),
+                )
+              } else if (currentEvent === 'agent' && data.agent_id) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, agentId: data.agent_id }
+                      : msg,
+                  ),
+                )
+              } else if (currentEvent === 'complete' && data.conversation_id) {
+                receivedConversationId = data.conversation_id
+                setConversationId(data.conversation_id)
+                // Final update with full content
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, content: data.output || accumulatedContent }
+                      : msg,
+                  ),
+                )
+              } else if (currentEvent === 'error' && data.error) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, content: `Error: ${data.error}` }
+                      : msg,
+                  ),
+                )
+              }
+            } catch (e) {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+
+      // Final update with accumulated content if complete event wasn't processed
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId
+            ? { ...msg, content: accumulatedContent || msg.content }
+            : msg,
+        ),
+      )
     } catch (err) {
       setMessages((prev) =>
         prev.map((msg) =>

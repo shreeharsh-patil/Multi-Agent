@@ -106,3 +106,77 @@ async def process_message(
         "agent_traces": agent_traces,
         "events_count": len(events),
     }
+
+
+async def process_message_stream(
+    message: str,
+    user_id: str = "default",
+    conversation_id: str = "default",
+):
+    """Process a user message and yield SSE events as the ADK runner produces them.
+
+    Yields dicts with 'event' and 'data' fields for SSE serialization.
+    """
+    runner = create_runner(user_id, conversation_id)
+
+    accumulated_content = ""
+    current_agent = "unknown"
+
+    yield {"event": "start", "data": {"conversation_id": conversation_id}}
+
+    async for event in runner.run_async(
+        session_id=conversation_id,
+        user_id=user_id,
+        new_message=message,
+    ):
+        event_type = type(event).__name__
+        agent_id = event.node_name if hasattr(event, 'node_name') else "unknown"
+
+        content_piece = ""
+        if hasattr(event, 'content') and event.content:
+            content_piece = str(event.content)
+        elif hasattr(event, 'message') and event.message:
+            content_piece = str(event.message)
+
+        # Accumulate content
+        if content_piece:
+            accumulated_content += content_piece
+
+        # Yield agent switch events
+        if agent_id != current_agent:
+            current_agent = agent_id
+            yield {"event": "agent", "data": {"agent_id": agent_id}}
+
+        # Yield content chunk
+        if content_piece:
+            yield {"event": "chunk", "data": {"text": content_piece}}
+
+        # Yield trace
+        yield {
+            "event": "trace",
+            "data": {
+                "agent_id": agent_id,
+                "event_type": event_type,
+                "has_content": bool(content_piece),
+            },
+        }
+
+        # If this is the final response, yield the completion event
+        if hasattr(event, 'is_final_response') and event.is_final_response():
+            yield {
+                "event": "complete",
+                "data": {
+                    "output": accumulated_content,
+                    "conversation_id": conversation_id,
+                },
+            }
+            return
+
+    # Fallback: yield complete if no final event was found
+    yield {
+        "event": "complete",
+        "data": {
+            "output": accumulated_content,
+            "conversation_id": conversation_id,
+        },
+    }
