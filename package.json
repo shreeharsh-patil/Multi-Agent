@@ -1,0 +1,18 @@
+{
+  "name": "multi-agent-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-Agent AI Platform with Google ADK orchestration",
+  "scripts": {
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "lint": "npm run lint --workspace=frontend",
+    "test": "npm run test --workspace=frontend",
+    "backend:dev": "cd backend && uvicorn src.main:app --reload",
+    "backend:install": "cd backend && pip install -r requirements.txt"
+  },
+  "workspaces": [
+    "frontend",
+    "shared"
+  ]
+}

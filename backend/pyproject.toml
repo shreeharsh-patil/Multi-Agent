@@ -1,0 +1,24 @@
+[project]
+name = "multi-agent-platform-backend"
+version = "0.1.0"
+description = "Multi-Agent AI Platform Backend with Google ADK"
+requires-python = ">=3.11"
+authors = [
+    { name = "Multi-Agent Platform" },
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "google-adk>=0.1.0",
+    "google-genai>=1.0.0",
+    "motor>=3.6.0",
+    "beanie>=1.28.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
