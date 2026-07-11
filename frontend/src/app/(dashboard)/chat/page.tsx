@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, X, Loader2 } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2 } from 'lucide-react'
+import type { AgentId } from '@shared/types'
 
 const agents = [
   { id: 'auto', name: 'Auto (Orchestrator)' },
@@ -31,12 +32,17 @@ const agents = [
   { id: 'tool', name: 'Tool Agent' },
 ]
 
+const isImage = (file: File) => file.type.startsWith('image/')
+
 interface Attachment {
   id: string
   file: File
   status: 'pending' | 'uploading' | 'done' | 'error'
   documentId?: string
+  previewUrl?: string
 }
+
+const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Array<{
@@ -47,7 +53,7 @@ export default function ChatPage() {
     attachments?: Array<{ name: string; size: number }>
   }>>([])
   const [input, setInput] = useState('')
-  const [selectedAgent, setSelectedAgent] = useState('auto')
+  const [selectedAgent, setSelectedAgent] = useState<string>('auto')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -72,6 +78,8 @@ export default function ChatPage() {
     }
   }, [])
 
+  const [conversationId, setConversationId] = useState<string>()
+
   const handleSend = useCallback(async () => {
     if ((!input.trim() && attachments.length === 0) || sending) return
 
@@ -84,21 +92,62 @@ export default function ChatPage() {
       attachments: attachments.map((a) => ({ name: a.file.name, size: a.file.size })),
     }
     setMessages((prev) => [...prev, userMsg])
+    const text = input.trim()
     setInput('')
     setAttachments([])
 
+    // Upload attachments if any
     for (const att of attachments) {
       const updated = await uploadAttachment(att)
       setAttachments((prev) => prev.map((a) => a.id === att.id ? updated : a))
     }
 
-    setMessages((prev) => [...prev, {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: 'Backend chat integration is ready. Send your message to the API at POST /api/chat.',
-    }])
-    setSending(false)
-  }, [input, attachments, sending, uploadAttachment])
+    // Add placeholder assistant message
+    const assistantId = crypto.randomUUID()
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }])
+
+    // Call the backend chat API
+    try {
+      const res = await api.chat.send({
+        message: text || `Uploaded ${attachments.length} file(s)`,
+        conversation_id: conversationId,
+        agent_id: selectedAgent === 'auto' ? undefined : selectedAgent as AgentId,
+      })
+
+      if (res.success && res.data) {
+        setConversationId(res.data.conversation_id)
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  content: res.data!.output,
+                  agentId: res.data!.agent_traces?.[0]?.agent_id,
+                }
+              : msg,
+          ),
+        )
+      } else {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? { ...msg, content: res.error || 'Request failed' }
+              : msg,
+          ),
+        )
+      }
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId
+            ? { ...msg, content: 'Network error. Ensure the backend is running on port 8000.' }
+            : msg,
+        ),
+      )
+    } finally {
+      setSending(false)
+    }
+  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -106,10 +155,18 @@ export default function ChatPage() {
       id: crypto.randomUUID(),
       file,
       status: 'pending',
+      previewUrl: isImage(file) ? URL.createObjectURL(file) : undefined,
     }))
     setAttachments((prev) => [...prev, ...newAttachments])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      attachments.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl) })
+    }
+  }, [])
 
   const removeAttachment = (id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id))
@@ -231,7 +288,7 @@ export default function ChatPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.docx,.pptx,.txt,.md"
+                accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.gif"
                 multiple
                 className="hidden"
                 onChange={handleFileSelect}

@@ -115,11 +115,55 @@ async def web_search(query: str) -> str:
     Returns:
         Search result summary
     """
-    return (
-        f"Search request: '{query}'. "
-        "Web search requires a configured search API (Google Search, etc.). "
-        "Please set up the search API key in settings."
-    )
+    import json
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Try DuckDuckGo-style search via a free API
+            response = await client.get(
+                "https://api.duckduckgo.com/",
+                params={
+                    "q": query,
+                    "format": "json",
+                    "no_html": 1,
+                    "skip_disambig": 1,
+                },
+            )
+            if response.status_code == 200:
+                data = response.json()
+                results = []
+
+                # Abstract text
+                abstract = data.get("AbstractText", "")
+                if abstract:
+                    results.append(f"Summary: {abstract}")
+
+                # Related topics
+                topics = data.get("RelatedTopics", [])
+                for topic in topics[:5]:
+                    if "Text" in topic:
+                        results.append(f"- {topic['Text']}")
+                    elif "Topics" in topic:
+                        for sub in topic.get("Topics", [])[:3]:
+                            if "Text" in sub:
+                                results.append(f"- {sub['Text']}")
+
+                if results:
+                    return "\n".join(results)
+
+            # Fallback to a simple text message
+            return (
+                f"Search results for '{query}':\n"
+                "1. Check Google for the latest information\n"
+                "2. Browse relevant Wikipedia articles\n"
+                f"Note: Full web search requires a dedicated API key (Google Custom Search, etc.)"
+            )
+    except ImportError:
+        return f"Web search unavailable: httpx library not installed. Run: pip install httpx"
+    except Exception as e:
+        logger.error(f"Web search failed: {e}")
+        return f"Web search encountered an error: {e}. Please try again later."
 
 
 async def drive_list(user_id: str = "default") -> str:

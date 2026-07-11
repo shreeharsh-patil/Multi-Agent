@@ -15,30 +15,17 @@ PUBLIC_PATHS = {
 
 
 async def get_user_id_from_request(request: Request) -> str:
-    """Extract user ID from request headers or session.
+    """Extract user ID from request.
     
-    In production, this would verify a JWT token from the Authorization header.
-    For development, falls back to a header or query param.
+    In development, reads from X-User-Id header or user_id query param.
+    In production, add JWT verification here.
     """
-    # Try Authorization header (Bearer token from NextAuth JWT)
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        # In development, decode a simple user ID from token
-        # In production, verify the JWT with NextAuth's secret
-        try:
-            from jose import jwt
-            payload = jwt.decode(token, "development-secret", algorithms=["HS256"])
-            return payload.get("sub", "default")
-        except Exception:
-            pass
-
-    # Fallback: X-User-Id header (for development/testing)
+    # X-User-Id header (for development/testing)
     user_id = request.headers.get("X-User-Id", "")
     if user_id:
         return user_id
 
-    # Last resort: query param
+    # Query param fallback
     user_id = request.query_params.get("user_id", "")
     if user_id:
         return user_id

@@ -1,6 +1,7 @@
+import asyncio
 from typing import Optional
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from src.services.vector_store.base import VectorStore
 from src.config import settings
 from src.utils.logger import logger
@@ -24,13 +25,17 @@ class QdrantVectorStore(VectorStore):
         await self.create_collection(collection)
         points = [
             PointStruct(
-                id=int(hash(id_str) % (2**63)),
+                id=abs(hash(id_str)) % (2**63),
                 vector=emb,
                 payload=payload,
             )
             for id_str, emb, payload in zip(ids, embeddings, payloads)
         ]
-        self.client.upsert(collection_name=collection, points=points)
+        await asyncio.to_thread(
+            self.client.upsert,
+            collection_name=collection,
+            points=points,
+        )
         logger.info(f"Stored {len(points)} points in '{collection}'")
 
     async def search(
@@ -41,11 +46,17 @@ class QdrantVectorStore(VectorStore):
         filter: Optional[dict] = None,
     ) -> list[dict]:
         try:
-            results = self.client.search(
+            search_filter = None
+            if filter:
+                conditions = [FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filter.items()]
+                search_filter = Filter(must=conditions)
+
+            results = await asyncio.to_thread(
+                self.client.search,
                 collection_name=collection,
                 query_vector=query_embedding,
                 limit=top_k,
-                query_filter=filter,
+                query_filter=search_filter,
             )
             return [
                 {
@@ -65,14 +76,19 @@ class QdrantVectorStore(VectorStore):
         collection: str,
         ids: list[str],
     ) -> None:
-        point_ids = [int(hash(id_str) % (2**63)) for id_str in ids]
-        self.client.delete(collection_name=collection, points_selector=point_ids)
+        point_ids = [abs(hash(id_str)) % (2**63) for id_str in ids]
+        await asyncio.to_thread(
+            self.client.delete,
+            collection_name=collection,
+            points_selector=point_ids,
+        )
         logger.info(f"Deleted {len(ids)} from '{collection}'")
 
     async def create_collection(self, collection: str) -> None:
-        collections = self.client.get_collections().collections
-        if not any(c.name == collection for c in collections):
-            self.client.create_collection(
+        collections = await asyncio.to_thread(self.client.get_collections)
+        if not any(c.name == collection for c in collections.collections):
+            await asyncio.to_thread(
+                self.client.create_collection,
                 collection_name=collection,
                 vectors_config=VectorParams(size=768, distance=Distance.COSINE),
             )

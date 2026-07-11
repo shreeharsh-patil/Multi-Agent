@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 import chromadb
 from chromadb.config import Settings
@@ -8,11 +9,22 @@ from src.utils.logger import logger
 
 class ChromaVectorStore(VectorStore):
     def __init__(self):
-        self.client = chromadb.PersistentClient(
-            path=settings.chroma_persist_dir,
-            settings=Settings(anonymized_telemetry=False),
-        )
-        logger.info(f"ChromaDB initialized at {settings.chroma_persist_dir}")
+        self._client = None
+        self._lock = asyncio.Lock()
+
+    async def _get_client(self):
+        if self._client is None:
+            async with self._lock:
+                if self._client is not None:
+                    return self._client
+                self._client = await asyncio.to_thread(
+                    lambda: chromadb.PersistentClient(
+                        path=settings.chroma_persist_dir,
+                        settings=Settings(anonymized_telemetry=False),
+                    )
+                )
+                logger.info(f"ChromaDB initialized at {settings.chroma_persist_dir}")
+        return self._client
 
     async def store_embeddings(
         self,
@@ -21,14 +33,16 @@ class ChromaVectorStore(VectorStore):
         embeddings: list[list[float]],
         payloads: list[dict],
     ) -> None:
-        collection_obj = self.client.get_or_create_collection(collection)
+        client = await self._get_client()
+        collection_obj = await asyncio.to_thread(client.get_or_create_collection, collection)
         metadatas = []
         documents = []
         for p in payloads:
             metadatas.append({k: str(v) if isinstance(v, (dict, list)) else v for k, v in p.items() if k != "content"})
             documents.append(p.get("content", ""))
 
-        collection_obj.add(
+        await asyncio.to_thread(
+            collection_obj.add,
             ids=ids,
             embeddings=embeddings,
             metadatas=metadatas,
@@ -44,8 +58,10 @@ class ChromaVectorStore(VectorStore):
         filter: Optional[dict] = None,
     ) -> list[dict]:
         try:
-            collection_obj = self.client.get_collection(collection)
-            results = collection_obj.query(
+            client = await self._get_client()
+            collection_obj = await asyncio.to_thread(client.get_collection, collection)
+            results = await asyncio.to_thread(
+                collection_obj.query,
                 query_embeddings=[query_embedding],
                 n_results=top_k,
                 where=filter,
@@ -70,12 +86,14 @@ class ChromaVectorStore(VectorStore):
         ids: list[str],
     ) -> None:
         try:
-            collection_obj = self.client.get_collection(collection)
-            collection_obj.delete(ids=ids)
+            client = await self._get_client()
+            collection_obj = await asyncio.to_thread(client.get_collection, collection)
+            await asyncio.to_thread(collection_obj.delete, ids=ids)
             logger.info(f"Deleted {len(ids)} from collection '{collection}'")
         except Exception as e:
             logger.warning(f"Delete failed: {e}")
 
     async def create_collection(self, collection: str) -> None:
-        self.client.get_or_create_collection(collection)
+        client = await self._get_client()
+        await asyncio.to_thread(client.get_or_create_collection, collection)
         logger.info(f"Ensured collection '{collection}' exists")
