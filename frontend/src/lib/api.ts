@@ -1,4 +1,4 @@
-import type { ApiResponse, ChatRequest, ChatResponse, DocumentInfo, AgentManifest } from '@shared/types'
+import type { ApiResponse, ChatRequest, ChatResponse, DocumentInfo } from '@shared/types'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -7,11 +7,13 @@ async function fetchApi<T>(
   options?: RequestInit,
 ): Promise<ApiResponse<T>> {
   try {
+    const headers: Record<string, string> = {}
+    const isFormData = options?.body instanceof FormData
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json'
+    }
     const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
       ...options,
     })
     return await res.json()
@@ -30,38 +32,25 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    stream: (data: ChatRequest) =>
-      `${BACKEND_URL}/api/chat/stream?${new URLSearchParams({
-        message: data.message,
-        ...(data.conversationId && { conversationId: data.conversationId }),
-        ...(data.agentId && { agentId: data.agentId }),
-      })}`,
   },
 
   documents: {
     list: () => fetchApi<DocumentInfo[]>('/api/documents'),
-    upload: (formData: FormData) =>
-      fetchApi<DocumentInfo>('/api/documents/upload', {
+    upload: (file: File, userId = 'default') => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('user_id', userId)
+      return fetchApi<DocumentInfo & { chunks?: number }>('/api/documents/upload', {
         method: 'POST',
         body: formData,
-      }),
+      })
+    },
     delete: (id: string) =>
       fetchApi<null>(`/api/documents/${id}`, { method: 'DELETE' }),
   },
 
   agents: {
-    list: () => fetchApi<AgentManifest[]>('/api/agents'),
-    get: (id: string) => fetchApi<AgentManifest>(`/api/agents/${id}`),
-  },
-
-  knowledge: {
-    query: (query: string, documentIds?: string[]) =>
-      fetchApi<{ results: unknown[]; citations: unknown[] }>(
-        '/api/knowledge/query',
-        {
-          method: 'POST',
-          body: JSON.stringify({ query, documentIds }),
-        },
-      ),
+    list: () =>
+      fetchApi<Array<{ id: string; name: string; description: string }>>('/api/agents'),
   },
 }

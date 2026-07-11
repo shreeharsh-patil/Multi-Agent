@@ -10,18 +10,6 @@ const stats = [
   { label: 'Knowledge Items', value: '0', icon: BookOpen, color: 'text-amber-500' },
 ]
 
-const agents = [
-  { name: 'Knowledge Agent', description: 'RAG & document search', color: 'bg-blue-500/10 text-blue-500' },
-  { name: 'Drive Agent', description: 'Google Drive integration', color: 'bg-green-500/10 text-green-500' },
-  { name: 'Notes Agent', description: 'Structured notes & summaries', color: 'bg-purple-500/10 text-purple-500' },
-  { name: 'Quiz Agent', description: 'MCQs & practice questions', color: 'bg-amber-500/10 text-amber-500' },
-  { name: 'Planner Agent', description: 'Study & task planning', color: 'bg-pink-500/10 text-pink-500' },
-  { name: 'Research Agent', description: 'Internet search & reports', color: 'bg-indigo-500/10 text-indigo-500' },
-  { name: 'Coding Agent', description: 'Code writing & debugging', color: 'bg-cyan-500/10 text-cyan-500' },
-  { name: 'Memory Agent', description: 'Long-term memory', color: 'bg-rose-500/10 text-rose-500' },
-  { name: 'Tool Agent', description: 'APIs & external tools', color: 'bg-orange-500/10 text-orange-500' },
-]
-
 export default function DashboardPage() {
   return (
     <div className="space-y-8 animate-fade-in">
@@ -49,34 +37,6 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            Available Agents
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {agents.map((agent) => (
-              <Card key={agent.name} className="border-0 bg-secondary/50">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${agent.color}`}>
-                      <Bot className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{agent.name}</h3>
-                      <p className="text-sm text-muted-foreground">{agent.description}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

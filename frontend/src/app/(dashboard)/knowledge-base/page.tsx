@@ -2,16 +2,8 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { BookOpen, Search, Upload, FileText, Plus, Brain } from 'lucide-react'
-
-const knowledgeItems = [
-  { id: '1', title: 'Introduction to AI', type: 'PDF', pages: 24, date: '2026-07-10', chunks: 48 },
-  { id: '2', title: 'Machine Learning Fundamentals', type: 'DOCX', pages: 56, date: '2026-07-09', chunks: 112 },
-  { id: '3', title: 'Neural Networks Notes', type: 'TXT', pages: 12, date: '2026-07-08', chunks: 36 },
-]
+import { Search, Upload, BookOpen } from 'lucide-react'
 
 export default function KnowledgeBasePage() {
   return (
@@ -39,41 +31,21 @@ export default function KnowledgeBasePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
+                <BookOpen className="h-5 w-5" />
                 Indexed Documents
               </CardTitle>
-              <CardDescription>3 documents indexed · 196 total chunks</CardDescription>
+              <CardDescription>No documents indexed yet</CardDescription>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-3">
-                  {knowledgeItems.map((item) => (
-                    <Card key={item.id} className="border-0 bg-secondary/50">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-3">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                              <BookOpen className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <h3 className="font-medium">{item.title}</h3>
-                              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                                <Badge variant="secondary" className="text-xs">{item.type}</Badge>
-                                <span>{item.pages} pages</span>
-                                <span>{item.chunks} chunks</span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button variant="ghost" size="sm">
-                            <Brain className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">Added {item.date}</p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </ScrollArea>
+              <div className="text-center py-12 text-muted-foreground">
+                <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No documents in your knowledge base</p>
+                <p className="text-sm mt-1">Upload documents to build your knowledge base</p>
+                <Button variant="outline" className="mt-4 gap-2">
+                  <Upload className="h-4 w-4" />
+                  Upload your first document
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -82,7 +54,7 @@ export default function KnowledgeBasePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Brain className="h-5 w-5" />
+                <Search className="h-5 w-5" />
                 Ask Knowledge Base
               </CardTitle>
               <CardDescription>Query your documents using RAG</CardDescription>
@@ -105,10 +77,10 @@ export default function KnowledgeBasePage() {
             <CardContent>
               <div className="space-y-3">
                 {[
-                  { label: 'Total Documents', value: '3' },
-                  { label: 'Total Chunks', value: '196' },
-                  { label: 'Vector Index Size', value: '2.4 MB' },
-                  { label: 'Last Updated', value: '2026-07-10' },
+                  { label: 'Total Documents', value: '0' },
+                  { label: 'Total Chunks', value: '0' },
+                  { label: 'Vector Index Size', value: '0 B' },
+                  { label: 'Last Updated', value: '—' },
                 ].map((stat) => (
                   <div key={stat.label} className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{stat.label}</span>

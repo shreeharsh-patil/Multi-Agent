@@ -151,21 +151,24 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 }
 
 export interface ChatRequest {
-  conversationId?: string
+  conversation_id?: string
   message: string
-  agentId?: AgentId
-  attachments?: string[]
+  agent_id?: AgentId
+  user_id?: string
 }
 
 export interface ChatResponse {
-  conversationId: string
-  message: Message
-  agentTraces?: AgentTrace[]
+  conversation_id: string
+  output: string
+  citations: Citation[]
+  agent_traces: AgentTrace[]
+  events_count: number
+  success: boolean
+  error?: string
 }
 
 export interface AgentTrace {
-  agentId: AgentId
-  input: string
-  output: string
-  latency: number
+  agent_id: string
+  event_type: string
+  has_content: boolean
 }

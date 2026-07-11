@@ -1,16 +1,8 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Calendar, Plus, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
-
-const tasks = [
-  { id: '1', title: 'Review AI notes', due: '2026-07-12', priority: 'high', status: 'pending' },
-  { id: '2', title: 'Complete quiz on ML', due: '2026-07-14', priority: 'medium', status: 'in_progress' },
-  { id: '3', title: 'Research paper summary', due: '2026-07-16', priority: 'low', status: 'pending' },
-  { id: '4', title: 'Study neural networks', due: '2026-07-11', priority: 'high', status: 'completed' },
-]
 
 export default function PlannerPage() {
   return (
@@ -37,7 +29,7 @@ export default function PlannerPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">2</p>
+            <p className="text-3xl font-bold">0</p>
           </CardContent>
         </Card>
         <Card>
@@ -48,7 +40,7 @@ export default function PlannerPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">1</p>
+            <p className="text-3xl font-bold">0</p>
           </CardContent>
         </Card>
         <Card>
@@ -59,7 +51,7 @@ export default function PlannerPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">1</p>
+            <p className="text-3xl font-bold">0</p>
           </CardContent>
         </Card>
       </div>
@@ -70,32 +62,16 @@ export default function PlannerPage() {
             <Calendar className="h-5 w-5" />
             Tasks
           </CardTitle>
-          <CardDescription>4 tasks · 2 due this week</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {tasks.map((task) => (
-              <div key={task.id} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-secondary/50 transition-colors">
-                <div className={`p-2 rounded-full ${
-                  task.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
-                  task.status === 'in_progress' ? 'bg-amber-500/10 text-amber-500' :
-                  'bg-secondary'
-                }`}>
-                  {task.status === 'completed' ? <CheckCircle2 className="h-4 w-4" /> :
-                   task.status === 'in_progress' ? <Clock className="h-4 w-4" /> :
-                   <AlertCircle className="h-4 w-4" />}
-                </div>
-                <div className="flex-1">
-                  <p className={`font-medium ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
-                    {task.title}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Due: {task.due}</p>
-                </div>
-                <Badge variant={task.priority === 'high' ? 'destructive' : task.priority === 'medium' ? 'warning' : 'secondary'}>
-                  {task.priority}
-                </Badge>
-              </div>
-            ))}
+          <div className="text-center py-12 text-muted-foreground">
+            <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p className="text-lg font-medium">No tasks yet</p>
+            <p className="text-sm mt-1">Use the Planner Agent to create tasks and schedules</p>
+            <Button variant="outline" className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Create your first task
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Bot, Settings, Play, Brain, BookOpen, Search, FileCode, StickyNote, GraduationCap, Calendar, Puzzle } from 'lucide-react'
+import { Bot, BookOpen, Brain, Search, FileCode, StickyNote, GraduationCap, Calendar, Puzzle } from 'lucide-react'
 
 const agents = [
   { id: 'knowledge', name: 'Knowledge Agent', description: 'RAG, document search, citations, knowledge graph, and summaries', icon: BookOpen, color: 'text-blue-500', tags: ['RAG', 'Search', 'Citations'] },
@@ -35,9 +35,6 @@ export default function AgentsPage() {
                 <div className={`p-3 rounded-lg bg-secondary ${agent.color}`}>
                   <agent.icon className="h-6 w-6" />
                 </div>
-                <Button variant="ghost" size="icon">
-                  <Settings className="h-4 w-4" />
-                </Button>
               </div>
               <CardTitle className="mt-4">{agent.name}</CardTitle>
               <CardDescription>{agent.description}</CardDescription>
@@ -48,10 +45,6 @@ export default function AgentsPage() {
                   <Badge key={tag} variant="secondary">{tag}</Badge>
                 ))}
               </div>
-              <Button className="w-full gap-2">
-                <Play className="h-4 w-4" />
-                Open Chat
-              </Button>
             </CardContent>
           </Card>
         ))}

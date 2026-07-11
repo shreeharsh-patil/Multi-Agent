@@ -1,8 +1,49 @@
-from fastapi import Request
+from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from src.utils.logger import logger
 from src.utils.exceptions import AppException
 import time
+
+# Paths that do NOT require authentication
+PUBLIC_PATHS = {
+    "/api/health",
+    "/api",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+}
+
+
+async def get_user_id_from_request(request: Request) -> str:
+    """Extract user ID from request headers or session.
+    
+    In production, this would verify a JWT token from the Authorization header.
+    For development, falls back to a header or query param.
+    """
+    # Try Authorization header (Bearer token from NextAuth JWT)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        # In development, decode a simple user ID from token
+        # In production, verify the JWT with NextAuth's secret
+        try:
+            from jose import jwt
+            payload = jwt.decode(token, "development-secret", algorithms=["HS256"])
+            return payload.get("sub", "default")
+        except Exception:
+            pass
+
+    # Fallback: X-User-Id header (for development/testing)
+    user_id = request.headers.get("X-User-Id", "")
+    if user_id:
+        return user_id
+
+    # Last resort: query param
+    user_id = request.query_params.get("user_id", "")
+    if user_id:
+        return user_id
+
+    return "default"
 
 
 async def error_handler_middleware(request: Request, call_next):

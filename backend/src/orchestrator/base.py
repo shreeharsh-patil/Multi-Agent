@@ -2,7 +2,6 @@ import time
 from typing import Optional
 from src.utils.logger import logger
 from src.utils.exceptions import AgentException
-from src.agents.base import BaseAgent, AgentResult
 from src.agents.registry import AgentRegistry
 from src.orchestrator.router import AgentRouter
 
@@ -31,33 +30,55 @@ class AgentOrchestrator:
         if not target_agent_id:
             target_agent_id = "knowledge"
 
-        agent = self.registry.get_agent(target_agent_id)
-        if not agent:
-            raise AgentException(f"Agent '{target_agent_id}' not found")
+        # Route via ADK multi-agent system
+        from src.adk.runner import process_message
 
-        context = {
-            "user_id": user_id,
-            "conversation_id": conversation_id,
-        }
+        conv_id = conversation_id or f"orch_{user_id}_{int(time.time())}"
 
-        result = await agent.execute(user_input, context)
+        try:
+            result = await process_message(
+                message=user_input,
+                user_id=user_id,
+                conversation_id=conv_id,
+            )
 
-        elapsed = time.time() - start_time
-        logger.info("Request processed", extra={
-            "agent_id": target_agent_id,
-            "latency_ms": round(elapsed * 1000, 2),
-            "success": result.success,
-        })
+            elapsed = time.time() - start_time
+            logger.info("Request processed via ADK", extra={
+                "agent_id": target_agent_id,
+                "latency_ms": round(elapsed * 1000, 2),
+                "success": result.get("success", True),
+            })
 
-        return {
-            "agent_id": target_agent_id,
-            "output": result.output,
-            "citations": result.citations,
-            "tool_calls": result.tool_calls,
-            "latency_ms": round(elapsed * 1000, 2),
-            "success": result.success,
-            "error": result.error,
-        }
+            return {
+                "agent_id": target_agent_id,
+                "output": result.get("output", ""),
+                "citations": result.get("citations", []),
+                "tool_calls": [],
+                "agent_traces": result.get("agent_traces", []),
+                "latency_ms": round(elapsed * 1000, 2),
+                "success": result.get("success", True),
+                "error": result.get("error"),
+            }
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"ADK processing failed", extra={"error": str(e)})
+
+            # Fallback: use custom agent if ADK fails
+            agent = self.registry.get_agent(target_agent_id)
+            if agent:
+                context = {"user_id": user_id, "conversation_id": conversation_id}
+                result = await agent.execute(user_input, context)
+                return {
+                    "agent_id": target_agent_id,
+                    "output": result.output,
+                    "citations": result.citations,
+                    "tool_calls": result.tool_calls,
+                    "latency_ms": round(elapsed * 1000, 2),
+                    "success": result.success,
+                    "error": result.error,
+                }
+
+            raise AgentException(f"Agent execution failed: {e}") from e
 
     async def process_multi_agent(
         self,

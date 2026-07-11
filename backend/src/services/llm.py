@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 from src.config import settings
 from src.utils.logger import logger
@@ -6,18 +7,25 @@ from src.utils.logger import logger
 class LLMService:
     def __init__(self):
         self._client = None
+        self._lock = asyncio.Lock()
         self.model = settings.gemini_model
 
-    def _get_client(self):
+    async def _get_client(self):
         if self._client is None:
-            if not settings.gemini_api_key:
-                raise ValueError(
-                    "GEMINI_API_KEY not configured. "
-                    "Set it in .env or environment variables."
+            async with self._lock:
+                if self._client is not None:
+                    return self._client
+                if not settings.gemini_api_key:
+                    raise ValueError(
+                        "GEMINI_API_KEY not configured. "
+                        "Set it in .env or environment variables."
+                    )
+                from google import genai
+                # genai.Client is sync — initialize once under lock
+                self._client = await asyncio.to_thread(
+                    lambda: genai.Client(api_key=settings.gemini_api_key)
                 )
-            from google import genai
-            self._client = genai.Client(api_key=settings.gemini_api_key)
-            logger.info(f"LLM service initialized with model: {self.model}")
+                logger.info(f"LLM service initialized with model: {self.model}")
         return self._client
 
     async def generate(
@@ -27,16 +35,21 @@ class LLMService:
         temperature: float = 0.7,
         max_output_tokens: int = 4096,
     ) -> str:
-        client = self._get_client()
+        client = await self._get_client()
         try:
-            response = client.models.generate_content(
+            config = {
+                "temperature": temperature,
+                "max_output_tokens": max_output_tokens,
+            }
+            if system_instruction:
+                config["system_instruction"] = system_instruction
+
+            # genai.models.generate_content is sync — run in thread pool
+            response = await asyncio.to_thread(
+                client.models.generate_content,
                 model=self.model,
                 contents=[prompt],
-                config={
-                    "system_instruction": system_instruction,
-                    "temperature": temperature,
-                    "max_output_tokens": max_output_tokens,
-                },
+                config=config,
             )
             return response.text
         except Exception as e:
