@@ -18,27 +18,24 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
 
     # --- Initialize MongoDB / Beanie ---
+    mongo_client = None
     try:
-        try:
-            mongo_client = AsyncIOMotorClient(
-                settings.mongodb_uri,
-                tls=True,
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=15000,
-            )
-            # Verify connection
-            await mongo_client.admin.command("ping")
-            logger.info(f"MongoDB connected: {settings.mongodb_uri}")
-        except Exception as e:
-            logger.warning(f"Failed to connect to primary MongoDB: {e}")
-            fallback_uri = "mongodb://localhost:27017/multi-agent-platform"
-            if settings.mongodb_uri != fallback_uri:
-                logger.info(f"Attempting fallback to local MongoDB: {fallback_uri}")
-                mongo_client = AsyncIOMotorClient(fallback_uri)
-                await mongo_client.admin.command("ping")
-                logger.info("Connected to fallback local MongoDB")
-            else:
-                raise e
+        for uri in [
+            settings.mongodb_uri,
+            settings.mongodb_uri + ("&" if "?" in settings.mongodb_uri else "?") + "tls=true&tlsInsecure=true&retryWrites=true&w=majority",
+            "mongodb://localhost:27017/multi-agent-platform",
+        ]:
+            try:
+                client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=15000)
+                await client.admin.command("ping")
+                mongo_client = client
+                logger.info("MongoDB connected")
+                break
+            except Exception as e:
+                logger.warning(f"MongoDB attempt failed: {e}")
+
+        if mongo_client is None:
+            raise RuntimeError("No MongoDB connection available")
 
         from src.models.user import User
         from src.models.document import Document, DocumentChunk
@@ -53,23 +50,14 @@ async def lifespan(app: FastAPI):
         await init_beanie(
             database=mongo_client[settings.mongodb_db_name],
             document_models=[
-                User,
-                Document,
-                DocumentChunk,
-                Conversation,
-                MemoryItem,
-                AgentConfig,
-                AgentTask,
-                ActivityLog,
-                Note,
-                ResearchReport,
-                PlannerPlan,
-                QuizSession,
+                User, Document, DocumentChunk, Conversation, MemoryItem,
+                AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
+                PlannerPlan, QuizSession,
             ],
         )
         logger.info("Beanie models initialized")
     except Exception as e:
-        logger.exception(f"MongoDB initialization failed")
+        logger.warning(f"MongoDB initialization failed: {e}")
         logger.warning("App will start without database — some features will be unavailable")
 
     # --- Initialize custom agents (fallback) ---
