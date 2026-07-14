@@ -51,7 +51,11 @@ async def lifespan(app: FastAPI):
             logger.warning(f"MongoDB attempt failed: {e}")
 
     if mongo_client is None:
-        raise RuntimeError("Could not connect to MongoDB — authentication and all data features require a database. Set MONGODB_URI in environment.")
+        raise RuntimeError(
+            "Could not connect to MongoDB. If you are deploying to Render/Cloud, you MUST "
+            "whitelist IP '0.0.0.0/0' (Allow access from anywhere) in your MongoDB Atlas "
+            "Network Access settings, because Render uses dynamic outgoing IP addresses."
+        )
 
     from src.models.user import User
     from src.models.document import Document, DocumentChunk
