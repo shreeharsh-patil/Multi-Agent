@@ -598,8 +598,8 @@ export default function ChatPage() {
           </Card>
         )}
 
-        <Card
-          className="flex-1 flex flex-col relative"
+        <div
+          className="flex-1 flex flex-col relative bg-background"
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
@@ -629,19 +629,19 @@ export default function ChatPage() {
             </div>
           ) : (
             <ScrollArea ref={scrollRef} className="flex-1 p-6">
-              <div className="space-y-6">
+              <div className="space-y-6 max-w-4xl mx-auto w-full">
                 {messages.map((msg) => (
-                  <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                  <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
                       <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="bg-primary text-primary-foreground">
+                        <AvatarFallback className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800">
                           <Bot className="h-4 w-4" />
                         </AvatarFallback>
                       </Avatar>
                     )}
-                    <div className={`max-w-[80%] ${msg.role === 'user' ? 'order-1' : ''}`}>
-                      {msg.agentId && (
-                        <Badge variant="outline" className="mb-1 text-xs">
+                    <div className={`max-w-[75%] ${msg.role === 'user' ? 'order-1' : ''}`}>
+                      {msg.agentId && msg.role === 'assistant' && (
+                        <Badge variant="outline" className="mb-1.5 text-[10px] uppercase tracking-wider font-mono bg-secondary/30">
                           {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name}
                         </Badge>
                       )}
@@ -675,28 +675,28 @@ export default function ChatPage() {
                         </div>
                       )}
                       <div className="group relative">
-                      <div
-                        className={`rounded-lg px-4 py-3 text-sm ${
-                          msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary text-secondary-foreground'
-                        }`}
-                      >
-                        <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
-                      </div>
-                      {msg.role === 'assistant' && msg.content && (
-                        <div className="absolute -bottom-7 left-0 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button type="button" onClick={() => speakMessage(msg.id, msg.content)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground" aria-label={speakingId === msg.id ? 'Stop speaking' : 'Read response aloud'}>
-                            {speakingId === msg.id ? <><Square className="h-3 w-3 fill-current" /> Stop</> : <><Volume2 className="h-3 w-3" /> Listen</>}
-                          </button>
-                          <CodePreviewButton content={msg.content} onPreview={setCodePreview} />
+                        <div
+                          className={`rounded-2xl px-4 py-3 text-sm ${
+                            msg.role === 'user'
+                              ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200/50 dark:border-zinc-700/30 shadow-sm'
+                              : 'text-foreground leading-relaxed'
+                          }`}
+                        >
+                          <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
                         </div>
-                      )}
+                        {msg.role === 'assistant' && msg.content && (
+                          <div className="absolute -bottom-7 left-0 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button type="button" onClick={() => speakMessage(msg.id, msg.content)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground" aria-label={speakingId === msg.id ? 'Stop speaking' : 'Read response aloud'}>
+                              {speakingId === msg.id ? <><Square className="h-3 w-3 fill-current" /> Stop</> : <><Volume2 className="h-3 w-3" /> Listen</>}
+                            </button>
+                            <CodePreviewButton content={msg.content} onPreview={setCodePreview} />
+                          </div>
+                        )}
                       </div>
                     </div>
                     {msg.role === 'user' && (
                       <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="bg-muted">
+                        <AvatarFallback className="bg-zinc-100 dark:bg-zinc-800 border">
                           <User className="h-4 w-4" />
                         </AvatarFallback>
                       </Avatar>
@@ -707,7 +707,7 @@ export default function ChatPage() {
             </ScrollArea>
           )}
 
-          <div className="p-4 border-t space-y-2">
+          <div className="px-4 py-4 max-w-4xl mx-auto w-full space-y-2">
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {attachments.map((att) => (
@@ -742,7 +742,7 @@ export default function ChatPage() {
                 ))}
               </div>
             )}
-            <div className="flex gap-3">
+            <div className="relative flex items-center bg-secondary/40 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 rounded-2xl p-1.5 focus-within:ring-1 focus-within:ring-zinc-400 dark:focus-within:ring-zinc-700 transition-all duration-150 shadow-sm w-full gap-2">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -752,10 +752,11 @@ export default function ChatPage() {
                 onChange={handleFileSelect}
               />
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
+                className="rounded-xl h-8 w-8 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 shrink-0"
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -764,19 +765,30 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="flex-1"
+                className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-1.5 text-sm placeholder:text-zinc-500 h-9"
                 disabled={sending}
               />
-              <Button variant={isListening ? 'default' : 'outline'} size="icon" onClick={toggleVoiceInput} disabled={sending} aria-label={isListening ? 'Stop listening' : 'Start voice input'} className={isListening ? 'animate-pulse' : ''}>
-                {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
+              <Button 
+                variant={isListening ? 'default' : 'ghost'} 
+                size="icon" 
+                onClick={toggleVoiceInput} 
+                disabled={sending} 
+                aria-label={isListening ? 'Stop listening' : 'Start voice input'} 
+                className={`rounded-xl h-8 w-8 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 shrink-0 ${isListening ? 'animate-pulse' : 'hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'}`}
+              >
+                {isListening ? <Square className="h-3.5 w-3.5 fill-current text-destructive" /> : <Mic className="h-4 w-4" />}
               </Button>
-              <Button onClick={handleSend} disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)} className="gap-2">
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              <Button 
+                onClick={handleSend} 
+                disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)} 
+                className="rounded-xl h-8 px-3 text-xs gap-1.5 bg-zinc-900 hover:bg-zinc-850 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-zinc-100 shrink-0"
+              >
+                {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 Send
               </Button>
             </div>
           </div>
-        </Card>
+        </div>
       </div>
 
       {codePreview && (
