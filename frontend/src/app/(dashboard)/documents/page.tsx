@@ -247,21 +247,34 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      <Card className="border-primary/15 bg-gradient-to-r from-primary/[.05] via-background to-violet-500/[.04]">
-        <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center">
+      <Card className="border-zinc-200/50 dark:border-zinc-900 bg-card/40 backdrop-blur-md shadow-xs">
+        <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center">
           <div className="flex items-center gap-3 md:flex-1">
-            <div className="rounded-lg bg-primary/10 p-2 text-primary"><FolderOpen className="h-5 w-5" /></div>
-            <div><p className="text-sm font-semibold">Organize your knowledge</p><p className="text-xs text-muted-foreground">Choose a workspace to scope uploads and RAG searches.</p></div>
+            <div className="rounded-lg bg-zinc-100 dark:bg-zinc-900 p-2 text-zinc-700 dark:text-zinc-300 border border-zinc-200/20 dark:border-zinc-800/20"><FolderOpen className="h-4.5 w-4.5 stroke-[1.5]" /></div>
+            <div>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Scope Knowledge</p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Organize documents into dedicated RAG search scopes.</p>
+            </div>
           </div>
-          <select value={selectedWorkspace} onChange={(e) => setSelectedWorkspace(e.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm md:w-56">
+          <select 
+            value={selectedWorkspace} 
+            onChange={(e) => setSelectedWorkspace(e.target.value)} 
+            className="h-9 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 text-xs md:w-56 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-700 text-zinc-800 dark:text-zinc-200"
+          >
             <option value="all">All workspaces</option>
             <option value="unfiled">Unfiled documents</option>
             {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.documentCount})</option>)}
           </select>
           <div className="flex gap-2">
-            <input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createWorkspace()} placeholder="New workspace" className="h-9 w-36 rounded-md border bg-background px-3 text-sm" />
-            <Button variant="outline" size="sm" onClick={createWorkspace} disabled={creatingWorkspace || !newWorkspaceName.trim()} className="gap-1"><Plus className="h-3.5 w-3.5" /> Create</Button>
-            <Button variant="outline" size="sm" onClick={copyWorkspaceInvite} disabled={selectedWorkspace === 'all' || selectedWorkspace === 'unfiled'} className="gap-1"><Share2 className="h-3.5 w-3.5" /> {inviteCopied ? 'Copied' : 'Invite'}</Button>
+            <input 
+              value={newWorkspaceName} 
+              onChange={(e) => setNewWorkspaceName(e.target.value)} 
+              onKeyDown={(e) => e.key === 'Enter' && createWorkspace()} 
+              placeholder="New scope..." 
+              className="h-9 w-36 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-700 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-450 dark:placeholder:text-zinc-500" 
+            />
+            <Button variant="outline" size="sm" onClick={createWorkspace} disabled={creatingWorkspace || !newWorkspaceName.trim()} className="gap-1 h-9 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-850 hover:bg-zinc-100 dark:hover:bg-zinc-900"><Plus className="h-3.5 w-3.5" /> Create</Button>
+            <Button variant="outline" size="sm" onClick={copyWorkspaceInvite} disabled={selectedWorkspace === 'all' || selectedWorkspace === 'unfiled'} className="gap-1 h-9 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-850 hover:bg-zinc-100 dark:hover:bg-zinc-900"><Share2 className="h-3.5 w-3.5" /> {inviteCopied ? 'Copied' : 'Invite'}</Button>
           </div>
         </CardContent>
       </Card>

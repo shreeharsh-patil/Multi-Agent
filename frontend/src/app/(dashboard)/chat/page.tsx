@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -52,7 +53,7 @@ interface Attachment {
 
 const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
 
-export default function ChatPage() {
+function ChatContent() {
   const { data: session } = useSession()
   const googleAccessToken = (session as any)?.accessToken as string | undefined
   const [messages, setMessages] = useState<Array<{
@@ -67,6 +68,14 @@ export default function ChatPage() {
   const [customAgents, setCustomAgents] = useState<Array<{ id: string; name: string }>>([])
   const [teamMode, setTeamMode] = useState(false)
   const [teamAgents, setTeamAgents] = useState<string[]>(['research', 'coding', 'planner'])
+
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const agentParam = searchParams?.get('agent')
+    if (agentParam && agents.concat(customAgents).some(a => a.id === agentParam)) {
+      setSelectedAgent(agentParam)
+    }
+  }, [searchParams, customAgents])
   const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState('all')
   const [voiceMode, setVoiceMode] = useState(false)
@@ -78,6 +87,7 @@ export default function ChatPage() {
   const [isDragging, setIsDragging] = useState(false)
   const [codePreview, setCodePreview] = useState<CodeSandboxProps | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
@@ -271,6 +281,9 @@ export default function ChatPage() {
     }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
 
     // Add placeholder assistant message (will be updated incrementally via SSE)
     const assistantId = crypto.randomUUID()
@@ -502,6 +515,16 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
+    }
+  }
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInput(suggestion)
+    if (textareaRef.current) {
+      textareaRef.current.value = suggestion
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`
+      textareaRef.current.focus()
     }
   }
 
@@ -760,12 +783,18 @@ export default function ChatPage() {
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
-              <Input
+              <textarea
+                ref={textareaRef}
                 placeholder={teamMode ? 'Give your team a multi-step mission...' : 'Ask about your documents or images...'}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  e.target.style.height = 'auto'
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
+                }}
                 onKeyDown={handleKeyDown}
-                className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-1.5 text-sm placeholder:text-zinc-500 h-9"
+                rows={1}
+                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-2 py-2 text-sm placeholder:text-zinc-500 min-h-[36px] max-h-[160px] scrollbar-thin"
                 disabled={sending}
               />
               <Button 
@@ -885,8 +914,8 @@ export default function ChatPage() {
               <Button
                 key={suggestion}
                 variant="ghost"
-                className="w-full justify-start text-xs h-auto py-1.5 font-normal"
-                onClick={() => setInput(suggestion)}
+                className="w-full justify-start text-xs h-auto py-1.5 font-normal text-left text-zinc-650 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/40"
+                onClick={() => handleSuggestionClick(suggestion)}
               >
                 {suggestion}
               </Button>
@@ -904,5 +933,17 @@ export default function ChatPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
   )
 }

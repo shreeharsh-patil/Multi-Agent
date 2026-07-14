@@ -121,29 +121,42 @@ export default function AgentsPage() {
   const renderAgentList = () => {
     return agents.map((agent) => {
       const Icon = iconMap[agent.icon] || Bot
-      const color = colorMap[agent.id] || 'text-muted-foreground'
+      const color = colorMap[agent.id] || 'text-zinc-500'
       const tags = agent.custom ? (agent.tools || []).map((tool) => availableTools.find((item) => item.id === tool)?.label || tool) : tagMap[agent.id] || []
       return (
-        <Card key={agent.id} className="group hover:shadow-md transition-shadow">
-          <CardHeader>
+        <Card key={agent.id} className="group border-zinc-200/50 dark:border-zinc-900 bg-card/40 backdrop-blur-md hover:-translate-y-0.5 transition-all duration-200 hover:border-zinc-350 dark:hover:border-zinc-800 shadow-xs flex flex-col justify-between">
+          <CardHeader className="p-5">
             <div className="flex items-start justify-between">
-              <div className={`p-3 rounded-lg bg-secondary ${color}`}>
-                <Icon className="h-6 w-6" />
+              <div className={`p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/20 dark:border-zinc-800/20 ${color}`}>
+                <Icon className="h-5 w-5 stroke-[1.5]" />
               </div>
-              <Link href="/chat" className={`${buttonVariants({ variant: 'ghost', size: 'sm' })} gap-2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+              <Link 
+                href={`/chat?agent=${agent.id}`} 
+                className={`${buttonVariants({ variant: 'outline', size: 'sm' })} text-xs h-7 px-2.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900 opacity-0 group-hover:opacity-100 transition-opacity`}
+              >
                 Chat
               </Link>
             </div>
-            <CardTitle className="mt-4">{agent.name}</CardTitle>
-            <CardDescription>{agent.description}</CardDescription>
+            <CardTitle className="mt-4 text-base font-medium text-zinc-900 dark:text-zinc-50">{agent.name}</CardTitle>
+            <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal mt-1 min-h-[32px] line-clamp-2">{agent.description}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2 mb-4">
+          <CardContent className="p-5 pt-0">
+            <div className="flex flex-wrap gap-1.5 mb-4">
               {tags.map((tag) => (
-                <Badge key={tag} variant="secondary">{tag}</Badge>
+                <Badge key={tag} variant="secondary" className="bg-zinc-100/60 dark:bg-zinc-900/60 text-zinc-650 dark:text-zinc-400 font-normal text-[10px] px-2 py-0.5 border-none">{tag}</Badge>
               ))}
             </div>
-            {agent.custom && <Button variant="ghost" size="sm" onClick={() => deleteAgent(agent.id)} className="gap-2 text-destructive"><Trash2 className="h-3.5 w-3.5" /> Delete</Button>}
+            {agent.custom && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => deleteAgent(agent.id)} 
+                className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 h-8 px-2 rounded-md"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> 
+                Delete
+              </Button>
+            )}
           </CardContent>
         </Card>
       )

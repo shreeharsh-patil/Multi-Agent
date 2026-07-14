@@ -23,7 +23,7 @@
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* Smoother, more modern rounded corners */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-border: 220 13% 91%;
@@ -33,58 +33,65 @@
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    /* Sleek obsidian/carbon dark mode palette */
+    --background: 240 10% 3.9%; /* Rich dark charcoal (#09090b) */
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 240 10% 5.5%; /* Elevated dark grey card (#0e0e11) */
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 240 10% 5.5%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
     --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
+    --secondary: 240 3.7% 12%; /* Sleek button dark background */
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --muted: 240 3.7% 12%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 3.7% 15%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
+    --border: 240 3.7% 12%; /* Thin sharp borders */
+    --input: 240 3.7% 12%;
     --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-background: 240 10% 3%; /* Ultra dark sidebar (#070708) */
+    --sidebar-foreground: 240 5% 80%;
+    --sidebar-border: 240 3.7% 10%;
+    --sidebar-accent: 240 3.7% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border transition-colors duration-150;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased selection:bg-zinc-800 selection:text-white;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight font-semibold text-foreground;
+    @apply tracking-tight font-medium text-foreground;
   }
 }
 
 @layer utilities {
+  .glass-card {
+    @apply bg-card/65 backdrop-blur-md border border-white/5 dark:border-white/[0.03];
+  }
+  .glass-card-hover {
+    @apply transition-all duration-300 hover:border-zinc-700/30 hover:bg-zinc-900/35 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)];
+  }
   .scrollbar-thin {
     scrollbar-width: thin;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/20 rounded-full;
+    @apply bg-muted-foreground/15 rounded-full hover:bg-muted-foreground/30 transition-colors;
   }
 }

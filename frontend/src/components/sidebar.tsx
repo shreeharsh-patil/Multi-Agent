@@ -36,17 +36,17 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r bg-sidebar border-zinc-200 dark:border-zinc-800">
-      <div className="p-6">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-primary-foreground stroke-[1.5]" />
+    <aside className="hidden md:flex w-60 flex-col border-r bg-sidebar/50 backdrop-blur-md border-zinc-200/50 dark:border-zinc-900">
+      <div className="px-6 py-7">
+        <Link href="/dashboard" className="flex items-center gap-2.5 group">
+          <div className="h-8 w-8 rounded-lg bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center transition-transform group-hover:scale-105 duration-200">
+            <Sparkles className="h-4 w-4 text-zinc-100 dark:text-zinc-900 stroke-[1.5]" />
           </div>
-          <span className="font-semibold text-lg tracking-tight">AI Platform</span>
+          <span className="font-medium text-base tracking-tight text-zinc-900 dark:text-zinc-50">AI Space</span>
         </Link>
       </div>
 
-      <ScrollArea className="flex-1 px-3">
+      <ScrollArea className="flex-1 px-4">
         <nav className="space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -57,22 +57,26 @@ export function Sidebar() {
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   buttonVariants({ variant: 'ghost' }),
-                  'w-full justify-start gap-3 font-normal text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50',
-                  isActive && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium text-zinc-950 dark:text-zinc-50',
+                  'w-full justify-start gap-3 px-3 py-2 h-9 rounded-md font-normal transition-all duration-150',
+                  'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/40',
+                  isActive && 'bg-zinc-100 dark:bg-zinc-900/60 text-zinc-900 dark:text-zinc-50 font-medium border-l-2 border-zinc-900 dark:border-zinc-100 rounded-l-none pl-2.5',
                 )}
               >
-                <item.icon className="h-4 w-4 stroke-[1.5]" />
-                {item.name}
+                <item.icon className={cn("h-4 w-4 stroke-[1.5]", isActive ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-500")} />
+                <span className="text-xs tracking-wide">{item.name}</span>
               </Link>
             )
           })}
         </nav>
       </ScrollArea>
 
-      <div className="p-4 border-t border-zinc-200 dark:border-zinc-850">
-        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono text-center">
-          Multi-Agent AI Platform v0.1
-        </p>
+      <div className="p-4 border-t border-zinc-200/50 dark:border-zinc-900">
+        <div className="flex items-center justify-between px-2">
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-650 font-mono">
+            Platform v0.1
+          </p>
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title="Connected" />
+        </div>
       </div>
     </aside>
   )

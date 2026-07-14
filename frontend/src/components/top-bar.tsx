@@ -54,7 +54,7 @@ export function TopBar() {
   const pathname = usePathname()
 
   return (
-    <header className="flex items-center justify-between gap-4 px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 w-full relative">
+    <header className="flex items-center justify-between gap-4 px-8 py-4 border-b bg-background/50 backdrop-blur-md border-zinc-200/50 dark:border-zinc-900 w-full relative">
       {/* Mobile Menu Button */}
       <div className="md:hidden flex items-center">
         <Button 
@@ -124,42 +124,49 @@ export function TopBar() {
       <div className="flex items-center gap-3 ml-auto">
         <ThemeToggle />
 
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 stroke-[1.5]" />
-          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
+        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60">
+          <Bell className="h-4.5 w-4.5 stroke-[1.5] text-zinc-500 dark:text-zinc-400" />
+          <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-emerald-500" />
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-              <Avatar className="h-9 w-9">
+            <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:opacity-90">
+              <Avatar className="h-8 w-8 border border-zinc-200/50 dark:border-zinc-800">
                 <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
-                <AvatarFallback>
+                <AvatarFallback className="bg-zinc-100 dark:bg-zinc-900 text-xs text-zinc-650 dark:text-zinc-400 font-medium">
                   {session?.user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end">
-            <DropdownMenuLabel>
-              <div className="flex flex-col">
-                <span>{session?.user?.name}</span>
-                <span className="text-xs text-muted-foreground font-normal">
+          <DropdownMenuContent className="w-56 mt-1 border-zinc-200/60 dark:border-zinc-900" align="end">
+            <DropdownMenuLabel className="font-normal py-2 px-3">
+              <div className="flex flex-col space-y-0.5">
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{session?.user?.name}</span>
+                <span className="text-xs text-zinc-400 dark:text-zinc-555 font-normal truncate">
                   {session?.user?.email}
                 </span>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4 stroke-[1.5]" />
-              Profile
+            <DropdownMenuSeparator className="bg-zinc-200/60 dark:bg-zinc-900" />
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="cursor-pointer flex items-center w-full px-3 py-1.5 text-xs">
+                <User className="mr-2 h-4 w-4 stroke-[1.5] text-zinc-400" />
+                Profile Settings
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4 stroke-[1.5]" />
-              Settings
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="cursor-pointer flex items-center w-full px-3 py-1.5 text-xs">
+                <Settings className="mr-2 h-4 w-4 stroke-[1.5] text-zinc-400" />
+                Platform Settings
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/login' })}>
+            <DropdownMenuSeparator className="bg-zinc-200/60 dark:bg-zinc-900" />
+            <DropdownMenuItem 
+              className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive flex items-center px-3 py-1.5 text-xs"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+            >
               <LogOut className="mr-2 h-4 w-4 stroke-[1.5]" />
               Sign out
             </DropdownMenuItem>

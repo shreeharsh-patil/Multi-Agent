@@ -7,10 +7,10 @@ import { api } from '@/lib/api'
 import Link from 'next/link'
 
 const statConfig = [
-  { label: 'Active Agents', icon: Bot, color: 'text-blue-500', key: 'agents' as const },
-  { label: 'Documents', icon: FileText, color: 'text-purple-500', key: 'documents' as const },
-  { label: 'Notes', icon: BookOpen, color: 'text-amber-500', key: 'notes' as const },
-  { label: 'Conversations', icon: MessageSquare, color: 'text-green-500', key: 'conversations' as const },
+  { label: 'Specialist Agents', icon: Bot, bg: 'bg-indigo-50/40 dark:bg-indigo-950/15', color: 'text-indigo-650 dark:text-indigo-400 border-indigo-200/20 dark:border-indigo-800/20', key: 'agents' as const },
+  { label: 'Indexed Documents', icon: FileText, bg: 'bg-violet-50/40 dark:bg-violet-950/15', color: 'text-violet-650 dark:text-violet-400 border-violet-200/20 dark:border-violet-800/20', key: 'documents' as const },
+  { label: 'Knowledge Notes', icon: BookOpen, bg: 'bg-amber-50/40 dark:bg-amber-950/15', color: 'text-amber-650 dark:text-amber-400 border-amber-200/20 dark:border-amber-800/20', key: 'notes' as const },
+  { label: 'Conversations', icon: MessageSquare, bg: 'bg-emerald-50/40 dark:bg-emerald-950/15', color: 'text-emerald-650 dark:text-emerald-400 border-emerald-200/20 dark:border-emerald-800/20', key: 'conversations' as const },
 ]
 
 export default function DashboardPage() {
@@ -23,17 +23,18 @@ export default function DashboardPage() {
     const fetchStats = async () => {
       setLoading(true)
       try {
-        const [agentsRes, docsRes, notesRes] = await Promise.all([
+        const [agentsRes, docsRes, notesRes, convsRes] = await Promise.all([
           api.agents.list(),
           api.documents.list(),
           api.notes.list(),
+          api.chat.listConversations()
         ])
         if (mounted) {
           setStats({
             agents: (agentsRes.success && agentsRes.data ? agentsRes.data.length : 0),
             documents: (docsRes.success && docsRes.data ? docsRes.data.length : 0),
             notes: (notesRes.success && notesRes.data ? notesRes.data.length : 0),
-            conversations: 0,
+            conversations: (convsRes.success && convsRes.data ? convsRes.data.length : 0),
           })
         }
       } catch (e) {
@@ -47,105 +48,130 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-10 animate-fade-in max-w-7xl mx-auto py-2">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Welcome to your Multi-Agent AI Platform
+        <h1 className="text-2xl md:text-3xl font-medium tracking-tight text-zinc-900 dark:text-zinc-50">Overview</h1>
+        <p className="text-xs md:text-sm text-zinc-550 dark:text-zinc-400 mt-1">
+          Welcome back. Here is the active status of your collaborative AI workspace.
         </p>
       </div>
 
       {error && (
-        <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg">
+        <div className="bg-destructive/10 text-destructive text-xs px-4 py-3 rounded-lg border border-destructive/20">
           {error}
-          <span className="text-xs ml-2">(Some stats may be incomplete)</span>
+          <span className="text-[10px] ml-2 font-mono opacity-80">(Some stats may be incomplete)</span>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Grid */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {statConfig.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  <p className="text-3xl font-bold mt-1">
-                    {loading ? (
-                      <Loader2 className="h-6 w-6 animate-spin inline-block" />
-                    ) : (
-                      stats[stat.key]
-                    )}
-                  </p>
-                </div>
-                <div className={`p-3 rounded-full bg-secondary ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" />
-                </div>
+          <Card key={stat.label} className="border-zinc-200/50 dark:border-zinc-900 bg-card/40 backdrop-blur-md hover:-translate-y-0.5 transition-all duration-200 hover:border-zinc-350 dark:hover:border-zinc-800 shadow-xs">
+            <CardContent className="p-5 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium tracking-wider uppercase text-zinc-450 dark:text-zinc-500">{stat.label}</p>
+                <p className="text-2xl md:text-3xl font-medium tracking-tight text-zinc-900 dark:text-zinc-50">
+                  {loading ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-zinc-400 inline-block" />
+                  ) : (
+                    stats[stat.key]
+                  )}
+                </p>
+              </div>
+              <div className={`p-2.5 rounded-lg border ${stat.bg} ${stat.color}`}>
+                <stat.icon className="h-4.5 w-4.5 stroke-[1.5]" />
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Sparkles className="h-5 w-5" />
-              Quick Actions
+      {/* Main Grid split */}
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Quick Actions Card */}
+        <Card className="md:col-span-2 border-zinc-200/50 dark:border-zinc-900 bg-card/40 backdrop-blur-md shadow-xs">
+          <CardHeader className="px-6 pt-6 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-wider uppercase text-zinc-450 dark:text-zinc-500">
+              <Sparkles className="h-4 w-4 text-zinc-500" />
+              Quick Workspace Actions
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-2 gap-4">
               <Link href="/chat">
-                <div className="p-4 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer text-center">
-                  <MessageSquare className="h-6 w-6 mx-auto mb-2 text-primary" />
-                  <p className="text-sm font-medium">Start Chat</p>
+                <div className="p-5 rounded-xl border border-zinc-200/40 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-100/30 dark:hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer text-center group">
+                  <div className="h-10 w-10 mx-auto mb-3 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/15 flex items-center justify-center border border-indigo-100/20 dark:border-indigo-900/20 text-indigo-650 dark:text-indigo-400">
+                    <MessageSquare className="h-5 w-5 stroke-[1.5] transition-transform duration-200 group-hover:scale-105" />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Start Chat</p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Converse with specialized agents</p>
                 </div>
               </Link>
               <Link href="/documents">
-                <div className="p-4 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer text-center">
-                  <FileText className="h-6 w-6 mx-auto mb-2 text-purple-500" />
-                  <p className="text-sm font-medium">Upload Document</p>
+                <div className="p-5 rounded-xl border border-zinc-200/40 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-100/30 dark:hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer text-center group">
+                  <div className="h-10 w-10 mx-auto mb-3 rounded-lg bg-violet-50/50 dark:bg-violet-950/15 flex items-center justify-center border border-violet-100/20 dark:border-violet-900/20 text-violet-650 dark:text-violet-400">
+                    <FileText className="h-5 w-5 stroke-[1.5] transition-transform duration-200 group-hover:scale-105" />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Upload Files</p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Index document archives for RAG</p>
                 </div>
               </Link>
               <Link href="/notes">
-                <div className="p-4 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer text-center">
-                  <BookOpen className="h-6 w-6 mx-auto mb-2 text-amber-500" />
-                  <p className="text-sm font-medium">Create Notes</p>
+                <div className="p-5 rounded-xl border border-zinc-200/40 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-100/30 dark:hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer text-center group">
+                  <div className="h-10 w-10 mx-auto mb-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/15 flex items-center justify-center border border-amber-100/20 dark:border-amber-900/20 text-amber-650 dark:text-amber-400">
+                    <BookOpen className="h-5 w-5 stroke-[1.5] transition-transform duration-200 group-hover:scale-105" />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Create Notes</p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Take rich notes and flashcards</p>
                 </div>
               </Link>
               <Link href="/drive">
-                <div className="p-4 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer text-center">
-                  <Activity className="h-6 w-6 mx-auto mb-2 text-green-500" />
-                  <p className="text-sm font-medium">Google Drive</p>
+                <div className="p-5 rounded-xl border border-zinc-200/40 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-100/30 dark:hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer text-center group">
+                  <div className="h-10 w-10 mx-auto mb-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/15 flex items-center justify-center border border-emerald-100/20 dark:border-emerald-900/20 text-emerald-650 dark:text-emerald-400">
+                    <Activity className="h-5 w-5 stroke-[1.5] transition-transform duration-200 group-hover:scale-105" />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Google Drive</p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Connect cloud files & calendar</p>
                 </div>
               </Link>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Bot className="h-5 w-5" />
-              Active Agents
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        {/* Active Agents Card */}
+        <Card className="border-zinc-200/50 dark:border-zinc-900 bg-card/40 backdrop-blur-md shadow-xs flex flex-col justify-between">
+          <div>
+            <CardHeader className="px-6 pt-6 pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-wider uppercase text-zinc-450 dark:text-zinc-500">
+                <Bot className="h-4 w-4 text-zinc-500" />
+                Orchestration Hub
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 pt-2 pb-6">
+              <div className="space-y-4 mt-2">
+                <div>
+                  {loading ? (
+                    <div className="h-10 w-10 flex items-center justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                    </div>
+                  ) : (
+                    <p className="text-5xl font-light tracking-tight text-zinc-900 dark:text-zinc-50">{stats.agents}</p>
+                  )}
+                  <p className="text-[11px] text-zinc-550 dark:text-zinc-400 mt-1">
+                    Specialized collaborative agent roles configured and active.
+                  </p>
+                </div>
+                <div className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed font-normal bg-zinc-50/50 dark:bg-zinc-900/40 border border-zinc-200/40 dark:border-zinc-900 p-3 rounded-lg">
+                  Agents can dynamically collaborate on complex research, code analysis, document retrieval, and planning.
+                </div>
               </div>
-            ) : (
-              <p className="text-4xl font-bold text-primary">{stats.agents}</p>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">
-              Specialized agents ready to help
-            </p>
-            <Link href="/agents">
-              <p className="text-sm text-primary hover:underline mt-3 inline-block">View all agents →</p>
+            </CardContent>
+          </div>
+          <div className="p-6 pt-0">
+            <Link href="/agents" className="w-full inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 hover:border-zinc-300 dark:border-zinc-900 dark:hover:border-zinc-800 bg-transparent text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
+              Manage Agents →
             </Link>
-          </CardContent>
+          </div>
         </Card>
       </div>
     </div>
