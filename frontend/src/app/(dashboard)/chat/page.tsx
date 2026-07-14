@@ -38,6 +38,7 @@ interface Attachment {
   id: string
   file: File
   status: 'pending' | 'uploading' | 'done' | 'error'
+  progress?: number
   documentId?: string
   imageUrl?: string
   previewUrl?: string
@@ -69,15 +70,17 @@ export default function ChatPage() {
   }, [messages])
 
   const uploadAttachment = useCallback(async (att: Attachment): Promise<Attachment> => {
-    setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, status: 'uploading' } : a))
+    setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, status: 'uploading', progress: 0 } : a))
     try {
-      const res = await api.documents.upload(att.file)
+      const res = await api.documents.upload(att.file, 'default', (progress) => {
+        setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, progress } : a))
+      })
       if (res.success && res.data) {
-        return { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl }
+        return { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
       }
-      return { ...att, status: 'error' }
+      return { ...att, status: 'error', progress: 0 }
     } catch {
-      return { ...att, status: 'error' }
+      return { ...att, status: 'error', progress: 0 }
     }
   }, [])
 
@@ -543,7 +546,12 @@ export default function ChatPage() {
                       <FileText className="h-4 w-4 text-muted-foreground" />
                     )}
                     <span className="max-w-[120px] truncate">{att.file.name}</span>
-                    {att.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
+                    {att.status === 'uploading' && (
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
+                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                        {att.progress !== undefined ? `${att.progress}%` : '0%'}
+                      </span>
+                    )}
                     {att.status === 'pending' && (
                       <button onClick={() => removeAttachment(att.id)} className="shrink-0">
                         <X className="h-3 w-3 hover:text-destructive" />

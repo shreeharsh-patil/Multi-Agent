@@ -26,6 +26,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [importingFromDrive, setImportingFromDrive] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,9 +52,10 @@ export default function DocumentsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadProgress(0)
     setError(null)
     try {
-      const res = await api.documents.upload(file)
+      const res = await api.documents.upload(file, 'default', setUploadProgress)
       if (res.success) {
         await fetchDocuments()
       } else {
@@ -163,12 +165,30 @@ export default function DocumentsPage() {
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                Upload
+                {uploading ? `Uploading ${uploadProgress}%` : 'Upload'}
               </span>
             </Button>
           </label>
         </div>
       </div>
+
+      {uploading && (
+        <div className="bg-secondary/40 border rounded-xl p-4 space-y-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex justify-between items-center text-sm">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="font-medium">Uploading your document...</span>
+            </div>
+            <span className="font-semibold text-primary">{uploadProgress}%</span>
+          </div>
+          <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-primary/80 to-primary h-full transition-all duration-300 ease-out" 
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg">
@@ -205,11 +225,16 @@ export default function DocumentsPage() {
                   accept=".pdf,.docx,.pptx,.txt,.md"
                   className="hidden"
                   onChange={handleUpload}
+                  disabled={uploading}
                 />
-                <Button variant="outline" className="mt-4 gap-2" asChild>
+                <Button variant="outline" className="mt-4 gap-2" disabled={uploading} asChild>
                   <span>
-                    <Upload className="h-4 w-4" />
-                    Upload your first document
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {uploading ? `Uploading ${uploadProgress}%` : 'Upload your first document'}
                   </span>
                 </Button>
               </label>

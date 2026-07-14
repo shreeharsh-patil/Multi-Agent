@@ -33,6 +33,66 @@ async function fetchApi<T>(
   }
 }
 
+async function uploadApiWithProgress<T>(
+  endpoint: string,
+  formData: FormData,
+  onProgress?: (progress: number) => void,
+  headers: Record<string, string> = {},
+): Promise<ApiResponse<T>> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BACKEND_URL}${endpoint}`)
+
+    // Attach JWT access token if available
+    const token = getAccessToken()
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    }
+
+    // Attach other headers
+    Object.entries(headers).forEach(([key, value]) => {
+      xhr.setRequestHeader(key, value)
+    })
+
+    if (onProgress && xhr.upload) {
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100)
+          onProgress(percentComplete)
+        }
+      })
+    }
+
+    xhr.onload = () => {
+      try {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const response = JSON.parse(xhr.responseText)
+          resolve(response)
+        } else {
+          resolve({
+            success: false,
+            error: `Upload failed with status ${xhr.status}`,
+          })
+        }
+      } catch (error) {
+        resolve({
+          success: false,
+          error: error instanceof Error ? error.message : 'Invalid JSON response',
+        })
+      }
+    }
+
+    xhr.onerror = () => {
+      resolve({
+        success: false,
+        error: 'Network error occurred during upload',
+      })
+    }
+
+    xhr.send(formData)
+  })
+}
+
 export const api = {
   auth: {
     login: (data: { email: string; name: string; image?: string; google_id?: string }) =>
@@ -97,14 +157,15 @@ export const api = {
 
   documents: {
     list: () => fetchApi<DocumentInfo[]>('/api/documents'),
-    upload: (file: File, userId = 'default') => {
+    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void) => {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('user_id', userId)
-      return fetchApi<DocumentInfo & { chunks?: number; imageUrl?: string }>('/api/documents/upload', {
-        method: 'POST',
-        body: formData,
-      })
+      return uploadApiWithProgress<DocumentInfo & { chunks?: number; imageUrl?: string }>(
+        '/api/documents/upload',
+        formData,
+        onProgress,
+      )
     },
     get: (id: string) =>
       fetchApi<DocumentInfo & { imageUrl?: string }>(`/api/documents/${id}`),
@@ -119,15 +180,17 @@ export const api = {
         '/api/drive/files',
         { headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
       ),
-    uploadToDrive: (file: File, accessToken: string, folderId?: string) => {
+    uploadToDrive: (file: File, accessToken: string, folderId?: string, onProgress?: (progress: number) => void) => {
       const formData = new FormData()
       formData.append('file', file)
       const params = new URLSearchParams()
       if (folderId) params.append('folder_id', folderId)
       const query = params.toString()
-      return fetchApi<{ id: string; name: string }>(
+      return uploadApiWithProgress<{ id: string; name: string }>(
         `/api/drive/upload${query ? `?${query}` : ''}`,
-        { method: 'POST', body: formData, headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
+        formData,
+        onProgress,
+        { 'X-Drive-Access-Token': accessToken } as Record<string, string>,
       )
     },
     deleteFile: (fileId: string, accessToken: string) =>

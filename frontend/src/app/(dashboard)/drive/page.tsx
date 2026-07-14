@@ -49,6 +49,7 @@ export default function DrivePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
 
   const fetchFiles = useCallback(async () => {
     if (!accessToken) return
@@ -85,8 +86,9 @@ export default function DrivePage() {
     const target = e.target
     if (!file || !accessToken) return
     setUploading(true)
+    setUploadProgress(0)
     try {
-      const res = await api.drive.uploadToDrive(file, accessToken)
+      const res = await api.drive.uploadToDrive(file, accessToken, undefined, setUploadProgress)
       if (res.success) {
         await fetchFiles()
       }
@@ -185,19 +187,37 @@ export default function DrivePage() {
               onChange={handleUpload}
               disabled={uploading}
             />
-            <Button variant="outline" className="gap-2" disabled={uploading} asChild>
+           <Button variant="outline" className="gap-2" disabled={uploading} asChild>
               <span>
                 {uploading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                Upload
+                {uploading ? `Uploading ${uploadProgress}%` : 'Upload'}
               </span>
             </Button>
           </label>
         </div>
       </div>
+
+      {uploading && (
+        <div className="bg-secondary/40 border rounded-xl p-4 space-y-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex justify-between items-center text-sm">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="font-medium">Uploading to Google Drive...</span>
+            </div>
+            <span className="font-semibold text-primary">{uploadProgress}%</span>
+          </div>
+          <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-primary/80 to-primary h-full transition-all duration-300 ease-out" 
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg">
