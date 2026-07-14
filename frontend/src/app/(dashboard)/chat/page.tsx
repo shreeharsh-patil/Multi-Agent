@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Maximize2, Share2 } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Share2 } from 'lucide-react'
 import type { AgentId } from '@shared/types'
 import { CodePreviewButton, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'

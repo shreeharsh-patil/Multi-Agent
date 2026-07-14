@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Loader2, Maximize2, Minimize2, RefreshCw } from 'lucide-react'
+import { Maximize2, Minimize2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export interface CodeSandboxProps {
@@ -10,6 +10,10 @@ export interface CodeSandboxProps {
   js?: string
   fullHtml?: string
   className?: string
+}
+
+function escapeCloser(str: string): string {
+  return str.replace(/<\//g, '<\\/')
 }
 
 function buildHtmlDocument(html: string, css: string, js: string): string {
@@ -28,9 +32,9 @@ ${css}
 ${html}
 <script>
 try {
-  ${js}
+  ${escapeCloser(js)}
 } catch (e) {
-  document.body.innerHTML += '<pre style="color:red;margin-top:16px">Runtime Error: ' + e.message + '</pre>';
+  document.body.innerHTML += '<pre style="color:red;margin-top:16px">Runtime Error: ' + e.message + '<\\/pre>';
 }
 </script>
 </body>
