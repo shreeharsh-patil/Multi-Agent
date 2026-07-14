@@ -19,16 +19,24 @@ async def lifespan(app: FastAPI):
 
     # --- Initialize MongoDB / Beanie ---
     mongo_client = None
-    for uri in [
-        settings.mongodb_uri,
-        settings.mongodb_uri + ("&" if "?" in settings.mongodb_uri else "?") + "tls=true&tlsInsecure=true&retryWrites=true&w=majority",
-        "mongodb://localhost:27017/multi-agent-platform",
-    ]:
+    uris_to_try = [settings.mongodb_uri]
+    # If using SRV, also try with direct connection params
+    if "+srv" in settings.mongodb_uri:
+        direct_uri = settings.mongodb_uri.replace("mongodb+srv://", "mongodb://")
+        direct_uri += ("&" if "?" in direct_uri else "?") + "ssl=true&retryWrites=true&w=majority"
+        uris_to_try.append(direct_uri)
+    # Also try with tlsInsecure to bypass TLS issues
+    for base in list(uris_to_try):
+        sep = "&" if "?" in base else "?"
+        uris_to_try.append(base + sep + "tls=true&tlsInsecure=true&retryWrites=true&w=majority")
+    uris_to_try.append("mongodb://localhost:27017/multi-agent-platform")
+
+    for uri in uris_to_try:
         try:
-            client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=15000)
+            client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=20000)
             await client.admin.command("ping")
             mongo_client = client
-            logger.info("MongoDB connected")
+            logger.info(f"MongoDB connected")
             break
         except Exception as e:
             logger.warning(f"MongoDB attempt failed: {e}")
