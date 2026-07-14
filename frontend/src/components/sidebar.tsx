@@ -36,13 +36,13 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r bg-sidebar">
+    <aside className="hidden md:flex w-64 flex-col border-r bg-sidebar border-zinc-200 dark:border-zinc-800">
       <div className="p-6">
         <Link href="/dashboard" className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
+            <Sparkles className="h-4 w-4 text-primary-foreground stroke-[1.5]" />
           </div>
-          <span className="font-semibold text-lg">AI Platform</span>
+          <span className="font-semibold text-lg tracking-tight">AI Platform</span>
         </Link>
       </div>
 
@@ -57,11 +57,11 @@ export function Sidebar() {
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   buttonVariants({ variant: 'ghost' }),
-                  'w-full justify-start gap-3 font-normal',
-                  isActive && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium',
+                  'w-full justify-start gap-3 font-normal text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50',
+                  isActive && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium text-zinc-950 dark:text-zinc-50',
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-4 w-4 stroke-[1.5]" />
                 {item.name}
               </Link>
             )
@@ -69,8 +69,8 @@ export function Sidebar() {
         </nav>
       </ScrollArea>
 
-      <div className="p-4 border-t">
-        <p className="text-xs text-muted-foreground text-center">
+      <div className="p-4 border-t border-zinc-200 dark:border-zinc-850">
+        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono text-center">
           Multi-Agent AI Platform v0.1
         </p>
       </div>
