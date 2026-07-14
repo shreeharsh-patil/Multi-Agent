@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Maximize2 } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Maximize2, Share2 } from 'lucide-react'
 import type { AgentId } from '@shared/types'
-import { CodePreviewButton, CodePreviewPanel, extractCodeFromContent, type CodeSandboxProps } from '@/components/code-sandbox'
+import { CodePreviewButton, type CodeSandboxProps } from '@/components/code-sandbox'
+import { CodePreviewPanel } from '@/components/code-preview-panel'
 
 const agents = [
   { id: 'auto', name: 'Auto (Orchestrator)' },
@@ -71,6 +72,7 @@ export default function ChatPage() {
   const [voiceMode, setVoiceMode] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [speakingId, setSpeakingId] = useState<string | null>(null)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -90,9 +92,10 @@ export default function ChatPage() {
   const uploadAttachment = useCallback(async (att: Attachment): Promise<Attachment> => {
     setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, status: 'uploading', progress: 0 } : a))
     try {
+      const uploadWorkspace = selectedWorkspace !== 'all' && selectedWorkspace !== 'unfiled' ? selectedWorkspace : undefined
       const res = await api.documents.upload(att.file, 'default', (progress) => {
         setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, progress } : a))
-      })
+      }, uploadWorkspace)
       if (res.success && res.data) {
         return { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
       }
@@ -100,7 +103,7 @@ export default function ChatPage() {
     } catch {
       return { ...att, status: 'error', progress: 0 }
     }
-  }, [])
+  }, [selectedWorkspace])
 
   const speakMessage = useCallback((id: string, content: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
@@ -173,6 +176,16 @@ export default function ChatPage() {
   }>>([])
   const [loadingConversations, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
+
+  const shareConversation = useCallback(async () => {
+    if (!conversationId) return
+    const res = await api.chat.createShare(conversationId)
+    if (res.success && res.data) {
+      const url = `${window.location.origin}/shared/chat/${res.data.token}`
+      setShareUrl(url)
+      await navigator.clipboard?.writeText(url)
+    }
+  }, [conversationId])
 
   // Fetch conversations list
   const fetchConversations = useCallback(async () => {
@@ -503,6 +516,9 @@ export default function ChatPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={shareConversation} disabled={!conversationId}>
+              <Share2 className="h-4 w-4" /> <span className="hidden sm:inline">Share</span>
+            </Button>
             <Button
               variant={voiceMode ? 'default' : 'outline'}
               size="sm"
@@ -532,6 +548,7 @@ export default function ChatPage() {
             </Select>}
           </div>
         </div>
+        {shareUrl && <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-xs"><Share2 className="h-3.5 w-3.5 text-emerald-600" /><span className="font-medium">Share link copied</span><Input readOnly value={shareUrl} className="ml-auto h-7 max-w-md text-[11px]" /></div>}
 
         {voiceMode && (
           <Card className="mb-4 border-violet-500/25 bg-gradient-to-r from-violet-500/[.08] via-background to-fuchsia-500/[.05]">

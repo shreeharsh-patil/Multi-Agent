@@ -46,6 +46,7 @@ export interface Conversation {
   createdAt: string
   updatedAt: string
   metadata?: Record<string, unknown>
+  workspaceId?: string
 }
 
 export interface Message {

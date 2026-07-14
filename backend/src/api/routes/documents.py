@@ -12,6 +12,7 @@ from src.services.rag.chunker import text_chunker
 from src.services.rag.retriever import get_retriever
 from src.services.rag.ocr import enrich_pdf_with_ocr
 from src.utils.logger import logger
+from src.models.workspace import Workspace
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
@@ -24,16 +25,29 @@ TEXT_EXTENSIONS = {"pdf", "docx", "pptx", "txt", "md"}
 ALL_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS
 
 
+async def can_use_workspace(workspace_id: str | None, user_id: str) -> bool:
+    if not workspace_id:
+        return True
+    workspace = await Workspace.get(workspace_id)
+    return bool(workspace and (workspace.user_id == user_id or user_id in workspace.member_ids))
+
+
 @router.get("")
 async def list_documents(http_request: Request, user_id: str = "default", workspace_id: str | None = None) -> list[dict]:
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
+    if workspace_id and workspace_id != "__unfiled__" and not await can_use_workspace(workspace_id, resolved_user_id):
+        raise HTTPException(status_code=404, detail="Workspace not found")
 
     from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
-    if await should_use_opendocuments(resolved_user_id):
+    # Workspace-scoped documents must stay in the local index so member
+    # permissions and workspace filtering remain enforceable.
+    if not workspace_id and await should_use_opendocuments(resolved_user_id):
         return await opendocuments_client.list_documents()
 
     query = Document.find(Document.user_id == resolved_user_id)
+    if workspace_id and workspace_id != "__unfiled__":
+        query = Document.find(Document.workspace_id == workspace_id)
     if workspace_id == "__unfiled__":
         query = query.find(Document.workspace_id == None)
     elif workspace_id:
@@ -63,6 +77,8 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
 
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
+    if workspace_id and not await can_use_workspace(workspace_id, resolved_user_id):
+        raise HTTPException(status_code=404, detail="Workspace not found")
 
     ext = os.path.splitext(file.filename)[1].lower().lstrip(".")
     if ext not in ALL_EXTENSIONS:
@@ -72,7 +88,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
     content = await file.read()
 
     from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
-    if not is_image and await should_use_opendocuments(resolved_user_id):
+    if not workspace_id and not is_image and await should_use_opendocuments(resolved_user_id):
         return await opendocuments_client.upload_document(file.filename, content)
 
     if is_image:
@@ -276,7 +292,7 @@ async def move_document(document_id: str, http_request: Request, workspace_id: s
     if workspace_id:
         from src.models.workspace import Workspace
         workspace = await Workspace.get(workspace_id)
-        if not workspace or workspace.user_id != resolved_user_id:
+        if not workspace or (workspace.user_id != resolved_user_id and resolved_user_id not in workspace.member_ids):
             raise HTTPException(status_code=404, detail="Workspace not found")
     doc.workspace_id = workspace_id
     doc.updated_at = datetime.now(timezone.utc)

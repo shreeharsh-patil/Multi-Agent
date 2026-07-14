@@ -18,7 +18,7 @@ class Retriever:
         query_embedding = await embedding_service.embed_text(query)
 
         filter_dict = None
-        if user_id:
+        if user_id and not workspace_id:
             filter_dict = {"user_id": user_id}
         if workspace_id:
             filter_dict = {**(filter_dict or {}), "workspace_id": workspace_id}

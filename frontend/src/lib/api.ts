@@ -155,6 +155,8 @@ export const api = {
       }>(`/api/chat/conversations/${id}`),
     deleteConversation: (id: string) =>
       fetchApi<{ success: boolean }>(`/api/chat/conversations/${id}`, { method: 'DELETE' }),
+    createShare: (id: string) => fetchApi<{ token: string; conversationId: string }>(`/api/shares/chat/${id}`, { method: 'POST' }),
+    revokeShare: (id: string) => fetchApi<{ success: boolean }>(`/api/shares/chat/${id}`, { method: 'DELETE' }),
   },
 
   documents: {
@@ -186,6 +188,12 @@ export const api = {
     update: (id: string, data: { name: string; description?: string; color?: string }) =>
       fetchApi<{ id: string; name: string; description?: string; color: string }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: string) => fetchApi<{ success: boolean }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+    join: (id: string) => fetchApi<{ id: string; name: string; member: boolean }>(`/api/shares/workspace/${id}/join`, { method: 'POST' }),
+    members: (id: string) => fetchApi<{ ownerId: string; memberIds: string[] }>(`/api/workspaces/${id}/members`),
+  },
+
+  shares: {
+    chat: (token: string) => fetchApi<{ id: string; title: string; ownerId: string; messages: Array<{ role: string; content: string; agentId?: string }>; createdAt: string; updatedAt: string }>(`/api/shares/chat/${token}`),
   },
 
   drive: {
@@ -277,6 +285,10 @@ export const api = {
       fetchApi<{ id: string; query: string; content: string; createdAt: string }>(
         '/api/research',
         { method: 'POST', body: JSON.stringify(data) },
+      ),
+    deep: (query: string) =>
+      fetchApi<{ id: string; query: string; content: string; createdAt: string; stages: Array<{ id: string; label: string; detail: string }>; sources: string[] }>(
+        '/api/research/deep', { method: 'POST', body: JSON.stringify({ query }) },
       ),
     delete: (id: string) =>
       fetchApi<{ success: boolean }>(`/api/research/${id}`, { method: 'DELETE' }),

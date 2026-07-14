@@ -12,6 +12,7 @@ from src.models.agent import AgentConfig
 from src.models.conversation import Conversation, Message
 from src.utils.logger import logger
 from beanie import PydanticObjectId
+from src.models.workspace import Workspace
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
@@ -55,6 +56,15 @@ class ChatResponse(BaseModel):
     error: Optional[str] = None
 
 
+async def can_access_conversation(conv: Conversation, user_id: str) -> bool:
+    if conv.user_id == user_id:
+        return True
+    if not conv.workspace_id:
+        return False
+    workspace = await Workspace.get(conv.workspace_id)
+    return bool(workspace and (workspace.user_id == user_id or user_id in workspace.member_ids))
+
+
 async def _save_messages(
     conv_id: str,
     user_id: str,
@@ -63,6 +73,7 @@ async def _save_messages(
     agent_id: Optional[str] = None,
     is_new: bool = False,
     attachments: Optional[list[dict]] = None,
+    workspace_id: Optional[str] = None,
 ):
     """Save user and assistant messages to the Conversation in MongoDB."""
     try:
@@ -78,6 +89,7 @@ async def _save_messages(
                 user_id=user_id,
                 title=title,
                 agent_id=agent_id,
+                workspace_id=workspace_id,
                 messages=[
                     Message(
                         role="user",
@@ -91,6 +103,8 @@ async def _save_messages(
         else:
             conv = await Conversation.get(conv_id)
             if conv:
+                if workspace_id and not conv.workspace_id:
+                    conv.workspace_id = workspace_id
                 conv.messages.append(
                     Message(
                         role="user",
@@ -121,9 +135,10 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
 
-    convs = await Conversation.find(
-        Conversation.user_id == resolved_user_id
-    ).sort(-Conversation.updated_at).to_list()
+    owned = await Conversation.find(Conversation.user_id == resolved_user_id).to_list()
+    workspace_ids = [str(w.id) for w in await Workspace.find({"member_ids": resolved_user_id}).to_list()]
+    shared = await Conversation.find({"workspace_id": {"$in": workspace_ids}}).to_list() if workspace_ids else []
+    convs = sorted({str(c.id): c for c in owned + shared}.values(), key=lambda c: c.updated_at, reverse=True)
 
     return [
         {
@@ -140,16 +155,18 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
 
 
 @router.get("/conversations/{conv_id}")
-async def get_conversation(conv_id: str) -> dict:
+async def get_conversation(conv_id: str, http_request: Request) -> dict:
     """Get a conversation with all messages."""
     conv = await Conversation.get(conv_id)
-    if not conv:
+    user_id = (getattr(http_request.state, "user", None) or {}).get("sub", "default")
+    if not conv or not await can_access_conversation(conv, user_id):
         raise HTTPException(404, "Conversation not found")
 
     return {
         "id": str(conv.id),
         "title": conv.title,
         "agentId": conv.agent_id,
+        "workspaceId": conv.workspace_id,
         "messages": [
             {
                 "id": str(i),
@@ -166,10 +183,11 @@ async def get_conversation(conv_id: str) -> dict:
 
 
 @router.delete("/conversations/{conv_id}")
-async def delete_conversation(conv_id: str) -> dict:
+async def delete_conversation(conv_id: str, http_request: Request) -> dict:
     """Delete a conversation."""
     conv = await Conversation.get(conv_id)
-    if not conv:
+    user_id = (getattr(http_request.state, "user", None) or {}).get("sub", "default")
+    if not conv or conv.user_id != user_id:
         raise HTTPException(404, "Conversation not found")
     await conv.delete()
     return {"success": True, "message": "Conversation deleted"}
@@ -184,6 +202,14 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         # Use authenticated user from JWT if available, fall back to request body
         auth_user = getattr(http_request.state, "user", None)
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+        if body.conversation_id:
+            existing = await Conversation.get(body.conversation_id)
+            if not existing or not await can_access_conversation(existing, user_id):
+                raise HTTPException(status_code=404, detail="Conversation not found")
+        if body.workspace_id:
+            workspace = await Workspace.get(body.workspace_id)
+            if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
+                raise HTTPException(status_code=404, detail="Workspace not found")
         routed_agent_id = body.agent_id or AgentRouter().route(body.message)
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
@@ -222,6 +248,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             agent_id=body.agent_id,
             is_new=is_new,
             attachments=attachments_data,
+            workspace_id=body.workspace_id,
         )
 
         return ChatResponse(
@@ -255,6 +282,14 @@ async def chat_stream(
     # Use authenticated user from JWT if available
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+    if body.conversation_id:
+        existing = await Conversation.get(body.conversation_id)
+        if not existing or not await can_access_conversation(existing, user_id):
+            raise HTTPException(status_code=404, detail="Conversation not found")
+    if body.workspace_id:
+        workspace = await Workspace.get(body.workspace_id)
+        if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
+            raise HTTPException(status_code=404, detail="Workspace not found")
     routed_agent_id = body.agent_id or AgentRouter().route(body.message)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
@@ -279,6 +314,7 @@ async def chat_stream(
                     conv_id=conv_id, user_id=user_id, user_message=body.message,
                     agent_message=accumulated_output, agent_id="teamwork", is_new=is_new,
                     attachments=attachments_data,
+                    workspace_id=body.workspace_id,
                 )
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
@@ -291,7 +327,7 @@ async def chat_stream(
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
@@ -304,7 +340,7 @@ async def chat_stream(
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
@@ -319,7 +355,7 @@ async def chat_stream(
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
@@ -347,6 +383,7 @@ async def chat_stream(
                         agent_id=body.agent_id,
                         is_new=is_new,
                         attachments=attachments_data,
+                        workspace_id=body.workspace_id,
                     )
 
                 yield f"event: {event_type}\n"

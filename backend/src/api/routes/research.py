@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from src.models.research import ResearchReport
 from src.utils.logger import logger
+from src.agents.research.agent import ResearchAgent
 
 router = APIRouter(prefix="/api/research", tags=["Research"])
 
@@ -18,6 +19,11 @@ class ReportResponse(BaseModel):
     query: str
     content: str
     createdAt: str
+
+
+class DeepResearchRequest(BaseModel):
+    query: str
+    user_id: str = "default"
 
 
 @router.get("")
@@ -69,6 +75,23 @@ async def create_report(body: CreateReportRequest) -> ReportResponse:
         content=report.content,
         createdAt=report.created_at.isoformat(),
     )
+
+
+@router.post("/deep", status_code=201)
+async def deep_research(body: DeepResearchRequest) -> dict:
+    if not body.query.strip():
+        raise HTTPException(400, "Research query is required")
+    try:
+        result = await ResearchAgent().deep_research(body.query.strip())
+        report = ResearchReport(user_id=body.user_id, query=body.query.strip(), content=result["output"])
+        await report.insert()
+        return {
+            "id": str(report.id), "query": report.query, "content": report.content,
+            "createdAt": report.created_at.isoformat(), "stages": result["stages"], "sources": result["sources"],
+        }
+    except Exception as exc:
+        logger.error(f"Deep research failed: {exc}", exc_info=True)
+        raise HTTPException(503, f"Deep research failed: {exc}")
 
 
 @router.delete("/{report_id}")

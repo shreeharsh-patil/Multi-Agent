@@ -38,6 +38,7 @@ class Message(BaseModel):
 
 class Conversation(BeanieDocument):
     user_id: str
+    workspace_id: Optional[str] = None
     title: str = "New Conversation"
     agent_id: Optional[str] = None
     messages: list[Message] = Field(default_factory=list)

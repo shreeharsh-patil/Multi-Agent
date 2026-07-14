@@ -12,6 +12,13 @@ def current_user(request: Request) -> str:
     return (auth_user.get("sub") if auth_user else None) or "default"
 
 
+async def get_accessible_workspace(workspace_id: str, user_id: str) -> Workspace:
+    workspace = await Workspace.get(workspace_id)
+    if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return workspace
+
+
 class WorkspaceCreate(BaseModel):
     name: str
     description: str | None = None
@@ -23,6 +30,8 @@ def serialize(workspace: Workspace, document_count: int = 0) -> dict:
         "id": str(workspace.id), "name": workspace.name,
         "description": workspace.description, "color": workspace.color,
         "documentCount": document_count,
+        "memberCount": len(workspace.member_ids) + 1,
+        "isOwner": False,
         "createdAt": workspace.created_at.isoformat(),
         "updatedAt": workspace.updated_at.isoformat(),
     }
@@ -31,8 +40,8 @@ def serialize(workspace: Workspace, document_count: int = 0) -> dict:
 @router.get("")
 async def list_workspaces(request: Request) -> list[dict]:
     user_id = current_user(request)
-    workspaces = await Workspace.find(Workspace.user_id == user_id).sort(-Workspace.updated_at).to_list()
-    return [serialize(w, await Document.find(Document.workspace_id == str(w.id), Document.user_id == user_id).count()) for w in workspaces]
+    workspaces = await Workspace.find({"$or": [{"user_id": user_id}, {"member_ids": user_id}]}).sort(-Workspace.updated_at).to_list()
+    return [{**serialize(w, await Document.find(Document.workspace_id == str(w.id)).count()), "isOwner": w.user_id == user_id} for w in workspaces]
 
 
 @router.post("")
@@ -66,3 +75,22 @@ async def delete_workspace(workspace_id: str, request: Request) -> dict:
     await Document.find(Document.workspace_id == workspace_id, Document.user_id == current_user(request)).update_many({"$set": {"workspace_id": None}})
     await workspace.delete()
     return {"success": True}
+
+
+@router.post("/{workspace_id}/join")
+async def join_workspace(workspace_id: str, request: Request) -> dict:
+    workspace = await Workspace.get(workspace_id)
+    user_id = current_user(request)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if user_id != workspace.user_id and user_id not in workspace.member_ids:
+        workspace.member_ids.append(user_id)
+        workspace.updated_at = datetime.now(timezone.utc)
+        await workspace.save()
+    return serialize(workspace)
+
+
+@router.get("/{workspace_id}/members")
+async def list_members(workspace_id: str, request: Request) -> dict:
+    workspace = await get_accessible_workspace(workspace_id, current_user(request))
+    return {"ownerId": workspace.user_id, "memberIds": workspace.member_ids}

@@ -17,6 +17,8 @@ PUBLIC_PATHS = {
     "/api/auth/login",
 }
 
+PUBLIC_PREFIXES = ("/api/shares/chat/",)
+
 
 async def get_user_id_from_request(request: Request) -> str:
     """Extract user ID from request.
@@ -59,7 +61,7 @@ async def jwt_auth_middleware(request: Request, call_next):
     path = request.url.path
 
     # Skip auth for public paths
-    if any(path.startswith(p) for p in PUBLIC_PATHS):
+    if any(path.startswith(p) for p in PUBLIC_PATHS) or any(path.startswith(p) for p in PUBLIC_PREFIXES):
         return await call_next(request)
 
     # Skip auth for OPTIONS (CORS preflight)

@@ -131,7 +131,10 @@ def create_coding_agent() -> LlmAgent:
             "Support multiple programming languages. "
             "Explain code logic clearly, help debug issues, and generate documentation. "
             "Follow best practices and suggest improvements. "
-            "When writing code, include comments and error handling."
+            "When writing code, include comments and error handling.\n\n"
+            "When generating HTML/CSS/JS code, always use markdown code blocks "
+            "with the language specified (e.g. ```html, ```css, ```js). "
+            "The platform automatically detects these blocks and renders a live preview."
         ),
         description="Writes code, explains programming concepts, debugs issues, and documents code.",
     )

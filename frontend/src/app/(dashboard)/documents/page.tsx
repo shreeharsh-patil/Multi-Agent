@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus, Share2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
 
@@ -42,6 +42,7 @@ export default function DocumentsPage() {
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>('all')
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [creatingWorkspace, setCreatingWorkspace] = useState(false)
+  const [inviteCopied, setInviteCopied] = useState(false)
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
@@ -77,6 +78,13 @@ export default function DocumentsPage() {
       setSelectedWorkspace(res.data.id)
     } else setError(res.error || 'Could not create workspace')
     setCreatingWorkspace(false)
+  }
+
+  const copyWorkspaceInvite = async () => {
+    if (selectedWorkspace === 'all' || selectedWorkspace === 'unfiled') return
+    await navigator.clipboard?.writeText(`${window.location.origin}/shared/workspace/${selectedWorkspace}`)
+    setInviteCopied(true)
+    window.setTimeout(() => setInviteCopied(false), 2200)
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,6 +260,7 @@ export default function DocumentsPage() {
           <div className="flex gap-2">
             <input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createWorkspace()} placeholder="New workspace" className="h-9 w-36 rounded-md border bg-background px-3 text-sm" />
             <Button variant="outline" size="sm" onClick={createWorkspace} disabled={creatingWorkspace || !newWorkspaceName.trim()} className="gap-1"><Plus className="h-3.5 w-3.5" /> Create</Button>
+            <Button variant="outline" size="sm" onClick={copyWorkspaceInvite} disabled={selectedWorkspace === 'all' || selectedWorkspace === 'unfiled'} className="gap-1"><Share2 className="h-3.5 w-3.5" /> {inviteCopied ? 'Copied' : 'Invite'}</Button>
           </div>
         </CardContent>
       </Card>

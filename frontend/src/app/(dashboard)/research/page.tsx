@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { Search, Globe, FileText, Loader2, Sparkles, Trash2 } from 'lucide-react'
+import { Search, Globe, FileText, Loader2, Sparkles, Trash2, CheckCircle2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 
@@ -24,6 +24,15 @@ export default function ResearchPage() {
   const [currentReport, setCurrentReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activeStage, setActiveStage] = useState(0)
+  const stages = [
+    { label: 'Research plan', detail: 'Framing questions and source strategy' },
+    { label: 'Initial search', detail: 'Gathering broad evidence and sources' },
+    { label: 'Source review', detail: 'Reading and comparing strong pages' },
+    { label: 'Draft synthesis', detail: 'Identifying findings and gaps' },
+    { label: 'Gap search', detail: 'Running targeted follow-up research' },
+    { label: 'Final report', detail: 'Editing the publication-grade report' },
+  ]
   const resultsRef = useRef<HTMLDivElement>(null)
 
   // Fetch existing reports from backend on mount
@@ -54,9 +63,28 @@ export default function ResearchPage() {
   const handleResearch = async () => {
     if (!query.trim() || researching) return
     setResearching(true)
+    setActiveStage(0)
     setCurrentReport(null)
     setError(null)
 
+    try {
+      const res = await api.research.deep(query)
+      if (res.success && res.data) {
+        const report = { id: res.data.id, query: res.data.query, content: res.data.content, createdAt: res.data.createdAt }
+        setCurrentReport(report)
+        setReports((prev) => [report, ...prev])
+      } else {
+        setError(res.error || 'Deep research failed')
+      }
+    } catch {
+      setError('Failed to complete deep research. Ensure the backend is running.')
+    } finally {
+      setResearching(false)
+      setQuery('')
+    }
+    return
+
+    /*
     try {
       const res = await api.chat.send({
         message: `Conduct thorough research on: ${query}
@@ -99,7 +127,14 @@ Make this comprehensive and well-structured.`,
       setResearching(false)
       setQuery('')
     }
+    */
   }
+
+  useEffect(() => {
+    if (!researching) return
+    const timer = window.setInterval(() => setActiveStage((stage) => Math.min(stage + 1, stages.length - 1)), 3500)
+    return () => window.clearInterval(timer)
+  }, [researching, stages.length])
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -162,10 +197,11 @@ Make this comprehensive and well-structured.`,
 
       {researching && (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
-            <p className="font-medium">Researching...</p>
-            <p className="text-sm mt-1">Gathering and analyzing information</p>
+          <CardContent className="space-y-4 py-6">
+            <div className="flex items-center gap-3"><Loader2 className="h-5 w-5 animate-spin text-primary" /><div><p className="font-medium">Deep Research is running</p><p className="text-sm text-muted-foreground">A bounded multi-step investigation is in progress.</p></div></div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {stages.map((stage, index) => <div key={stage.label} className={`rounded-lg border p-3 transition-colors ${index === activeStage ? 'border-primary/40 bg-primary/[.06]' : index < activeStage ? 'border-emerald-500/30 bg-emerald-500/[.04]' : 'opacity-50'}`}><div className="flex items-center gap-2 text-sm font-medium">{index < activeStage ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : index === activeStage ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <span className="h-4 w-4 rounded-full border" />}{stage.label}</div><p className="mt-1 text-xs text-muted-foreground">{stage.detail}</p></div>)}
+            </div>
           </CardContent>
         </Card>
       )}
