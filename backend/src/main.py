@@ -45,6 +45,8 @@ async def lifespan(app: FastAPI):
             client = AsyncIOMotorClient(uri, **kwargs)
             await client.admin.command("ping")
             mongo_client = client
+            # Monkeypatch append_metadata to prevent Beanie 1.x / PyMongo 4+ init errors
+            mongo_client.append_metadata = lambda *args, **kwargs: None
             logger.info(f"MongoDB connected")
             break
         except Exception as e:
