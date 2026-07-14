@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Literal
 from beanie import Document as BeanieDocument
 from pydantic import Field
@@ -12,8 +12,8 @@ class MemoryItem(BeanieDocument):
     value: Optional[dict] = None
     embedding: Optional[list[float]] = None
     score: Optional[float] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "memory_items"

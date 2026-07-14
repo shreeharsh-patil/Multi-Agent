@@ -381,9 +381,11 @@ export default function ChatPage() {
   }, [addFiles])
 
   // Cleanup object URLs on unmount
+  const attachmentsRef = useRef(attachments)
+  attachmentsRef.current = attachments
   useEffect(() => {
     return () => {
-      attachments.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl) })
+      attachmentsRef.current.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl) })
     }
   }, [])
 

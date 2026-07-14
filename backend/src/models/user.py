@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from beanie import Document as BeanieDocument, Indexed
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
-class UserPreferences(BeanieDocument):
+class UserPreferences(BaseModel):
     theme: str = "system"
     default_model: str = "gemini-2.0-flash"
     notifications: bool = True
@@ -20,8 +20,8 @@ class User(BeanieDocument):
     access_token: Optional[str] = None
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "users"

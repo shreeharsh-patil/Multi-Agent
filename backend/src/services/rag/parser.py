@@ -1,5 +1,4 @@
-from typing import BinaryIO, Optional
-import os
+from typing import Optional
 import PyPDF2
 from docx import Document as DocxDocument
 from pptx import Presentation
@@ -17,7 +16,7 @@ class DocumentParser:
     SUPPORTED_FORMATS = {".pdf", ".docx", ".pptx", ".txt", ".md"}
 
     def parse(self, file_path: str, file_type: str) -> ParseResult:
-        ext = f".{file_type.lower().replace('docx', 'docx').replace('pptx', 'pptx')}"
+        ext = f".{file_type.lower()}"
 
         if file_type == "pdf" or ext == ".pdf":
             return self._parse_pdf(file_path)

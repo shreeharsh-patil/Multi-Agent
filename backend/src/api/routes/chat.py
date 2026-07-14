@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -103,7 +103,7 @@ async def _save_messages(
                     agent_id=agent_id,
                 )
             )
-            conv.updated_at = datetime.utcnow()
+            conv.updated_at = datetime.now(timezone.utc)
             await conv.save()
     except Exception as e:
         logger.error(f"Failed to save messages: {e}")

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
@@ -17,6 +18,7 @@ class Settings(BaseSettings):
     vector_db_provider: Literal["chroma", "qdrant"] = "chroma"
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
+    qdrant_api_key: str = ""
     chroma_persist_dir: str = "./chroma_data"
 
     llm_provider: str = "gemini"
@@ -34,9 +36,10 @@ class Settings(BaseSettings):
 
     google_drive_credentials_path: str = ""
 
-    jwt_secret_key: str = "change-this-in-production"
+    secret_key: str = "change-this-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60 * 24  # 24 hours
+    jwt_access_token_expire_minutes: int = 60 * 24
+    embedding_dimension: int = 768
 
     opendocuments_api_url: str = "http://localhost:5001"
     use_opendocuments_rag: bool = False
@@ -75,7 +78,6 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-import os
 if settings.gemini_api_key:
     os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
     os.environ["GOOGLE_API_KEY"] = settings.gemini_api_key

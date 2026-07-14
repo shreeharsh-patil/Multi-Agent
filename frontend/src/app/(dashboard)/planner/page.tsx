@@ -208,7 +208,7 @@ Format the response with clear sections and bullet points.`,
       {/* Plans List View */}
       {view === 'list' && (
         <>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-1">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -218,28 +218,6 @@ Format the response with clear sections and bullet points.`,
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{plans.length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                  Pending
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold">{plans.length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Completed
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold">0</p>
               </CardContent>
             </Card>
           </div>

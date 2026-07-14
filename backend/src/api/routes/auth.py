@@ -1,12 +1,12 @@
 """Authentication and user management API routes."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from src.models.user import User, UserPreferences
+from src.models.user import User
 from src.services.auth.service import create_access_token, verify_access_token
 from src.utils.logger import logger
 
@@ -96,7 +96,7 @@ async def login(body: LoginRequest) -> LoginResponse:
             user.google_id = body.google_id
             needs_save = True
         if needs_save:
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(timezone.utc)
             await user.save()
 
     # Sign JWT
@@ -188,7 +188,7 @@ async def update_me(
             needs_save = True
 
     if needs_save:
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
         await user.save()
 
     return UserProfileResponse(

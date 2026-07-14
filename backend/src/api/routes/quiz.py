@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -237,7 +237,7 @@ async def check_answer(body: CheckAnswerRequest, http_request: Request) -> dict:
                 is_correct=is_correct,
             )
         )
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(timezone.utc)
     await session.save()
 
     return {
@@ -257,7 +257,7 @@ async def submit_quiz(body: SubmitRequest, http_request: Request) -> dict:
     score = sum(1 for a in session.answers if a.is_correct)
     session.score = score
     session.completed = True
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(timezone.utc)
     await session.save()
 
     # Return full results with correct answers and explanations

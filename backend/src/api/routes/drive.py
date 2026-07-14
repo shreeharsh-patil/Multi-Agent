@@ -2,7 +2,7 @@ import asyncio
 import os
 import tempfile
 from typing import Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Header, Query
 from pydantic import BaseModel
 from src.services.drive.service import drive_service
 from src.utils.logger import logger
@@ -25,7 +25,7 @@ class DriveDownloadResponse(BaseModel):
 
 @router.get("/files")
 async def list_drive_files(
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
     folder_id: Optional[str] = Query(None, description="Folder ID to list"),
     page_size: int = Query(20, description="Number of files per page"),
 ) -> DriveListResponse:
@@ -59,7 +59,7 @@ async def list_drive_files(
 @router.post("/upload")
 async def upload_to_drive(
     file: UploadFile = File(...),
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
     folder_id: Optional[str] = Query(None, description="Target folder ID"),
 ) -> dict:
     """Upload a file to Google Drive."""
@@ -113,7 +113,7 @@ async def upload_to_drive(
 @router.get("/download/{file_id}")
 async def download_from_drive(
     file_id: str,
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
 ) -> dict:
     """Get download URL and metadata for a Drive file."""
     try:
@@ -137,7 +137,7 @@ async def download_from_drive(
 @router.get("/download/{file_id}/content")
 async def download_drive_file_content(
     file_id: str,
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
 ):
     """Download the actual file content from Google Drive."""
     from fastapi.responses import StreamingResponse
@@ -169,7 +169,7 @@ async def download_drive_file_content(
 @router.delete("/files/{file_id}")
 async def delete_drive_file(
     file_id: str,
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
 ) -> dict:
     """Delete a file from Google Drive."""
     try:
@@ -186,7 +186,7 @@ async def delete_drive_file(
 @router.post("/folders")
 async def create_drive_folder(
     name: str = Query(..., description="Folder name"),
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
     parent_id: Optional[str] = Query(None, description="Parent folder ID"),
 ) -> dict:
     """Create a folder in Google Drive."""
@@ -204,7 +204,7 @@ async def create_drive_folder(
 
 @router.get("/storage")
 async def get_drive_storage(
-    access_token: str = Query(..., description="Google Drive access token"),
+    access_token: str = Header(..., alias="X-Drive-Access-Token"),
 ) -> dict:
     """Get Drive storage usage information."""
     try:

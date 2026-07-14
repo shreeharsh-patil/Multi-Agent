@@ -21,7 +21,6 @@ import {
   Sparkles,
   CheckCircle2,
   XCircle,
-  HelpCircle,
   Trophy,
   RefreshCw,
   Trash2,

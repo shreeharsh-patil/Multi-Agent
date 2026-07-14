@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { FileText, Upload, Download, Trash2, Loader2, ExternalLink, HardDrive } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, HardDrive } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
 
@@ -63,7 +63,6 @@ export default function DocumentsPage() {
       setError('Upload failed')
     } finally {
       setUploading(false)
-      if (e.target) e.target.value = ''
     }
   }
 
@@ -100,7 +99,8 @@ export default function DocumentsPage() {
         let imported = 0
         for (const doc of docs) {
           const downloadRes = await fetch(
-            `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/drive/download/${doc.id}/content?access_token=${encodeURIComponent(accessToken)}`,
+            `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/drive/download/${doc.id}/content`,
+            { headers: { 'X-Drive-Access-Token': accessToken } },
           )
           if (downloadRes.ok) {
             const blob = await downloadRes.blob()

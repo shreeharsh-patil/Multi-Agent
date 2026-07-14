@@ -24,11 +24,11 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
-        ;(session.user as { id: string }).id = token.sub!
+      return {
+        ...session,
+        user: session.user ? { ...session.user, id: token.sub! } : undefined,
+        accessToken: token.accessToken,
       }
-      ;(session as unknown as Record<string, unknown>).accessToken = token.accessToken
-      return session
     },
   },
   pages: {

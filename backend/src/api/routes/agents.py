@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from src.adk.runner import get_orchestrator
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
 

@@ -1,5 +1,4 @@
 import asyncio
-from typing import Optional
 from src.config import settings
 from src.utils.logger import logger
 

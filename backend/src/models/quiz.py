@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from beanie import Document as BeanieDocument
 from pydantic import BaseModel, Field
@@ -20,7 +20,7 @@ class UserAnswer(BaseModel):
     question_index: int
     selected_answer: str
     is_correct: bool
-    answered_at: datetime = Field(default_factory=datetime.utcnow)
+    answered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class QuizSession(BeanieDocument):
@@ -34,8 +34,8 @@ class QuizSession(BeanieDocument):
     total_questions: int = 0
     completed: bool = False
     source_conversation_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "quiz_sessions"

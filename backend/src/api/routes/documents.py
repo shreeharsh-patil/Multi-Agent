@@ -213,32 +213,29 @@ async def download_document(document_id: str):
 
 
 @router.delete("/{document_id}")
-async def delete_document(document_id: str) -> dict:
+async def delete_document(document_id: str, http_request: Request) -> dict:
     from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
-    
-    # Check if document exists locally
-    doc = await Document.get(document_id)
-    
-    if await should_use_opendocuments() or not doc:
-        if doc:
-            if os.path.exists(doc.file_path):
-                os.unlink(doc.file_path)
-            await doc.delete()
-            return {"success": True, "message": "Document deleted"}
-        else:
-            success = await opendocuments_client.delete_document(document_id)
-            if not success:
-                raise HTTPException(status_code=404, detail="Document not found")
-            return {"success": True, "message": "Document deleted"}
 
-    if not doc:
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = auth_user.get("sub") if auth_user else None
+
+    doc = await Document.get(document_id)
+
+    # Verify ownership if document exists locally
+    if doc:
+        if resolved_user_id and doc.user_id != resolved_user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this document")
+    elif await should_use_opendocuments(resolved_user_id or "default"):
+        success = await opendocuments_client.delete_document(document_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return {"success": True, "message": "Document deleted"}
+    else:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Delete the physical file if it exists
     if os.path.exists(doc.file_path):
         os.unlink(doc.file_path)
 
-    # Delete from vector store (only for text documents)
     if doc.file_type not in IMAGE_EXTENSIONS:
         from src.services.vector_store.factory import get_vector_store
         vs = get_vector_store()

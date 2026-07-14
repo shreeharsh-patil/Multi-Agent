@@ -103,7 +103,6 @@ async def memory_search(query: str, user_id: str = "default") -> str:
         memories = await memory_service.search(user_id, query)
         if not memories:
             return "No relevant memories found."
-        import json
         return json.dumps(memories, indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Memory search failed: {e}"
@@ -112,19 +111,40 @@ async def memory_search(query: str, user_id: str = "default") -> str:
 async def calculator(expression: str) -> str:
     """Evaluate a mathematical expression safely.
 
+    Uses AST validation to allow only numeric expressions and math functions.
+
     Args:
         expression: The math expression (e.g. '2 + 2', 'sqrt(16)', '3 * 7')
 
     Returns:
         The calculated result
     """
+    import ast
     import math
     safe_dict = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
     safe_dict.update({"abs": abs, "min": min, "max": max, "round": round, "sum": sum})
     try:
+        tree = ast.parse(expression.strip(), mode="eval")
+        allowed = (ast.Expression, ast.Constant, ast.BinOp, ast.UnaryOp,
+                   ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow,
+                   ast.USub, ast.Mod, ast.FloorDiv, ast.Name, ast.Call, ast.List, ast.Tuple)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                if node.id not in safe_dict:
+                    raise ValueError(f"Unknown variable: {node.id}")
+            elif isinstance(node, ast.Call):
+                if not isinstance(node.func, ast.Name):
+                    raise ValueError("Only named functions allowed")
+                if node.func.id not in safe_dict:
+                    raise ValueError(f"Unknown function: {node.func.id}")
+            elif not isinstance(node, allowed):
+                raise ValueError(f"Unsupported syntax: {type(node).__name__}")
         result = eval(expression, {"__builtins__": {}}, safe_dict)
         return f"Result: {result}"
     except Exception as e:
+        exc = str(e)
+        if "Unsupported syntax" in exc or "Unknown" in exc:
+            return f"Calculation error: {e}"
         return f"Calculation error: {e}"
 
 
@@ -185,9 +205,6 @@ async def web_search(query: str) -> str:
     except Exception as e:
         logger.error(f"Web search failed: {e}")
         return f"Web search encountered an error: {e}. Please try again later."
-
-
-import json
 
 
 async def find_user_access_token(user_id: str) -> str:

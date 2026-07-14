@@ -20,7 +20,6 @@ import {
   Edit3,
   X,
   Save,
-  Eye,
   Search,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -252,7 +251,7 @@ export default function NotesPage() {
               {filteredNotes.map((note) => (
                 <Card
                   key={note.id}
-                  className={`cursor-pointer transition-all hover:shadow-md ${
+                  className={`group cursor-pointer transition-all hover:shadow-md ${
                     selectedNote?.id === note.id ? 'ring-2 ring-primary' : ''
                   }`}
                   onClick={() => handleSelect(note)}

@@ -1,14 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from beanie import Document as BeanieDocument
 from pydantic import Field
 
 
 class ResearchReport(BeanieDocument):
-    user_id: str = "default"
+    user_id: str
     query: str
     content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "research_reports"

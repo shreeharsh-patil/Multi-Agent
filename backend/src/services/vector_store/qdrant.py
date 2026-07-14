@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from typing import Optional
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
@@ -7,12 +8,22 @@ from src.config import settings
 from src.utils.logger import logger
 
 
+def _deterministic_id(id_str: str) -> int:
+    """Generate a deterministic positive 64-bit integer from a string ID."""
+    digest = hashlib.sha256(id_str.encode()).hexdigest()
+    return int(digest[:16], 16)
+
+
 class QdrantVectorStore(VectorStore):
     def __init__(self):
-        self.client = QdrantClient(
-            host=settings.qdrant_host,
-            port=settings.qdrant_port,
-        )
+        kwargs = {
+            "host": settings.qdrant_host,
+            "port": settings.qdrant_port,
+        }
+        if settings.qdrant_api_key:
+            kwargs["api_key"] = settings.qdrant_api_key
+            kwargs["https"] = True
+        self.client = QdrantClient(**kwargs)
         logger.info(f"Qdrant initialized at {settings.qdrant_host}:{settings.qdrant_port}")
 
     async def store_embeddings(
@@ -25,7 +36,7 @@ class QdrantVectorStore(VectorStore):
         await self.create_collection(collection)
         points = [
             PointStruct(
-                id=abs(hash(id_str)) % (2**63),
+                id=_deterministic_id(id_str),
                 vector=emb,
                 payload=payload,
             )
@@ -76,7 +87,7 @@ class QdrantVectorStore(VectorStore):
         collection: str,
         ids: list[str],
     ) -> None:
-        point_ids = [abs(hash(id_str)) % (2**63) for id_str in ids]
+        point_ids = [_deterministic_id(id_str) for id_str in ids]
         await asyncio.to_thread(
             self.client.delete,
             collection_name=collection,
@@ -90,6 +101,6 @@ class QdrantVectorStore(VectorStore):
             await asyncio.to_thread(
                 self.client.create_collection,
                 collection_name=collection,
-                vectors_config=VectorParams(size=768, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=settings.embedding_dimension, distance=Distance.COSINE),
             )
             logger.info(f"Created collection '{collection}'")

@@ -82,6 +82,7 @@ export default function DrivePage() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    const target = e.target
     if (!file || !accessToken) return
     setUploading(true)
     try {
@@ -89,11 +90,11 @@ export default function DrivePage() {
       if (res.success) {
         await fetchFiles()
       }
-    } catch (e) {
+    } catch {
       setError('Upload failed')
     } finally {
       setUploading(false)
-      if (e.target) e.target.value = ''
+      if (target) target.value = ''
     }
   }
 
@@ -113,7 +114,8 @@ export default function DrivePage() {
     if (!accessToken) return
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/drive/download/${file.id}/content?access_token=${encodeURIComponent(accessToken)}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/drive/download/${file.id}/content`,
+        { headers: { 'X-Drive-Access-Token': accessToken } },
       )
       if (res.ok) {
         const blob = await res.blob()

@@ -21,8 +21,8 @@ async function fetchApi<T>(
     }
 
     const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-      headers,
       ...options,
+      headers: { ...headers, ...options?.headers },
     })
     return await res.json()
   } catch (error) {
@@ -116,33 +116,36 @@ export const api = {
   drive: {
     listFiles: (accessToken: string) =>
       fetchApi<{ files: Array<{ id: string; name: string; mimeType: string; size: number; modifiedTime: string; webViewLink: string; isFolder: boolean }>; total: number }>(
-        `/api/drive/files?access_token=${encodeURIComponent(accessToken)}`,
+        '/api/drive/files',
+        { headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
       ),
     uploadToDrive: (file: File, accessToken: string, folderId?: string) => {
       const formData = new FormData()
       formData.append('file', file)
-      const params = new URLSearchParams({ access_token: accessToken })
+      const params = new URLSearchParams()
       if (folderId) params.append('folder_id', folderId)
+      const query = params.toString()
       return fetchApi<{ id: string; name: string }>(
-        `/api/drive/upload?${params.toString()}`,
-        { method: 'POST', body: formData },
+        `/api/drive/upload${query ? `?${query}` : ''}`,
+        { method: 'POST', body: formData, headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
       )
     },
     deleteFile: (fileId: string, accessToken: string) =>
       fetchApi<{ success: boolean }>(
-        `/api/drive/files/${fileId}?access_token=${encodeURIComponent(accessToken)}`,
-        { method: 'DELETE' },
+        `/api/drive/files/${fileId}`,
+        { method: 'DELETE', headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
       ),
     getStorage: (accessToken: string) =>
       fetchApi<{ limit: number; usage: number; usageInDrive: number; usageInDriveTrash: number }>(
-        `/api/drive/storage?access_token=${encodeURIComponent(accessToken)}`,
+        '/api/drive/storage',
+        { headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
       ),
     createFolder: (name: string, accessToken: string, parentId?: string) => {
-      const params = new URLSearchParams({ name, access_token: accessToken })
+      const params = new URLSearchParams({ name })
       if (parentId) params.append('parent_id', parentId)
       return fetchApi<{ id: string; name: string }>(
         `/api/drive/folders?${params.toString()}`,
-        { method: 'POST' },
+        { method: 'POST', headers: { 'X-Drive-Access-Token': accessToken } as Record<string, string> },
       )
     },
   },

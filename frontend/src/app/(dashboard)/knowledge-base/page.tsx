@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Search, Upload, BookOpen, Loader2, FileText, Sparkles, ExternalLink } from 'lucide-react'
+import { Search, Upload, BookOpen, Loader2, FileText, Sparkles } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
@@ -91,7 +91,7 @@ export default function KnowledgeBasePage() {
   const readyDocs = documents.filter((d) => d.status === 'ready')
   const totalChunks = documents.reduce((sum, d) => sum + d.chunks, 0)
   const lastUpdated = documents.length > 0
-    ? documents.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.createdAt
+    ? [...documents].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.createdAt
     : null
 
   return (

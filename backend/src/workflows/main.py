@@ -1,6 +1,4 @@
-from typing import Optional
 from src.orchestrator.base import get_orchestrator
-from src.utils.logger import logger
 
 
 class WorkflowEngine:

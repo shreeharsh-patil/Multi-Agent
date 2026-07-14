@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Literal
 from beanie import Document as BeanieDocument
 from pydantic import Field
@@ -15,8 +15,8 @@ class Document(BeanieDocument):
     status: Literal["uploading", "processing", "ready", "error"] = "uploading"
     chunk_count: int = 0
     error_message: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "documents"
@@ -32,7 +32,7 @@ class DocumentChunk(BeanieDocument):
     section: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
     embedding: Optional[list[float]] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "document_chunks"

@@ -21,7 +21,7 @@ class MemoryAgent(BaseAgent):
         memory_context = ""
         if memories:
             memory_context = "Relevant memories:\n" + "\n".join(
-                f"- {m['key']}: {m['content']}" for m in memories
+                f"- {m.get('metadata', {}).get('key', 'unknown')}: {m.get('content', '')}" for m in memories
             )
 
         response = await llm_service.generate(

@@ -25,13 +25,13 @@ def use_adk() -> bool:
 
 async def get_or_create_session(user_id: str, conversation_id: str):
     """Get an existing session or create a new one."""
-    session = await SESSION_SERVICE.get_session(
+    session = SESSION_SERVICE.get_session(
         app_name=APP_NAME,
         user_id=user_id,
         session_id=conversation_id,
     )
     if not session:
-        session = await SESSION_SERVICE.create_session(
+        session = SESSION_SERVICE.create_session(
             app_name=APP_NAME,
             user_id=user_id,
             session_id=conversation_id,
