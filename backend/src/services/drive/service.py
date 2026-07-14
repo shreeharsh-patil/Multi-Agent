@@ -77,10 +77,9 @@ class DriveService:
         request = service.files().get_media(fileId=file_id)
         file_bytes = io.BytesIO()
         downloader = MediaIoBaseDownload(file_bytes, request)
-        done = False
 
         def _download():
-            nonlocal done
+            done = False
             while not done:
                 _, done = downloader.next_chunk()
             return file_bytes
