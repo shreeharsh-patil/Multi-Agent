@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus, Share2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, mkheaders } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
 
 interface Document {
@@ -32,6 +32,7 @@ interface Workspace {
 export default function DocumentsPage() {
   const { data: session } = useSession()
   const accessToken = (session as any)?.accessToken
+  const refreshToken = (session as any)?.refreshToken || ''
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -133,7 +134,7 @@ export default function DocumentsPage() {
     setImportingFromDrive(true)
     setError(null)
     try {
-      const res = await api.drive.listFiles(accessToken)
+      const res = await api.drive.listFiles(accessToken, refreshToken)
       if (res.success && res.data) {
         const supportedMimes = [
           'application/pdf',
@@ -149,7 +150,7 @@ export default function DocumentsPage() {
         for (const doc of docs) {
           const downloadRes = await fetch(
             `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/drive/download/${doc.id}/content`,
-            { headers: { 'X-Drive-Access-Token': accessToken } },
+            { headers: mkheaders(accessToken, refreshToken) },
           )
           if (downloadRes.ok) {
             const blob = await downloadRes.blob()

@@ -28,6 +28,7 @@ export const authOptions: NextAuthOptions = {
         ...session,
         user: session.user ? { ...session.user, id: token.sub! } : undefined,
         accessToken: token.accessToken,
+        refreshToken: token.refreshToken,
       }
     },
   },

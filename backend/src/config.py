@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     firecrawl_api_key: str = ""
 
+    google_client_id: str = ""
+    google_client_secret: str = ""
     google_drive_credentials_path: str = ""
 
     secret_key: str = "change-this-in-production"
@@ -44,6 +46,7 @@ class Settings(BaseSettings):
     embedding_dimension: int = 768
     enable_multimodal_ocr: bool = True
     ocr_min_page_chars: int = 40
+    allowed_origins: str = "http://localhost:3000,https://agentcampus.vercel.app"
 
     opendocuments_api_url: str = "http://localhost:5001"
     use_opendocuments_rag: bool = False

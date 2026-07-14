@@ -20,7 +20,7 @@ import {
   LogIn,
   HardDrive,
 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, mkheaders } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
 
 interface DriveFile {
@@ -44,6 +44,7 @@ interface DriveStorage {
 export default function DrivePage() {
   const { data: session } = useSession()
   const accessToken = (session as any)?.accessToken || ''
+  const refreshToken = (session as any)?.refreshToken || ''
   const [files, setFiles] = useState<DriveFile[]>([])
   const [storage, setStorage] = useState<DriveStorage | null>(null)
   const [loading, setLoading] = useState(false)
@@ -57,8 +58,8 @@ export default function DrivePage() {
     setError(null)
     try {
       const [filesRes, storageRes] = await Promise.all([
-        api.drive.listFiles(accessToken),
-        api.drive.getStorage(accessToken),
+        api.drive.listFiles(accessToken, refreshToken),
+        api.drive.getStorage(accessToken, refreshToken),
       ])
       if (filesRes.success && filesRes.data) {
         setFiles(filesRes.data.files)
@@ -88,7 +89,7 @@ export default function DrivePage() {
     setUploading(true)
     setUploadProgress(0)
     try {
-      const res = await api.drive.uploadToDrive(file, accessToken, undefined, setUploadProgress)
+      const res = await api.drive.uploadToDrive(file, accessToken, refreshToken, undefined, setUploadProgress)
       if (res.success) {
         await fetchFiles()
       }
@@ -103,7 +104,7 @@ export default function DrivePage() {
   const handleDelete = async (fileId: string) => {
     if (!confirm('Delete this file from Google Drive?')) return
     try {
-      const res = await api.drive.deleteFile(fileId, accessToken)
+      const res = await api.drive.deleteFile(fileId, accessToken, refreshToken)
       if (res.success) {
         setFiles((prev) => prev.filter((f) => f.id !== fileId))
       }
@@ -117,7 +118,7 @@ export default function DrivePage() {
     try {
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/drive/download/${file.id}/content`,
-        { headers: { 'X-Drive-Access-Token': accessToken } },
+        { headers: mkheaders(accessToken, refreshToken) },
       )
       if (res.ok) {
         const blob = await res.blob()

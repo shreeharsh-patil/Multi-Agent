@@ -242,12 +242,19 @@ def sse_client():
     with (
         patch("src.api.routes.chat.process_message_stream") as mock_stream,
         patch("src.api.routes.chat._save_messages") as mock_save,
+        patch("src.api.routes.chat.Conversation.get", new_callable=AsyncMock) as mock_get_conv,
+        patch("src.api.routes.chat.can_access_conversation", new_callable=AsyncMock, return_value=True) as mock_access,
     ):
         # Defer import so it sees the patches at module load for the endpoint
         from fastapi.testclient import TestClient
         from src.main import app
 
         mock_save.return_value = None
+        mock_conv = MagicMock()
+        mock_conv.id = "507f1f77bcf86cd799439011"
+        mock_conv.user_id = "test"
+        mock_get_conv.return_value = mock_conv
+
         client = TestClient(app, raise_server_exceptions=False)
         client._mock_stream = mock_stream
         client._mock_save = mock_save
@@ -335,16 +342,17 @@ class TestStreamEndpoint:
 
     def test_conversation_id_passed_through(self, sse_client):
         """A custom conversation_id is reflected in SSE events."""
+        valid_id = "507f1f77bcf86cd799439011"
         async def fake_stream(*_a, **_kw):
-            yield {"event": "start", "data": {"conversation_id": "custom-id"}}
-            yield {"event": "complete", "data": {"output": "Done", "conversation_id": "custom-id"}}
+            yield {"event": "start", "data": {"conversation_id": valid_id}}
+            yield {"event": "complete", "data": {"output": "Done", "conversation_id": valid_id}}
 
         sse_client._mock_stream.side_effect = fake_stream
 
         resp = sse_client.post(
             "/api/chat/stream",
-            json={"message": "Hi", "conversation_id": "custom-id", "user_id": "test"},
+            json={"message": "Hi", "conversation_id": valid_id, "user_id": "test"},
         )
         assert resp.status_code == 200
         body = resp.text
-        assert '"conversation_id": "custom-id"' in body
+        assert f'"conversation_id": "{valid_id}"' in body
