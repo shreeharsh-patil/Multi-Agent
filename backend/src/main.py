@@ -19,46 +19,42 @@ async def lifespan(app: FastAPI):
 
     # --- Initialize MongoDB / Beanie ---
     mongo_client = None
-    try:
-        for uri in [
-            settings.mongodb_uri,
-            settings.mongodb_uri + ("&" if "?" in settings.mongodb_uri else "?") + "tls=true&tlsInsecure=true&retryWrites=true&w=majority",
-            "mongodb://localhost:27017/multi-agent-platform",
-        ]:
-            try:
-                client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=15000)
-                await client.admin.command("ping")
-                mongo_client = client
-                logger.info("MongoDB connected")
-                break
-            except Exception as e:
-                logger.warning(f"MongoDB attempt failed: {e}")
+    for uri in [
+        settings.mongodb_uri,
+        settings.mongodb_uri + ("&" if "?" in settings.mongodb_uri else "?") + "tls=true&tlsInsecure=true&retryWrites=true&w=majority",
+        "mongodb://localhost:27017/multi-agent-platform",
+    ]:
+        try:
+            client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=15000)
+            await client.admin.command("ping")
+            mongo_client = client
+            logger.info("MongoDB connected")
+            break
+        except Exception as e:
+            logger.warning(f"MongoDB attempt failed: {e}")
 
-        if mongo_client is None:
-            raise RuntimeError("No MongoDB connection available")
+    if mongo_client is None:
+        raise RuntimeError("Could not connect to MongoDB — authentication and all data features require a database. Set MONGODB_URI in environment.")
 
-        from src.models.user import User
-        from src.models.document import Document, DocumentChunk
-        from src.models.conversation import Conversation
-        from src.models.memory import MemoryItem
-        from src.models.agent import AgentConfig, AgentTask, ActivityLog
-        from src.models.note import Note
-        from src.models.research import ResearchReport
-        from src.models.planner import PlannerPlan
-        from src.models.quiz import QuizSession
+    from src.models.user import User
+    from src.models.document import Document, DocumentChunk
+    from src.models.conversation import Conversation
+    from src.models.memory import MemoryItem
+    from src.models.agent import AgentConfig, AgentTask, ActivityLog
+    from src.models.note import Note
+    from src.models.research import ResearchReport
+    from src.models.planner import PlannerPlan
+    from src.models.quiz import QuizSession
 
-        await init_beanie(
-            database=mongo_client[settings.mongodb_db_name],
-            document_models=[
-                User, Document, DocumentChunk, Conversation, MemoryItem,
-                AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
-                PlannerPlan, QuizSession,
-            ],
-        )
-        logger.info("Beanie models initialized")
-    except Exception as e:
-        logger.warning(f"MongoDB initialization failed: {e}")
-        logger.warning("App will start without database — some features will be unavailable")
+    await init_beanie(
+        database=mongo_client[settings.mongodb_db_name],
+        document_models=[
+            User, Document, DocumentChunk, Conversation, MemoryItem,
+            AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
+            PlannerPlan, QuizSession,
+        ],
+    )
+    logger.info("Beanie models initialized")
 
     # --- Initialize custom agents (fallback) ---
     from src.agents.init_agents import initialize_agents
