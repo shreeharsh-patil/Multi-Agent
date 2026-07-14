@@ -32,14 +32,17 @@ async def lifespan(app: FastAPI):
         uris_to_try.append(base + sep + "tls=true&tlsInsecure=true&retryWrites=true&w=majority")
     uris_to_try.append("mongodb://localhost:27017/multi-agent-platform")
 
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-
     for uri in uris_to_try:
         try:
-            client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=20000, tls=True, tlsContext=ssl_context)
+            is_ssl = "mongodb+srv://" in uri or "ssl=true" in uri.lower() or "tls=true" in uri.lower()
+            kwargs = {
+                "serverSelectionTimeoutMS": 5000,
+            }
+            if is_ssl:
+                kwargs["tlsAllowInvalidCertificates"] = True
+                kwargs["tlsAllowInvalidHostnames"] = True
+
+            client = AsyncIOMotorClient(uri, **kwargs)
             await client.admin.command("ping")
             mongo_client = client
             logger.info(f"MongoDB connected")
