@@ -2,9 +2,10 @@ import asyncio
 from typing import Optional
 from src.config import settings
 from src.utils.logger import logger
+from src.services.llm.base import BaseLLMProvider
 
 
-class LLMService:
+class GeminiProvider(BaseLLMProvider):
     def __init__(self):
         self._client = None
         self._lock = asyncio.Lock()
@@ -21,11 +22,10 @@ class LLMService:
                         "Set it in .env or environment variables."
                     )
                 from google import genai
-                # genai.Client is sync — initialize once under lock
                 self._client = await asyncio.to_thread(
                     lambda: genai.Client(api_key=settings.gemini_api_key)
                 )
-                logger.info(f"LLM service initialized with model: {self.model}")
+                logger.info(f"Gemini provider initialized with model: {self.model}")
         return self._client
 
     async def generate(
@@ -44,7 +44,6 @@ class LLMService:
             if system_instruction:
                 config["system_instruction"] = system_instruction
 
-            # genai.models.generate_content is sync — run in thread pool
             response = await asyncio.to_thread(
                 client.models.generate_content,
                 model=self.model,
@@ -53,46 +52,5 @@ class LLMService:
             )
             return response.text
         except Exception as e:
-            logger.error(f"LLM generation failed", extra={"error": str(e)})
+            logger.error(f"Gemini generation failed", extra={"error": str(e)})
             raise
-
-    async def generate_with_citations(
-        self,
-        prompt: str,
-        context: list[dict],
-        system_instruction: Optional[str] = None,
-    ) -> tuple[str, list[dict]]:
-        context_block = "\n\n".join(
-            f"[Source: {c.get('file_name', 'Unknown')}"
-            + (f", Page {c.get('page_number')}" if c.get('page_number') else "")
-            + (f", Section: {c.get('section')}" if c.get('section') else "")
-            + f"]\n{c.get('content', '')}"
-            for c in context
-        )
-
-        full_prompt = f"""Context from documents:
-{context_block}
-
-User query: {prompt}
-
-Answer based on the context above. Include citations using [Source: filename, Page X] format."""
-
-        response = await self.generate(
-            prompt=full_prompt,
-            system_instruction=system_instruction or "You are a helpful AI assistant. Always cite your sources.",
-        )
-
-        citations = [
-            {
-                "file_name": c.get("file_name", "Unknown"),
-                "page_number": c.get("page_number"),
-                "section": c.get("section"),
-                "text": c.get("content", "")[:200],
-            }
-            for c in context
-        ]
-
-        return response, citations
-
-
-llm_service = LLMService()

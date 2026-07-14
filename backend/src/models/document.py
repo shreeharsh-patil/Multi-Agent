@@ -3,11 +3,13 @@ from typing import Optional, Literal
 from beanie import Document as BeanieDocument
 from pydantic import Field
 
+ALLOWED_FILE_TYPES = Literal["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg", "gif", "webp", "svg"]
+
 
 class Document(BeanieDocument):
     user_id: str
     file_name: str
-    file_type: Literal["pdf", "docx", "pptx", "txt", "md"]
+    file_type: ALLOWED_FILE_TYPES
     file_size: int
     file_path: str
     status: Literal["uploading", "processing", "ready", "error"] = "uploading"

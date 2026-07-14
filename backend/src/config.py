@@ -1,3 +1,5 @@
+from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from typing import Literal
 
@@ -6,8 +8,6 @@ class Settings(BaseSettings):
     app_name: str = "Multi-Agent AI Platform"
     app_version: str = "0.1.0"
     debug: bool = True
-    secret_key: str = "change-this-in-production"
-
     host: str = "0.0.0.0"
     port: int = 8000
 
@@ -19,15 +19,63 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     chroma_persist_dir: str = "./chroma_data"
 
+    llm_provider: str = "gemini"
+
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
     embedding_model: str = "text-embedding-004"
 
+    openrouter_api_key: str = ""
+    openrouter_model: str = "google/gemini-2.0-flash-exp"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    groq_api_key: str = ""
+    groq_model: str = "mixtral-8x7b-32768"
+
     google_drive_credentials_path: str = ""
+
+    jwt_secret_key: str = "change-this-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60 * 24  # 24 hours
+
+    opendocuments_api_url: str = "http://localhost:5001"
+    use_opendocuments_rag: bool = False
 
     log_level: str = "INFO"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value):
+        """Accept common environment values without crashing startup.
+
+        Some hosting environments set DEBUG to values such as ``release``.
+        Pydantic's boolean parser rejects those strings, which previously
+        prevented the entire backend from importing.
+        """
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "on", "development", "dev"}:
+                return True
+            if normalized in {"false", "0", "no", "off", "production", "prod", "release"}:
+                return False
+        return value
+
+    model_config = {
+        # Resolve both env files so startup works from either the repository
+        # root or backend directory. The backend file contains service keys;
+        # the root file contains shared/frontend settings.
+        "env_file": (
+            str(Path(__file__).resolve().parents[1] / ".env"),
+            str(Path(__file__).resolve().parents[2] / ".env"),
+        ),
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
+
+import os
+if settings.gemini_api_key:
+    os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+    os.environ["GOOGLE_API_KEY"] = settings.gemini_api_key

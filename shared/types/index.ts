@@ -33,6 +33,7 @@ export interface UserPreferences {
   defaultModel: string
   notifications: boolean
   language: string
+  useOpendocumentsRag?: boolean
 }
 
 export interface Conversation {
@@ -155,6 +156,11 @@ export interface ChatRequest {
   message: string
   agent_id?: AgentId
   user_id?: string
+  attachments?: Array<{
+    name: string
+    size: number
+    documentId?: string
+  }>
 }
 
 export interface ChatResponse {

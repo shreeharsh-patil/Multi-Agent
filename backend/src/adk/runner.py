@@ -2,16 +2,25 @@
 
 Manages ADK sessions and provides a clean API for executing
 the multi-agent orchestrator via FastAPI endpoints.
+
+When the LLM provider is not Gemini, falls back to the custom agent
+system since ADK is tightly coupled to Google's GenAI SDK.
 """
 
 from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from src.adk.agents import create_orchestrator_agent
+from src.config import settings
 from src.utils.logger import logger
 
 SESSION_SERVICE = InMemorySessionService()
 APP_NAME = "multi-agent-platform"
+
+
+def use_adk() -> bool:
+    """ADK only works with the Gemini provider."""
+    return settings.llm_provider == "gemini"
 
 
 async def get_or_create_session(user_id: str, conversation_id: str):
@@ -22,7 +31,7 @@ async def get_or_create_session(user_id: str, conversation_id: str):
         session_id=conversation_id,
     )
     if not session:
-        session = SESSION_SERVICE.create_session(
+        session = await SESSION_SERVICE.create_session(
             app_name=APP_NAME,
             user_id=user_id,
             session_id=conversation_id,
@@ -62,6 +71,43 @@ async def create_runner(user_id: str, conversation_id: str) -> Runner:
     )
 
 
+def _get_content_piece(event) -> str:
+    """Extract text content from an ADK Event object.
+
+    Handles both real ADK Events (where content/message are Content/Part structures)
+    and mock events from unit tests (where content/message might be plain strings).
+    """
+    if not event:
+        return ""
+
+    # 1. Try event.content
+    content = getattr(event, "content", None)
+    if content:
+        if isinstance(content, str):
+            return content
+        parts = getattr(content, "parts", None)
+        if parts:
+            pieces = []
+            for p in parts:
+                text = getattr(p, "text", None)
+                if text is not None:
+                    pieces.append(str(text))
+            return "".join(pieces)
+        return str(content)
+
+    # 2. Try event.message
+    message = getattr(event, "message", None)
+    if message:
+        if isinstance(message, str):
+            return message
+        text = getattr(message, "text", None)
+        if text is not None:
+            return str(text)
+        return str(message)
+
+    return ""
+
+
 async def process_message(
     message: str,
     user_id: str = "default",
@@ -69,9 +115,12 @@ async def process_message(
 ) -> dict:
     """Process a user message through the ADK multi-agent system.
 
-    Returns the final response with agent trace information.
+    Falls back to direct LLM if the provider is not Gemini.
     """
-    runner = create_runner(user_id, conversation_id)
+    if not use_adk():
+        return await _fallback_process_message(message, user_id, conversation_id)
+
+    runner = await create_runner(user_id, conversation_id)
     content = _to_content(message)
 
     events = []
@@ -89,17 +138,15 @@ async def process_message(
             break
 
     output = ""
-    citations = []
-    agent_traces = []
-
     if final_event:
-        output = final_event.content if hasattr(final_event, 'content') else str(final_event.message)
+        output = _get_content_piece(final_event)
 
+    agent_traces = []
     for event in events:
         agent_traces.append({
-            "agent_id": event.node_name if hasattr(event, 'node_name') else "unknown",
+            "agent_id": event.node_name if hasattr(event, "node_name") else "unknown",
             "event_type": str(type(event).__name__),
-            "has_content": bool(event.content if hasattr(event, 'content') else False),
+            "has_content": bool(_get_content_piece(event)),
         })
 
     logger.info(
@@ -113,10 +160,42 @@ async def process_message(
 
     return {
         "output": output,
-        "citations": citations,
+        "citations": [],
         "agent_traces": agent_traces,
         "events_count": len(events),
     }
+
+
+async def _fallback_process_message(
+    message: str,
+    user_id: str = "default",
+    conversation_id: str = "default",
+) -> dict:
+    """Fallback: use the LLM provider directly without ADK."""
+    from src.services.llm import llm_service
+
+    try:
+        output = await llm_service.generate(
+            prompt=message,
+            system_instruction=(
+                "You are a helpful AI assistant on a multi-agent platform. "
+                "Answer the user's question directly and concisely."
+            ),
+        )
+        return {
+            "output": output,
+            "citations": [],
+            "agent_traces": [{"agent_id": "direct", "event_type": "DirectResponse", "has_content": True}],
+            "events_count": 1,
+        }
+    except Exception as e:
+        logger.error(f"Fallback LLM failed: {e}")
+        return {
+            "output": f"I encountered an error: {e}",
+            "citations": [],
+            "agent_traces": [{"agent_id": "direct", "event_type": "Error", "has_content": False}],
+            "events_count": 1,
+        }
 
 
 async def process_message_stream(
@@ -124,15 +203,20 @@ async def process_message_stream(
     user_id: str = "default",
     conversation_id: str = "default",
 ):
-    """Process a user message and yield SSE events as the ADK runner produces them.
+    """Process a user message and yield SSE events.
 
-    Yields dicts with 'event' and 'data' fields for SSE serialization.
+    Uses ADK for Gemini provider, falls back to direct LLM for others.
     """
-    runner = create_runner(user_id, conversation_id)
+    if not use_adk():
+        async for event in _fallback_process_message_stream(message, user_id, conversation_id):
+            yield event
+        return
+
+    runner = await create_runner(user_id, conversation_id)
     content = _to_content(message)
 
     accumulated_content = ""
-    current_agent = "unknown"
+    current_agent = "orchestrator"
 
     yield {"event": "start", "data": {"conversation_id": conversation_id}}
 
@@ -142,28 +226,20 @@ async def process_message_stream(
         new_message=content,
     ):
         event_type = type(event).__name__
-        agent_id = event.node_name if hasattr(event, 'node_name') else "unknown"
+        agent_id = event.node_name if hasattr(event, "node_name") else "unknown"
 
-        content_piece = ""
-        if hasattr(event, 'content') and event.content:
-            content_piece = str(event.content)
-        elif hasattr(event, 'message') and event.message:
-            content_piece = str(event.message)
+        content_piece = _get_content_piece(event)
 
-        # Accumulate content
         if content_piece:
             accumulated_content += content_piece
 
-        # Yield agent switch events
         if agent_id != current_agent:
             current_agent = agent_id
             yield {"event": "agent", "data": {"agent_id": agent_id}}
 
-        # Yield content chunk
         if content_piece:
             yield {"event": "chunk", "data": {"text": content_piece}}
 
-        # Yield trace
         yield {
             "event": "trace",
             "data": {
@@ -173,8 +249,7 @@ async def process_message_stream(
             },
         }
 
-        # If this is the final response, yield the completion event
-        if hasattr(event, 'is_final_response') and event.is_final_response():
+        if hasattr(event, "is_final_response") and event.is_final_response():
             yield {
                 "event": "complete",
                 "data": {
@@ -184,7 +259,6 @@ async def process_message_stream(
             }
             return
 
-    # Fallback: yield complete if no final event was found
     yield {
         "event": "complete",
         "data": {
@@ -192,3 +266,36 @@ async def process_message_stream(
             "conversation_id": conversation_id,
         },
     }
+
+
+async def _fallback_process_message_stream(
+    message: str,
+    user_id: str = "default",
+    conversation_id: str = "default",
+):
+    """Fallback streaming: yield the complete response as a single chunk."""
+    from src.services.llm import llm_service
+
+    yield {"event": "start", "data": {"conversation_id": conversation_id}}
+    yield {"event": "agent", "data": {"agent_id": "direct"}}
+
+    try:
+        output = await llm_service.generate(
+            prompt=message,
+            system_instruction=(
+                "You are a helpful AI assistant on a multi-agent platform. "
+                "Answer the user's question directly and concisely."
+            ),
+        )
+        yield {"event": "chunk", "data": {"text": output}}
+        yield {
+            "event": "complete",
+            "data": {"output": output, "conversation_id": conversation_id},
+        }
+    except Exception as e:
+        error_msg = f"I encountered an error: {e}"
+        yield {"event": "chunk", "data": {"text": error_msg}}
+        yield {
+            "event": "complete",
+            "data": {"output": error_msg, "conversation_id": conversation_id},
+        }

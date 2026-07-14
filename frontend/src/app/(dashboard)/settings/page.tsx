@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useSession, signIn } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,11 +9,79 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { User, Bell, Palette, Key, Globe, Database, HardDrive, CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
+import { api } from '@/lib/api'
+import { User, Bell, Palette, Key, Globe, Database, HardDrive, CheckCircle2, XCircle, ExternalLink, BookOpen, Loader2 } from 'lucide-react'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
   const accessToken = (session as any)?.accessToken
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [name, setName] = useState('')
+  const [preferences, setPreferences] = useState({
+    theme: 'system',
+    defaultModel: 'gemini-2.0-flash',
+    notifications: true,
+    language: 'en',
+    useOpendocumentsRag: false,
+  })
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const res = await api.auth.getMe()
+        if (res.success && res.data) {
+          setName(res.data.name || '')
+          setPreferences({
+            theme: res.data.preferences?.theme ?? 'system',
+            defaultModel: res.data.preferences?.defaultModel ?? 'gemini-2.0-flash',
+            notifications: res.data.preferences?.notifications ?? true,
+            language: res.data.preferences?.language ?? 'en',
+            useOpendocumentsRag: res.data.preferences?.useOpendocumentsRag ?? false,
+          })
+        }
+      } catch (e) {
+        console.error('Failed to load preferences', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadPreferences()
+  }, [])
+
+  const handleTogglePreference = async (key: string, value: any) => {
+    const updatedPrefs = { ...preferences, [key]: value }
+    setPreferences(updatedPrefs)
+    try {
+      await api.auth.updateMe({
+        preferences: updatedPrefs,
+      })
+    } catch (e) {
+      console.error('Failed to save preference', e)
+    }
+  }
+
+  const handleProfileSave = async () => {
+    setSaving(true)
+    try {
+      await api.auth.updateMe({
+        name,
+      })
+    } catch (e) {
+      console.error('Failed to update profile', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -35,17 +104,20 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" defaultValue={session?.user?.name || 'User'} />
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" defaultValue={session?.user?.email || 'user@example.com'} />
+              <Input id="email" type="email" defaultValue={session?.user?.email || 'user@example.com'} disabled />
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               Signed in with Google
             </div>
-            <Button>Save Changes</Button>
+            <Button onClick={handleProfileSave} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
+            </Button>
           </CardContent>
         </Card>
 
@@ -109,6 +181,44 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* OpenDocuments Integration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              OpenDocuments RAG
+            </CardTitle>
+            <CardDescription>Use OpenDocuments as your self-hosted RAG backend</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Enable OpenDocuments</Label>
+                <p className="text-sm text-muted-foreground">
+                  Route document searches and knowledge base queries to OpenDocuments
+                </p>
+              </div>
+              <Switch
+                checked={preferences.useOpendocumentsRag}
+                onCheckedChange={(checked) => handleTogglePreference('useOpendocumentsRag', checked)}
+              />
+            </div>
+            <Separator />
+            <div className="grid gap-2">
+              <Label htmlFor="opendocuments-url">API URL</Label>
+              <Input
+                id="opendocuments-url"
+                value="http://localhost:5001"
+                disabled
+                className="bg-secondary/50"
+              />
+              <p className="text-xs text-muted-foreground">
+                Configured globally in backend settings.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -123,7 +233,7 @@ export default function SettingsPage() {
                 <Label>Dark Mode</Label>
                 <p className="text-sm text-muted-foreground">Toggle dark mode theme</p>
               </div>
-              <Switch />
+              <Switch checked={preferences.theme === 'dark'} onCheckedChange={(checked) => handleTogglePreference('theme', checked ? 'dark' : 'light')} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -150,7 +260,7 @@ export default function SettingsPage() {
                 <Label>Push Notifications</Label>
                 <p className="text-sm text-muted-foreground">Receive push notifications</p>
               </div>
-              <Switch />
+              <Switch checked={preferences.notifications} onCheckedChange={(checked) => handleTogglePreference('notifications', checked)} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -174,7 +284,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label>Language</Label>
-              <Input defaultValue="English (US)" />
+              <Input value={preferences.language} onChange={(e) => setPreferences({ ...preferences, language: e.target.value })} />
             </div>
             <div className="grid gap-2">
               <Label>Timezone</Label>

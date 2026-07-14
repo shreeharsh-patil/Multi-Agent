@@ -69,6 +69,13 @@ def empty_runner():
     return runner
 
 
+@pytest.fixture(autouse=True)
+def force_adk():
+    """Force use_adk to return True for all tests in this file."""
+    with patch("src.adk.runner.use_adk", return_value=True):
+        yield
+
+
 # =============================================================================
 # process_message_stream tests
 # =============================================================================

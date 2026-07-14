@@ -10,7 +10,6 @@ via TransferToAgentTool.
 """
 
 from google.adk.agents import LlmAgent
-from google.adk.tools import TransferToAgentTool
 from src.config import settings
 from src.adk.tools import (
     knowledge_search_tool,
@@ -219,18 +218,5 @@ def create_orchestrator_agent() -> LlmAgent:
             "Always respond in the user's language."
         ),
         sub_agents=sub_agents,
-        tools=[
-            TransferToAgentTool(agent_names=[
-                "knowledge",
-                "drive",
-                "notes",
-                "quiz",
-                "planner",
-                "research",
-                "coding",
-                "memory",
-                "tool",
-            ]),
-        ],
         description="Central orchestrator that routes requests to specialized agents.",
     )

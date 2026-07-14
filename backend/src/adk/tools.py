@@ -19,6 +19,28 @@ async def knowledge_search(query: str, user_id: str = "default") -> str:
     Returns:
         JSON string of search results with content and citations
     """
+    from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
+    if await should_use_opendocuments(user_id):
+        try:
+            res = await opendocuments_client.query_rag(query, top_k=5)
+            results = []
+            for doc in res.get("results", []):
+                meta = doc.get("metadata", {})
+                results.append(
+                    {
+                        "content": doc.get("content", ""),
+                        "file_name": meta.get("file_name", "Unknown"),
+                        "page_number": meta.get("page_number"),
+                        "score": round(doc.get("score", 0), 4),
+                    }
+                )
+            if not results:
+                return "No relevant documents found in OpenDocuments knowledge base."
+            return json.dumps(results, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"OpenDocuments search tool error: {e}")
+            return f"Search failed: {e}"
+
     from src.services.rag.retriever import get_retriever
 
     try:

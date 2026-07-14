@@ -9,6 +9,7 @@ class UserPreferences(BeanieDocument):
     default_model: str = "gemini-2.0-flash"
     notifications: bool = True
     language: str = "en"
+    use_opendocuments_rag: bool = False
 
 
 class User(BeanieDocument):

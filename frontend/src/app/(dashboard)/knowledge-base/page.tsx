@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -103,11 +103,9 @@ export default function KnowledgeBasePage() {
             Search and query your document knowledge
           </p>
         </div>
-        <Link href="/documents">
-          <Button className="gap-2">
+        <Link href="/documents" className={`${buttonVariants()} gap-2`}>
             <Upload className="h-4 w-4" />
             Upload Document
-          </Button>
         </Link>
       </div>
 
@@ -215,11 +213,9 @@ export default function KnowledgeBasePage() {
                   <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>No documents indexed</p>
                   <p className="text-sm mt-1">Upload documents from the Documents page</p>
-                  <Link href="/documents">
-                    <Button variant="outline" className="mt-4 gap-2">
+                  <Link href="/documents" className={`${buttonVariants({ variant: 'outline' })} mt-4 gap-2`}>
                       <Upload className="h-4 w-4" />
                       Go to Documents
-                    </Button>
                   </Link>
                 </div>
               ) : (

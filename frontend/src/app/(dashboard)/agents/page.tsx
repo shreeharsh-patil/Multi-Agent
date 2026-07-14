@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Bot,
   BookOpen,
@@ -92,10 +92,8 @@ export default function AgentsPage() {
               <div className={`p-3 rounded-lg bg-secondary ${color}`}>
                 <Icon className="h-6 w-6" />
               </div>
-              <Link href="/chat">
-                <Button variant="ghost" size="sm" className="gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  Chat
-                </Button>
+              <Link href="/chat" className={`${buttonVariants({ variant: 'ghost', size: 'sm' })} gap-2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                Chat
               </Link>
             </div>
             <CardTitle className="mt-4">{agent.name}</CardTitle>

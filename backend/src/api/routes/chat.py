@@ -1,5 +1,4 @@
 import json
-import uuid
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -8,8 +7,28 @@ from typing import Optional
 from src.adk.runner import process_message, process_message_stream
 from src.models.conversation import Conversation, Message
 from src.utils.logger import logger
+from beanie import PydanticObjectId
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
+
+
+def _friendly_chat_error(error: Exception) -> str:
+    """Return a useful client-facing message for common provider failures."""
+    message = str(error)
+    if "429" in message or "RESOURCE_EXHAUSTED" in message or "quota" in message.lower():
+        return (
+            "The AI provider quota is exhausted for the configured Gemini API key. "
+            "Enable billing or use a Gemini key/model with available quota, then restart the backend."
+        )
+    if "API key" in message or "api_key" in message.lower():
+        return "The Gemini API key is missing or invalid. Set GEMINI_API_KEY in backend/.env and restart the backend."
+    return message or "The AI agent could not generate a response."
+
+
+class AttachmentInfo(BaseModel):
+    name: str
+    size: int
+    documentId: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -17,6 +36,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     agent_id: Optional[str] = None
     user_id: str = "default"
+    attachments: list[AttachmentInfo] = []
 
 
 class ChatResponse(BaseModel):
@@ -36,9 +56,14 @@ async def _save_messages(
     agent_message: str,
     agent_id: Optional[str] = None,
     is_new: bool = False,
+    attachments: Optional[list[dict]] = None,
 ):
     """Save user and assistant messages to the Conversation in MongoDB."""
     try:
+        user_metadata = {}
+        if attachments:
+            user_metadata["attachments"] = attachments
+
         if is_new:
             # Create a new conversation with auto-title
             title = user_message[:80] + ("..." if len(user_message) > 80 else "")
@@ -52,6 +77,7 @@ async def _save_messages(
                         role="user",
                         content=user_message,
                         agent_id=agent_id,
+                        metadata=user_metadata,
                     )
                 ],
             )
@@ -64,6 +90,7 @@ async def _save_messages(
                         role="user",
                         content=user_message,
                         agent_id=agent_id,
+                        metadata=user_metadata,
                     )
                 )
 
@@ -83,10 +110,13 @@ async def _save_messages(
 
 
 @router.get("/conversations")
-async def list_conversations(user_id: str = "default") -> list[dict]:
+async def list_conversations(http_request: Request, user_id: str = "default") -> list[dict]:
     """List all conversations for a user."""
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
+
     convs = await Conversation.find(
-        Conversation.user_id == user_id
+        Conversation.user_id == resolved_user_id
     ).sort(-Conversation.updated_at).to_list()
 
     return [
@@ -120,6 +150,7 @@ async def get_conversation(conv_id: str) -> dict:
                 "role": m.role,
                 "content": m.content,
                 "agentId": m.agent_id,
+                "metadata": m.metadata,
             }
             for i, m in enumerate(conv.messages)
         ],
@@ -139,25 +170,31 @@ async def delete_conversation(conv_id: str) -> dict:
 
 
 @router.post("")
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
     try:
-        conv_id = request.conversation_id or str(uuid.uuid4())
-        is_new = not bool(request.conversation_id)
+        conv_id = body.conversation_id or str(PydanticObjectId())
+        is_new = not bool(body.conversation_id)
+
+        # Use authenticated user from JWT if available, fall back to request body
+        auth_user = getattr(http_request.state, "user", None)
+        user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
 
         result = await process_message(
-            message=request.message,
-            user_id=request.user_id,
+            message=body.message,
+            user_id=user_id,
             conversation_id=conv_id,
         )
 
         # Persist messages to MongoDB
+        attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
         await _save_messages(
             conv_id=conv_id,
-            user_id=request.user_id,
-            user_message=request.message,
+            user_id=user_id,
+            user_message=body.message,
             agent_message=result["output"],
-            agent_id=request.agent_id,
+            agent_id=body.agent_id,
             is_new=is_new,
+            attachments=attachments_data,
         )
 
         return ChatResponse(
@@ -169,13 +206,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
             success=True,
         )
     except Exception as e:
+        friendly_error = _friendly_chat_error(e)
         logger.error(f"Chat error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=503, detail=friendly_error)
 
 
 @router.post("/stream")
 async def chat_stream(
-    request: Request,
+    http_request: Request,
     body: ChatRequest,
 ):
     """SSE streaming chat endpoint (POST).
@@ -184,8 +222,13 @@ async def chat_stream(
     Uses POST to support long messages and avoid URL length limits.
     The client reads the stream and accumulates the response incrementally.
     """
-    conv_id = body.conversation_id or str(uuid.uuid4())
+    conv_id = body.conversation_id or str(PydanticObjectId())
     is_new = not bool(body.conversation_id)
+
+    # Use authenticated user from JWT if available
+    auth_user = getattr(http_request.state, "user", None)
+    user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+
     accumulated_output = ""
 
     async def event_generator():
@@ -193,10 +236,10 @@ async def chat_stream(
         try:
             async for sse_event in process_message_stream(
                 message=body.message,
-                user_id=body.user_id,
+                user_id=user_id,
                 conversation_id=conv_id,
             ):
-                if await request.is_disconnected():
+                if await http_request.is_disconnected():
                     break
 
                 event_type = sse_event["event"]
@@ -208,31 +251,34 @@ async def chat_stream(
 
                 # On complete, persist to MongoDB
                 if event_type == "complete":
+                    attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
                     await _save_messages(
                         conv_id=conv_id,
-                        user_id=body.user_id,
+                        user_id=user_id,
                         user_message=body.message,
                         agent_message=data.get("output", accumulated_output),
                         agent_id=body.agent_id,
                         is_new=is_new,
+                        attachments=attachments_data,
                     )
 
                 yield f"event: {event_type}\n"
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            logger.error(f"Stream error: {e}")
+            friendly_error = _friendly_chat_error(e)
+            logger.error(f"Stream error: {e}", exc_info=True)
             # Still try to save what we have
             if accumulated_output:
                 await _save_messages(
                     conv_id=conv_id,
-                    user_id=body.user_id,
+                    user_id=user_id,
                     user_message=body.message,
                     agent_message=accumulated_output,
                     agent_id=body.agent_id,
                     is_new=is_new,
                 )
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'error': friendly_error})}\n\n"
             yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
 
     return StreamingResponse(

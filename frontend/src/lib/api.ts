@@ -1,4 +1,5 @@
-import type { ApiResponse, ChatRequest, ChatResponse, DocumentInfo } from '@shared/types'
+import type { ApiResponse, ChatRequest, ChatResponse, DocumentInfo, UserProfile } from '@shared/types'
+import { getAccessToken } from '@/lib/auth-store'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -12,6 +13,13 @@ async function fetchApi<T>(
     if (!isFormData) {
       headers['Content-Type'] = 'application/json'
     }
+
+    // Attach JWT access token if available
+    const token = getAccessToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     const res = await fetch(`${BACKEND_URL}${endpoint}`, {
       headers,
       ...options,
@@ -26,18 +34,38 @@ async function fetchApi<T>(
 }
 
 export const api = {
+  auth: {
+    login: (data: { email: string; name: string; image?: string; google_id?: string }) =>
+      fetchApi<{ access_token: string; token_type: string; user: { id: string; email: string; name: string; avatar?: string } }>(
+        '/api/auth/login',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+    getMe: () =>
+      fetchApi<UserProfile>('/api/auth/me'),
+    updateMe: (data: { name?: string; avatar?: string; preferences?: Record<string, unknown> }) =>
+      fetchApi<UserProfile>('/api/auth/me', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
   chat: {
     send: (data: ChatRequest) =>
       fetchApi<ChatResponse>('/api/chat', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    stream: (data: ChatRequest) =>
-      fetch(`${BACKEND_URL}/api/chat/stream`, {
+    stream: (data: ChatRequest) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      const token = getAccessToken()
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      return fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(data),
-      }),
+      })
+    },
     listConversations: (userId?: string) =>
       fetchApi<Array<{
         id: string
@@ -53,7 +81,13 @@ export const api = {
         id: string
         title: string
         agentId?: string
-        messages: Array<{ id: string; role: string; content: string; agentId?: string }>
+        messages: Array<{
+          id: string
+          role: string
+          content: string
+          agentId?: string
+          metadata?: Record<string, unknown>
+        }>
         createdAt: string
         updatedAt: string
       }>(`/api/chat/conversations/${id}`),
@@ -67,11 +101,14 @@ export const api = {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('user_id', userId)
-      return fetchApi<DocumentInfo & { chunks?: number }>('/api/documents/upload', {
+      return fetchApi<DocumentInfo & { chunks?: number; imageUrl?: string }>('/api/documents/upload', {
         method: 'POST',
         body: formData,
       })
     },
+    get: (id: string) =>
+      fetchApi<DocumentInfo & { imageUrl?: string }>(`/api/documents/${id}`),
+    downloadUrl: (id: string) => `${BACKEND_URL}/api/documents/${id}/download`,
     delete: (id: string) =>
       fetchApi<null>(`/api/documents/${id}`, { method: 'DELETE' }),
   },
@@ -181,6 +218,85 @@ export const api = {
       ),
     delete: (id: string) =>
       fetchApi<{ success: boolean }>(`/api/planner/${id}`, { method: 'DELETE' }),
+  },
+
+  quiz: {
+    generate: (data: { topic: string; difficulty: string; question_count: number }) =>
+      fetchApi<{
+        quiz_id: string
+        topic: string
+        difficulty: string
+        questions: Array<{
+          question: string
+          options: Array<{ label: string; text: string }>
+        }>
+      }>('/api/quiz/generate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    check: (data: { quiz_id: string; question_index: number; selected_answer: string }) =>
+      fetchApi<{
+        is_correct: boolean
+        correct_answer: string
+        explanation: string
+      }>('/api/quiz/check', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    submit: (quiz_id: string) =>
+      fetchApi<{
+        quiz_id: string
+        topic: string
+        score: number
+        total_questions: number
+        percentage: number
+        completed: boolean
+        results: Array<{
+          question_index: number
+          question: string
+          options: Array<{ label: string; text: string }>
+          correct_answer: string
+          explanation: string
+          user_answer: string | null
+          is_correct: boolean | null
+        }>
+      }>('/api/quiz/submit', {
+        method: 'POST',
+        body: JSON.stringify({ quiz_id }),
+      }),
+    history: () =>
+      fetchApi<Array<{
+        id: string
+        topic: string
+        difficulty: string
+        score: number | null
+        total_questions: number
+        completed: boolean
+        created_at: string
+      }>>('/api/quiz/history'),
+    get: (quiz_id: string) =>
+      fetchApi<{
+        id: string
+        topic: string
+        difficulty: string
+        score: number | null
+        total_questions: number
+        completed: boolean
+        questions: Array<{
+          question: string
+          options: Array<{ label: string; text: string }>
+          correct_answer: string | null
+          explanation: string | null
+        }>
+        answers: Array<{
+          question_index: number
+          selected_answer: string
+          is_correct: boolean
+        }>
+        created_at: string
+      }>(`/api/quiz/${quiz_id}`),
+    delete: (quiz_id: string) =>
+      fetchApi<{ success: boolean }>(`/api/quiz/${quiz_id}`, { method: 'DELETE' }),
   },
 
   agents: {

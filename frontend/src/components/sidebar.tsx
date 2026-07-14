@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   LayoutDashboard,
@@ -51,17 +51,18 @@ export function Sidebar() {
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
-              <Link key={item.name} href={item.href}>
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    'w-full justify-start gap-3 font-normal',
-                    isActive && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium',
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.name}
-                </Button>
+              <Link
+                key={item.name}
+                href={item.href}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  buttonVariants({ variant: 'ghost' }),
+                  'w-full justify-start gap-3 font-normal',
+                  isActive && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium',
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.name}
               </Link>
             )
           })}

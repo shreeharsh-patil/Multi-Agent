@@ -5,8 +5,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from src.config import settings
 from src.utils.logger import logger
-from src.api.middleware import error_handler_middleware
-from src.api.routes import chat, documents, agents as agents_route, knowledge, drive_api, drive, notes, research, planner
+from src.api.middleware import (
+    api_response_envelope_middleware,
+    error_handler_middleware,
+    jwt_auth_middleware,
+)
+from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner
 
 
 @asynccontextmanager
@@ -15,10 +19,26 @@ async def lifespan(app: FastAPI):
 
     # --- Initialize MongoDB / Beanie ---
     try:
-        mongo_client = AsyncIOMotorClient(settings.mongodb_uri)
-        # Verify connection
-        await mongo_client.admin.command("ping")
-        logger.info(f"MongoDB connected: {settings.mongodb_uri}")
+        try:
+            mongo_client = AsyncIOMotorClient(
+                settings.mongodb_uri,
+                tls=True,
+                tlsAllowInvalidCertificates=True,
+                serverSelectionTimeoutMS=15000,
+            )
+            # Verify connection
+            await mongo_client.admin.command("ping")
+            logger.info(f"MongoDB connected: {settings.mongodb_uri}")
+        except Exception as e:
+            logger.warning(f"Failed to connect to primary MongoDB: {e}")
+            fallback_uri = "mongodb://localhost:27017/multi-agent-platform"
+            if settings.mongodb_uri != fallback_uri:
+                logger.info(f"Attempting fallback to local MongoDB: {fallback_uri}")
+                mongo_client = AsyncIOMotorClient(fallback_uri)
+                await mongo_client.admin.command("ping")
+                logger.info("Connected to fallback local MongoDB")
+            else:
+                raise e
 
         from src.models.user import User
         from src.models.document import Document, DocumentChunk
@@ -28,6 +48,7 @@ async def lifespan(app: FastAPI):
         from src.models.note import Note
         from src.models.research import ResearchReport
         from src.models.planner import PlannerPlan
+        from src.models.quiz import QuizSession
 
         await init_beanie(
             database=mongo_client[settings.mongodb_db_name],
@@ -43,6 +64,7 @@ async def lifespan(app: FastAPI):
                 Note,
                 ResearchReport,
                 PlannerPlan,
+                QuizSession,
             ],
         )
         logger.info("Beanie models initialized")
@@ -78,15 +100,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(jwt_auth_middleware)
 app.middleware("http")(error_handler_middleware)
+app.middleware("http")(api_response_envelope_middleware)
 
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(agents_route.router)
 app.include_router(knowledge.router)
-app.include_router(drive_api.router)
 app.include_router(drive.router)
 app.include_router(notes.router)
+app.include_router(quiz.router)
 app.include_router(research.router)
 app.include_router(planner.router)
 

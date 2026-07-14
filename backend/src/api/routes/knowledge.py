@@ -18,6 +18,11 @@ class QueryRequest(BaseModel):
 @router.post("/query")
 async def query_knowledge(request: QueryRequest) -> dict:
     try:
+        from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
+        if await should_use_opendocuments(request.user_id):
+            res = await opendocuments_client.query_rag(request.query, top_k=request.top_k)
+            return res
+
         retriever = get_retriever()
         docs = await retriever.retrieve(
             query=request.query,

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2 } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload } from 'lucide-react'
 import type { AgentId } from '@shared/types'
 
 const agents = [
@@ -39,6 +39,7 @@ interface Attachment {
   file: File
   status: 'pending' | 'uploading' | 'done' | 'error'
   documentId?: string
+  imageUrl?: string
   previewUrl?: string
 }
 
@@ -50,14 +51,16 @@ export default function ChatPage() {
     role: 'user' | 'assistant'
     content: string
     agentId?: string
-    attachments?: Array<{ name: string; size: number }>
+    attachments?: Array<{ name: string; size: number; documentId?: string }>
   }>>([])
   const [input, setInput] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<string>('auto')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -70,7 +73,7 @@ export default function ChatPage() {
     try {
       const res = await api.documents.upload(att.file)
       if (res.success && res.data) {
-        return { ...att, status: 'done', documentId: res.data.id }
+        return { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl }
       }
       return { ...att, status: 'error' }
     } catch {
@@ -121,6 +124,7 @@ export default function ChatPage() {
           role: m.role as 'user' | 'assistant',
           content: m.content,
           agentId: m.agentId,
+          attachments: (m.metadata as { attachments?: Array<{ name: string; size: number; documentId?: string }> } | undefined)?.attachments,
         })))
       }
     } catch (e) {
@@ -145,21 +149,27 @@ export default function ChatPage() {
 
     setSending(true)
 
+    // Upload attachments first, collecting results
+    const uploadedAttachments: Array<{ name: string; size: number; documentId?: string }> = []
+    for (const att of attachments) {
+      const updated = await uploadAttachment(att)
+      setAttachments((prev) => prev.map((a) => a.id === att.id ? updated : a))
+      uploadedAttachments.push({
+        name: att.file.name,
+        size: att.file.size,
+        documentId: updated.documentId,
+      })
+    }
+    setAttachments([])
+
     const userMsg = {
       id: crypto.randomUUID(),
       role: 'user' as const,
       content: text || `Uploaded ${attachmentCount} file(s)`,
-      attachments: attachments.map((a) => ({ name: a.file.name, size: a.file.size })),
+      attachments: uploadedAttachments,
     }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
-
-    // Upload attachments if any
-    for (const att of attachments) {
-      const updated = await uploadAttachment(att)
-      setAttachments((prev) => prev.map((a) => a.id === att.id ? updated : a))
-    }
-    setAttachments([])
 
     // Add placeholder assistant message (will be updated incrementally via SSE)
     const assistantId = crypto.randomUUID()
@@ -173,6 +183,7 @@ export default function ChatPage() {
         message: text || `Uploaded ${attachmentCount} file(s)`,
         conversation_id: currentConvId,
         agent_id: currentAgent,
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       })
 
       if (!streamResponse.ok) {
@@ -209,7 +220,7 @@ export default function ChatPage() {
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim()
           } else if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6)
+            const dataStr = line.slice(6).trim()
             try {
               const data = JSON.parse(dataStr)
 
@@ -275,6 +286,7 @@ export default function ChatPage() {
             message: text || `Uploaded ${attachmentCount} file(s)`,
             conversation_id: currentConvId,
             agent_id: currentAgent,
+            attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
           })
           if (res.success && res.data) {
             setConversationId(res.data.conversation_id)
@@ -322,17 +334,51 @@ export default function ChatPage() {
     }
   }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, fetchConversations])
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    const newAttachments: Attachment[] = files.map((file) => ({
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files)
+    const newAttachments: Attachment[] = fileArray.map((file) => ({
       id: crypto.randomUUID(),
       file,
       status: 'pending',
       previewUrl: isImage(file) ? URL.createObjectURL(file) : undefined,
     }))
     setAttachments((prev) => [...prev, ...newAttachments])
+  }, [])
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(e.target.files || [])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  // Drag & Drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only hide if leaving the drop zone
+    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
+      setIsDragging(false)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files)
+    }
+  }, [addFiles])
 
   // Cleanup object URLs on unmount
   useEffect(() => {
@@ -353,7 +399,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-full gap-6 animate-fade-in">
+    <div className="flex h-[calc(100vh-112px)] gap-6 animate-fade-in">
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -376,7 +422,27 @@ export default function ChatPage() {
           </Select>
         </div>
 
-        <Card className="flex-1 flex flex-col">
+        <Card
+          className="flex-1 flex flex-col relative"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          ref={dropZoneRef}
+        >
+          {/* Drag & Drop overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80 backdrop-blur-sm">
+              <div className="text-center">
+                <Upload className="h-12 w-12 mx-auto mb-3 text-primary animate-bounce" />
+                <p className="text-lg font-semibold">Drop files here</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  PDF, DOCX, TXT, MD, PNG, JPG, GIF, WEBP
+                </p>
+              </div>
+            </div>
+          )}
+
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center text-muted-foreground">
@@ -406,10 +472,29 @@ export default function ChatPage() {
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-2">
                           {msg.attachments.map((att, i) => (
-                            <Badge key={i} variant="secondary" className="gap-1 text-xs">
-                              {isImageExt(att.name) ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
-                              {att.name} ({formatBytes(att.size)})
-                            </Badge>
+                            isImageExt(att.name) && att.documentId ? (
+                              <div key={i} className="relative group">
+                                <img
+                                  src={api.documents.downloadUrl(att.documentId)}
+                                  alt={att.name}
+                                  className="max-w-[240px] max-h-[180px] rounded-lg border object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                />
+                                <Badge variant="secondary" className="absolute bottom-1 left-1 text-[10px] opacity-0 group-hover:opacity-80 transition-opacity gap-1">
+                                  <ImageIcon className="h-3 w-3" />
+                                  {att.name} ({formatBytes(att.size)})
+                                </Badge>
+                              </div>
+                            ) : isImageExt(att.name) ? (
+                              <Badge key={i} variant="secondary" className="gap-1 text-xs">
+                                <ImageIcon className="h-3 w-3" />
+                                {att.name} ({formatBytes(att.size)})
+                              </Badge>
+                            ) : (
+                              <Badge key={i} variant="secondary" className="gap-1 text-xs">
+                                <FileText className="h-3 w-3" />
+                                {att.name} ({formatBytes(att.size)})
+                              </Badge>
+                            )
                           ))}
                         </div>
                       )}
@@ -553,7 +638,7 @@ export default function ChatPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-6 w-6 shrink-0 opacity-40 hover:opacity-100 hover:text-destructive transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation()
                         if (window.confirm('Delete this conversation?')) {

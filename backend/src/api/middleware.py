@@ -1,7 +1,10 @@
 from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse
+import json
+from fastapi.responses import JSONResponse, Response
+from src.config import settings
 from src.utils.logger import logger
 from src.utils.exceptions import AppException
+from src.services.auth.service import verify_access_token
 import time
 
 # Paths that do NOT require authentication
@@ -11,26 +14,89 @@ PUBLIC_PATHS = {
     "/docs",
     "/openapi.json",
     "/redoc",
+    "/api/auth/login",
 }
 
 
 async def get_user_id_from_request(request: Request) -> str:
     """Extract user ID from request.
-    
-    In development, reads from X-User-Id header or user_id query param.
-    In production, add JWT verification here.
+
+    Priority:
+    1. JWT from Authorization header (production)
+    2. X-User-Id header (development/testing)
+    3. user_id query param (development/testing)
+    4. Default fallback
     """
-    # X-User-Id header (for development/testing)
+    # 1. JWT Bearer token
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):]
+        payload = verify_access_token(token)
+        if payload and payload.get("sub"):
+            return payload["sub"]
+
+    # 2. X-User-Id header (for development/testing)
     user_id = request.headers.get("X-User-Id", "")
     if user_id:
         return user_id
 
-    # Query param fallback
+    # 3. Query param fallback
     user_id = request.query_params.get("user_id", "")
     if user_id:
         return user_id
 
     return "default"
+
+
+async def jwt_auth_middleware(request: Request, call_next):
+    """Verify JWT on protected routes and set request.state.user.
+
+    Public paths are allowed through without authentication.
+    For protected paths, the Authorization header is checked.
+    In development mode (settings.debug=True), falls back to
+    X-User-Id header or user_id query param if no JWT is provided.
+    """
+    path = request.url.path
+
+    # Skip auth for public paths
+    if any(path.startswith(p) for p in PUBLIC_PATHS):
+        return await call_next(request)
+
+    # Skip auth for OPTIONS (CORS preflight)
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    # Try to authenticate via JWT
+    auth_header = request.headers.get("Authorization", "")
+    user_payload = None
+
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):]
+        user_payload = verify_access_token(token)
+
+    if user_payload:
+        # Authenticated via JWT
+        request.state.user = user_payload
+        return await call_next(request)
+
+    # Development fallback: allow X-User-Id header or user_id query param
+    if settings.debug:
+        user_id = request.headers.get("X-User-Id", "")
+        if not user_id:
+            user_id = request.query_params.get("user_id", "")
+        if user_id:
+            request.state.user = {"sub": user_id, "email": "dev@localhost", "name": "Developer"}
+            return await call_next(request)
+        # Even in dev mode, if there's absolutely no user context, use "default"
+        # so existing routes don't break
+        request.state.user = {"sub": "default", "email": "", "name": "Default User"}
+        return await call_next(request)
+
+    # Production: reject unauthenticated requests
+    return JSONResponse(
+        status_code=401,
+        content={"success": False, "error": "Authentication required. Provide a Bearer token in the Authorization header."},
+    )
 
 
 async def error_handler_middleware(request: Request, call_next):
@@ -51,6 +117,62 @@ async def error_handler_middleware(request: Request, call_next):
             status_code=500,
             content={"success": False, "error": "Internal server error"},
         )
+
+
+async def api_response_envelope_middleware(request: Request, call_next):
+    """Normalize successful JSON API responses for the frontend client.
+
+    The frontend uses a single ``{success, data, error}`` contract, while
+    several older routes returned raw lists or objects.  Normalize only JSON
+    responses under /api; streaming and file responses must remain untouched.
+    """
+    response = await call_next(request)
+    if not request.url.path.startswith("/api"):
+        return response
+
+    content_type = response.headers.get("content-type", "")
+    if "application/json" not in content_type or "text/event-stream" in content_type:
+        return response
+
+    body = getattr(response, "body", None)
+    if body is None:
+        # BaseHTTPMiddleware commonly exposes the response through an async
+        # body iterator instead of a populated ``body`` attribute.
+        body_iterator = getattr(response, "body_iterator", None)
+        if body_iterator is None:
+            return response
+        chunks = []
+        async for chunk in body_iterator:
+            chunks.append(chunk)
+        body = b"".join(chunks)
+
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        return response
+
+    # Error responses are already in the public contract.  Successful
+    # responses are wrapped, including ChatResponse/Auth responses whose
+    # payloads contain their own domain fields.
+    if response.status_code >= 400:
+        if isinstance(payload, dict) and "success" in payload:
+            return response
+        error = payload.get("detail", payload) if isinstance(payload, dict) else payload
+        return JSONResponse(
+            status_code=response.status_code,
+            content={"success": False, "error": error},
+        )
+
+    if isinstance(payload, dict) and set(payload) >= {"success", "data"}:
+        return response
+
+    headers = dict(response.headers)
+    headers.pop("content-length", None)
+    return JSONResponse(
+        status_code=response.status_code,
+        content={"success": True, "data": payload},
+        headers=headers,
+    )
 
 
 async def cors_middleware(request: Request, call_next):
