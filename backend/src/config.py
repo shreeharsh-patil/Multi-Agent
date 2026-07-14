@@ -53,6 +53,19 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    @field_validator("mongodb_uri", mode="before")
+    @classmethod
+    def clean_mongodb_uri(cls, value):
+        """Clean copy-pasted MongoDB URI containing control chars or whitespaces."""
+        if isinstance(value, str):
+            import re
+            # Remove all whitespace/newlines/tabs
+            value = re.sub(r"\s+", "", value)
+            # Remove non-printable control characters (ASCII < 32 or >= 127)
+            value = "".join(ch for ch in value if 31 < ord(ch) < 127)
+            value = value.strip()
+        return value
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug(cls, value):
