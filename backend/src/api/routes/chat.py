@@ -7,6 +7,8 @@ from typing import Optional
 from src.adk.runner import process_message, process_message_stream
 from src.orchestrator.base import get_orchestrator
 from src.orchestrator.router import AgentRouter
+from src.agents.custom import CustomAgent
+from src.models.agent import AgentConfig
 from src.models.conversation import Conversation, Message
 from src.utils.logger import logger
 from beanie import PydanticObjectId
@@ -185,8 +187,14 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         routed_agent_id = body.agent_id or AgentRouter().route(body.message)
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
+        custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
         if body.team_agents:
             result = await get_orchestrator().process_team(body.message, user_id, body.team_agents, conv_id)
+        elif custom_config:
+            custom_agent = CustomAgent(custom_config)
+            get_orchestrator().registry.register(custom_agent)
+            agent_result = await custom_agent.execute(body.message, {"user_id": user_id})
+            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "calendar":
             calendar_agent = get_orchestrator().registry.get_agent("calendar")
             if not calendar_agent:
@@ -248,6 +256,7 @@ async def chat_stream(
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
     routed_agent_id = body.agent_id or AgentRouter().route(body.message)
+    custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
     accumulated_output = ""
 
@@ -271,6 +280,18 @@ async def chat_stream(
                     agent_message=accumulated_output, agent_id="teamwork", is_new=is_new,
                     attachments=attachments_data,
                 )
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if custom_config:
+                custom_agent = CustomAgent(custom_config)
+                get_orchestrator().registry.register(custom_agent)
+                agent_result = await custom_agent.execute(body.message, {"user_id": user_id})
+                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
+                yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
+                yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 

@@ -10,6 +10,7 @@ from src.models.document import Document
 from src.services.rag.parser import document_parser
 from src.services.rag.chunker import text_chunker
 from src.services.rag.retriever import get_retriever
+from src.services.rag.ocr import enrich_pdf_with_ocr
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
@@ -49,6 +50,7 @@ async def list_documents(http_request: Request, user_id: str = "default", worksp
             "createdAt": d.created_at.isoformat(),
             "imageUrl": f"/api/documents/{d.id}/download" if d.file_type in IMAGE_EXTENSIONS else None,
             "workspaceId": d.workspace_id,
+            "ocrPages": d.ocr_pages,
         }
         for d in docs
     ]
@@ -122,6 +124,9 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
 
         try:
             parse_result = document_parser.parse(tmp_path, ext)
+            ocr_pages = 0
+            if ext == "pdf":
+                parse_result, ocr_pages = await enrich_pdf_with_ocr(tmp_path, parse_result)
             chunks = text_chunker.chunk(parse_result)
 
             chunk_data = [
@@ -144,6 +149,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             )
 
             doc.chunk_count = len(chunks)
+            doc.ocr_pages = ocr_pages
             doc.status = "ready"
             await doc.save()
 
@@ -157,6 +163,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 "status": doc.status,
                 "chunks": doc.chunk_count,
                 "imageUrl": None,
+                "ocrPages": ocr_pages,
             }
         except Exception as e:
             doc.status = "error"
@@ -187,6 +194,7 @@ async def get_document(document_id: str) -> dict:
         "imageUrl": f"/api/documents/{doc.id}/download" if is_image else None,
             "createdAt": doc.created_at.isoformat(),
         "workspaceId": doc.workspace_id,
+        "ocrPages": doc.ocr_pages,
     }
 
 

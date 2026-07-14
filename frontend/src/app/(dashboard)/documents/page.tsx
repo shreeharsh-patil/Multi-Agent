@@ -19,6 +19,7 @@ interface Document {
   chunks: number
   createdAt: string
   workspaceId?: string
+  ocrPages?: number
 }
 
 interface Workspace {
@@ -313,6 +314,7 @@ export default function DocumentsPage() {
                         <span>{formatBytes(doc.fileSize)}</span>
                         <span>{formatDate(doc.createdAt)}</span>
                         {doc.chunks > 0 && <span>{doc.chunks} chunks</span>}
+                        {doc.ocrPages ? <span className="text-violet-600 dark:text-violet-400">{doc.ocrPages} OCR page{doc.ocrPages !== 1 ? 's' : ''}</span> : null}
                       </div>
                     </div>
                     <Badge

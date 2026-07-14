@@ -5,9 +5,14 @@ from pydantic import Field
 
 
 class AgentConfig(BeanieDocument):
+    user_id: str = "system"
     agent_id: str
     name: str
     description: str
+    icon: str = "Bot"
+    system_instruction: str = "You are a helpful AI assistant."
+    tools: list[str] = Field(default_factory=list)
+    custom: bool = True
     enabled: bool = True
     version: str = "0.1.0"
     capabilities: list[str] = Field(default_factory=list)

@@ -156,7 +156,7 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 export interface ChatRequest {
   conversation_id?: string
   message: string
-  agent_id?: AgentId
+  agent_id?: string
   user_id?: string
   attachments?: Array<{
     name: string

@@ -381,6 +381,11 @@ export const api = {
 
   agents: {
     list: () =>
-      fetchApi<Array<{ id: string; name: string; description: string; icon: string }>>('/api/agents'),
+      fetchApi<Array<{ id: string; name: string; description: string; icon: string; capabilities?: string[]; tools?: string[]; systemInstruction?: string; custom?: boolean }>>('/api/agents'),
+    create: (data: { name: string; description: string; icon: string; system_instruction: string; tools: string[] }) =>
+      fetchApi<{ id: string; name: string; description: string; icon: string; tools: string[]; custom: boolean }>('/api/agents', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { name: string; description: string; icon: string; system_instruction: string; tools: string[] }) =>
+      fetchApi<{ id: string; name: string; description: string; icon: string; tools: string[]; custom: boolean }>(`/api/agents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string) => fetchApi<{ success: boolean }>(`/api/agents/${id}`, { method: 'DELETE' }),
   },
 }

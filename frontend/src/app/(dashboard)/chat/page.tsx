@@ -17,8 +17,9 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Maximize2 } from 'lucide-react'
 import type { AgentId } from '@shared/types'
+import { CodePreviewButton, CodePreviewPanel, extractCodeFromContent, type CodeSandboxProps } from '@/components/code-sandbox'
 
 const agents = [
   { id: 'auto', name: 'Auto (Orchestrator)' },
@@ -62,6 +63,7 @@ export default function ChatPage() {
   }>>([])
   const [input, setInput] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<string>('auto')
+  const [customAgents, setCustomAgents] = useState<Array<{ id: string; name: string }>>([])
   const [teamMode, setTeamMode] = useState(false)
   const [teamAgents, setTeamAgents] = useState<string[]>(['research', 'coding', 'planner'])
   const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
@@ -72,6 +74,7 @@ export default function ChatPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [codePreview, setCodePreview] = useState<CodeSandboxProps | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
@@ -191,6 +194,9 @@ export default function ChatPage() {
     api.workspaces.list().then((res) => {
       if (res.success && res.data) setWorkspaces(res.data)
     })
+    api.agents.list().then((res) => {
+      if (res.success && res.data) setCustomAgents(res.data.filter((agent) => agent.custom).map((agent) => ({ id: agent.id, name: agent.name })))
+    })
   }, [fetchConversations])
 
   // Load a conversation's messages
@@ -226,7 +232,7 @@ export default function ChatPage() {
     const text = input.trim()
     const attachmentCount = attachments.length
     const currentConvId = conversationId
-    const currentAgent = teamMode || selectedAgent === 'auto' ? undefined : selectedAgent as AgentId
+    const currentAgent = teamMode || selectedAgent === 'auto' ? undefined : selectedAgent
     const currentWorkspace = selectedWorkspace === 'all' ? undefined : selectedWorkspace === 'unfiled' ? '__unfiled__' : selectedWorkspace
 
     setSending(true)
@@ -521,7 +527,7 @@ export default function ChatPage() {
             {!teamMode && <Select value={selectedAgent} onValueChange={setSelectedAgent}>
               <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select agent" /></SelectTrigger>
               <SelectContent>
-                {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>)}
+                {agents.concat(customAgents).map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>)}
               </SelectContent>
             </Select>}
           </div>
@@ -619,7 +625,7 @@ export default function ChatPage() {
                     <div className={`max-w-[80%] ${msg.role === 'user' ? 'order-1' : ''}`}>
                       {msg.agentId && (
                         <Badge variant="outline" className="mb-1 text-xs">
-                          {agents.find((a) => a.id === msg.agentId)?.name}
+                          {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name}
                         </Badge>
                       )}
                       {msg.attachments && msg.attachments.length > 0 && (
@@ -661,9 +667,14 @@ export default function ChatPage() {
                       >
                         <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
                       </div>
-                      {msg.role === 'assistant' && msg.content && <button type="button" onClick={() => speakMessage(msg.id, msg.content)} className="absolute -bottom-7 left-0 flex items-center gap-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100" aria-label={speakingId === msg.id ? 'Stop speaking' : 'Read response aloud'}>
-                        {speakingId === msg.id ? <><Square className="h-3 w-3 fill-current" /> Stop</> : <><Volume2 className="h-3 w-3" /> Listen</>}
-                      </button>}
+                      {msg.role === 'assistant' && msg.content && (
+                        <div className="absolute -bottom-7 left-0 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button type="button" onClick={() => speakMessage(msg.id, msg.content)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground" aria-label={speakingId === msg.id ? 'Stop speaking' : 'Read response aloud'}>
+                            {speakingId === msg.id ? <><Square className="h-3 w-3 fill-current" /> Stop</> : <><Volume2 className="h-3 w-3" /> Listen</>}
+                          </button>
+                          <CodePreviewButton content={msg.content} onPreview={setCodePreview} />
+                        </div>
+                      )}
                       </div>
                     </div>
                     {msg.role === 'user' && (
@@ -751,6 +762,10 @@ export default function ChatPage() {
         </Card>
       </div>
 
+      {codePreview && (
+        <div className="fixed inset-0 z-30 bg-black/30" onClick={() => setCodePreview(null)} />
+      )}
+      <CodePreviewPanel preview={codePreview} onClose={() => setCodePreview(null)} />
       <div className="hidden lg:block w-80 space-y-4">
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">

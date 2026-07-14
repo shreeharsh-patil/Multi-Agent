@@ -50,3 +50,12 @@ Answer based on the context above. Include citations using [Source: filename, Pa
         ]
 
         return response, citations
+
+    async def generate_multimodal(
+        self,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        max_output_tokens: int = 4096,
+    ) -> str:
+        raise NotImplementedError("The configured LLM provider does not support image inputs")

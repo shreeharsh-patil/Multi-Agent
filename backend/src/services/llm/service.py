@@ -44,5 +44,20 @@ class LLMService:
             system_instruction=system_instruction,
         )
 
+    async def generate_multimodal(
+        self,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        max_output_tokens: int = 4096,
+    ) -> str:
+        provider = await self._get_provider()
+        return await provider.generate_multimodal(
+            prompt=prompt,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            max_output_tokens=max_output_tokens,
+        )
+
 
 llm_service = LLMService()

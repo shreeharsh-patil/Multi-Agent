@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24
     embedding_dimension: int = 768
+    enable_multimodal_ocr: bool = True
+    ocr_min_page_chars: int = 40
 
     opendocuments_api_url: str = "http://localhost:5001"
     use_opendocuments_rag: bool = False
@@ -100,6 +102,5 @@ if settings.firecrawl_api_key:
     first_key = next((k.strip() for k in settings.firecrawl_api_key.split(",") if k.strip()), "")
     if first_key:
         os.environ["FIRECRAWL_API_KEY"] = first_key
-
 
 
