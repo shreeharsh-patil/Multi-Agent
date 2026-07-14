@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
-import { User, Bell, Palette, Key, Globe, Database, HardDrive, CheckCircle2, XCircle, ExternalLink, BookOpen, Loader2 } from 'lucide-react'
+import { User, Bell, Palette, Key, Globe, Database, HardDrive, CalendarDays, CheckCircle2, XCircle, ExternalLink, BookOpen, Loader2 } from 'lucide-react'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -178,6 +178,28 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" />
+              Google Calendar
+            </CardTitle>
+            <CardDescription>Let the Calendar Agent manage your schedule</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-3">
+              <CalendarDays className="h-8 w-8 text-blue-500" />
+              <div className="flex-1"><p className="font-medium">Calendar access</p><p className="text-sm text-muted-foreground">{accessToken ? 'Available to the Calendar Agent' : 'Reconnect Google to grant calendar access'}</p></div>
+              <Badge variant={accessToken ? 'default' : 'secondary'}>{accessToken ? 'Connected' : 'Not connected'}</Badge>
+            </div>
+            <Button variant="outline" className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
+              <CalendarDays className="h-4 w-4" />
+              {accessToken ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}
+            </Button>
+            <p className="text-xs text-muted-foreground">After connecting, ask the Calendar Agent in Chat to list events, create meetings, check availability, or reschedule.</p>
           </CardContent>
         </Card>
 

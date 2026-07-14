@@ -12,6 +12,7 @@ class Retriever:
         self,
         query: str,
         user_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
         top_k: int = 5,
     ) -> list[dict]:
         query_embedding = await embedding_service.embed_text(query)
@@ -19,6 +20,8 @@ class Retriever:
         filter_dict = None
         if user_id:
             filter_dict = {"user_id": user_id}
+        if workspace_id:
+            filter_dict = {**(filter_dict or {}), "workspace_id": workspace_id}
 
         vs = get_vector_store()
         results = await vs.search(
@@ -37,6 +40,7 @@ class Retriever:
         user_id: str,
         document_id: str,
         file_name: str,
+        workspace_id: Optional[str] = None,
     ) -> None:
         texts = [c["content"] for c in chunks]
         embeddings = await embedding_service.embed_batch(texts)
@@ -51,6 +55,7 @@ class Retriever:
                 "chunk_index": c["chunk_index"],
                 "page_number": c.get("page_number"),
                 "section": c.get("section"),
+                "workspace_id": workspace_id or "__unfiled__",
             }
             for c in chunks
         ]

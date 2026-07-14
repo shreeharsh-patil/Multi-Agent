@@ -18,7 +18,12 @@ class KnowledgeAgent(BaseAgent):
         retriever = get_retriever()
         user_id = context.get("user_id", "")
 
-        docs = await retriever.retrieve(user_input, user_id=user_id, top_k=5)
+        docs = await retriever.retrieve(
+            user_input,
+            user_id=user_id,
+            workspace_id=context.get("workspace_id"),
+            top_k=5,
+        )
 
         if docs:
             response, citations = await llm_service.generate_with_citations(

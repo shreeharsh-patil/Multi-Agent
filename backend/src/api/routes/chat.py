@@ -5,6 +5,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from src.adk.runner import process_message, process_message_stream
+from src.orchestrator.base import get_orchestrator
+from src.orchestrator.router import AgentRouter
 from src.models.conversation import Conversation, Message
 from src.utils.logger import logger
 from beanie import PydanticObjectId
@@ -37,6 +39,8 @@ class ChatRequest(BaseModel):
     agent_id: Optional[str] = None
     user_id: str = "default"
     attachments: list[AttachmentInfo] = []
+    team_agents: list[str] = []
+    workspace_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -178,12 +182,27 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         # Use authenticated user from JWT if available, fall back to request body
         auth_user = getattr(http_request.state, "user", None)
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+        routed_agent_id = body.agent_id or AgentRouter().route(body.message)
 
-        result = await process_message(
-            message=body.message,
-            user_id=user_id,
-            conversation_id=conv_id,
-        )
+        google_access_token = http_request.headers.get("X-Google-Access-Token", "")
+        if body.team_agents:
+            result = await get_orchestrator().process_team(body.message, user_id, body.team_agents, conv_id)
+        elif routed_agent_id == "calendar":
+            calendar_agent = get_orchestrator().registry.get_agent("calendar")
+            if not calendar_agent:
+                raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
+            agent_result = await calendar_agent.execute(body.message, {"user_id": user_id, "google_access_token": google_access_token})
+            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
+        elif body.workspace_id:
+            knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
+            if not knowledge_agent:
+                raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
+            agent_result = await knowledge_agent.execute(
+                body.message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
+            )
+            result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
+        else:
+            result = await process_message(message=body.message, user_id=user_id, conversation_id=conv_id)
 
         # Persist messages to MongoDB
         attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
@@ -228,16 +247,63 @@ async def chat_stream(
     # Use authenticated user from JWT if available
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+    routed_agent_id = body.agent_id or AgentRouter().route(body.message)
 
     accumulated_output = ""
 
     async def event_generator():
         nonlocal accumulated_output
         try:
+            if body.team_agents:
+                team_result = await get_orchestrator().process_team(
+                    body.message, user_id, body.team_agents, conv_id
+                )
+                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
+                for stage in team_result["stages"]:
+                    yield f"event: agent\ndata: {json.dumps({'agent_id': stage['agent_id']})}\n\n"
+                    yield f"event: team_stage\ndata: {json.dumps({'agent_id': stage['agent_id'], 'status': 'complete'})}\n\n"
+                    stage_text = f"### {stage['agent_id'].title()} Agent\n{stage['output']}\n\n"
+                    yield f"event: chunk\ndata: {json.dumps({'text': stage_text})}\n\n"
+                accumulated_output = team_result["output"]
+                attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                await _save_messages(
+                    conv_id=conv_id, user_id=user_id, user_message=body.message,
+                    agent_message=accumulated_output, agent_id="teamwork", is_new=is_new,
+                    attachments=attachments_data,
+                )
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if routed_agent_id == "calendar":
+                calendar_agent = get_orchestrator().registry.get_agent("calendar")
+                if not calendar_agent:
+                    raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
+                agent_result = await calendar_agent.execute(body.message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")})
+                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
+                yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if body.workspace_id:
+                knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
+                if not knowledge_agent:
+                    raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
+                agent_result = await knowledge_agent.execute(
+                    body.message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
+                )
+                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
+                yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
             async for sse_event in process_message_stream(
-                message=body.message,
-                user_id=user_id,
-                conversation_id=conv_id,
+                message=body.message, user_id=user_id, conversation_id=conv_id,
             ):
                 if await http_request.is_disconnected():
                     break

@@ -8,6 +8,7 @@ export type AgentId =
   | 'coding'
   | 'memory'
   | 'tool'
+  | 'calendar'
 
 export interface AgentManifest {
   id: AgentId
@@ -90,6 +91,7 @@ export interface DocumentInfo {
   chunks: number
   createdAt: string
   updatedAt: string
+  workspaceId?: string
 }
 
 export interface KnowledgeBaseItem {
@@ -161,6 +163,8 @@ export interface ChatRequest {
     size: number
     documentId?: string
   }>
+  team_agents?: AgentId[]
+  workspace_id?: string
 }
 
 export interface ChatResponse {

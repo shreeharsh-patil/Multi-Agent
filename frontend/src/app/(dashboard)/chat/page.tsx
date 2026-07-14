@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen } from 'lucide-react'
 import type { AgentId } from '@shared/types'
 
 const agents = [
@@ -30,7 +31,10 @@ const agents = [
   { id: 'coding', name: 'Coding Agent' },
   { id: 'memory', name: 'Memory Agent' },
   { id: 'tool', name: 'Tool Agent' },
+  { id: 'calendar', name: 'Calendar Agent' },
 ]
+
+const teamworkAgents = agents.filter((agent) => agent.id !== 'auto' && agent.id !== 'tool')
 
 const isImage = (file: File) => file.type.startsWith('image/')
 
@@ -47,6 +51,8 @@ interface Attachment {
 const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
 
 export default function ChatPage() {
+  const { data: session } = useSession()
+  const googleAccessToken = (session as any)?.accessToken as string | undefined
   const [messages, setMessages] = useState<Array<{
     id: string
     role: 'user' | 'assistant'
@@ -56,12 +62,21 @@ export default function ChatPage() {
   }>>([])
   const [input, setInput] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<string>('auto')
+  const [teamMode, setTeamMode] = useState(false)
+  const [teamAgents, setTeamAgents] = useState<string[]>(['research', 'coding', 'planner'])
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
+  const [selectedWorkspace, setSelectedWorkspace] = useState('all')
+  const [voiceMode, setVoiceMode] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<any>(null)
+  const lastSpokenRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -82,6 +97,66 @@ export default function ChatPage() {
     } catch {
       return { ...att, status: 'error', progress: 0 }
     }
+  }, [])
+
+  const speakMessage = useCallback((id: string, content: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    if (speakingId === id) {
+      setSpeakingId(null)
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(content)
+    utterance.rate = 1.02
+    utterance.onend = () => setSpeakingId(null)
+    window.speechSynthesis.speak(utterance)
+    setSpeakingId(id)
+  }, [speakingId])
+
+  const toggleVoiceInput = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop()
+      setIsListening(false)
+      return
+    }
+    if (typeof window === 'undefined') return
+    const browserWindow = window as any
+    const SpeechRecognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!SpeechRecognition) return
+    const recognition = new SpeechRecognition()
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0]?.[0]?.transcript
+      if (transcript) setInput((current) => `${current}${current ? ' ' : ''}${transcript}`)
+    }
+    recognition.onend = () => setIsListening(false)
+    recognitionRef.current = recognition
+    recognition.start()
+    setIsListening(true)
+  }, [isListening])
+
+  const toggleVoiceMode = useCallback(() => {
+    setVoiceMode((current) => {
+      if (current) {
+        recognitionRef.current?.stop()
+        window.speechSynthesis?.cancel()
+        setIsListening(false)
+        setSpeakingId(null)
+      }
+      return !current
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!voiceMode || sending) return
+    const latest = [...messages].reverse().find((message) => message.role === 'assistant' && message.content)
+    if (!latest || lastSpokenRef.current === latest.id) return
+    lastSpokenRef.current = latest.id
+    speakMessage(latest.id, latest.content)
+  }, [messages, sending, voiceMode, speakMessage])
+
+  useEffect(() => () => {
+    recognitionRef.current?.stop()
+    window.speechSynthesis?.cancel()
   }, [])
 
   const [conversationId, setConversationId] = useState<string>()
@@ -113,6 +188,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     fetchConversations()
+    api.workspaces.list().then((res) => {
+      if (res.success && res.data) setWorkspaces(res.data)
+    })
   }, [fetchConversations])
 
   // Load a conversation's messages
@@ -143,12 +221,13 @@ export default function ChatPage() {
   }, [])
 
   const handleSend = useCallback(async () => {
-    if ((!input.trim() && attachments.length === 0) || sending) return
+    if ((!input.trim() && attachments.length === 0) || sending || (teamMode && teamAgents.length === 0)) return
 
     const text = input.trim()
     const attachmentCount = attachments.length
     const currentConvId = conversationId
-    const currentAgent = selectedAgent === 'auto' ? undefined : selectedAgent as AgentId
+    const currentAgent = teamMode || selectedAgent === 'auto' ? undefined : selectedAgent as AgentId
+    const currentWorkspace = selectedWorkspace === 'all' ? undefined : selectedWorkspace === 'unfiled' ? '__unfiled__' : selectedWorkspace
 
     setSending(true)
 
@@ -186,8 +265,10 @@ export default function ChatPage() {
         message: text || `Uploaded ${attachmentCount} file(s)`,
         conversation_id: currentConvId,
         agent_id: currentAgent,
+        team_agents: teamMode ? teamAgents as AgentId[] : undefined,
+        workspace_id: currentWorkspace,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-      })
+      }, googleAccessToken)
 
       if (!streamResponse.ok) {
         throw new Error(`HTTP ${streamResponse.status}`)
@@ -289,8 +370,10 @@ export default function ChatPage() {
             message: text || `Uploaded ${attachmentCount} file(s)`,
             conversation_id: currentConvId,
             agent_id: currentAgent,
+            team_agents: teamMode ? teamAgents as AgentId[] : undefined,
+            workspace_id: currentWorkspace,
             attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-          })
+          }, googleAccessToken)
           if (res.success && res.data) {
             setConversationId(res.data.conversation_id)
             setMessages((prev) =>
@@ -335,7 +418,7 @@ export default function ChatPage() {
       setSending(false)
       fetchConversations()
     }
-  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, fetchConversations])
+  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, fetchConversations])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -413,19 +496,84 @@ export default function ChatPage() {
               Upload documents, images, and chat with your AI agents
             </p>
           </div>
-          <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select agent" />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={voiceMode ? 'default' : 'outline'}
+              size="sm"
+              className={`gap-2 ${voiceMode ? 'bg-violet-600 text-white shadow-[0_0_24px_rgba(124,58,237,.28)] hover:bg-violet-600/90' : ''}`}
+              onClick={toggleVoiceMode}
+              aria-pressed={voiceMode}
+            >
+              <Volume2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Voice mode</span>
+            </Button>
+            <Button
+              variant={teamMode ? 'default' : 'outline'}
+              size="sm"
+              className={`gap-2 ${teamMode ? 'shadow-[0_0_24px_hsl(var(--primary)/.22)]' : ''}`}
+              onClick={() => setTeamMode((current) => !current)}
+              aria-pressed={teamMode}
+            >
+              <Users className="h-4 w-4" />
+              Teamwork
+              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">BETA</span>
+            </Button>
+            {!teamMode && <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select agent" /></SelectTrigger>
+              <SelectContent>
+                {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>)}
+              </SelectContent>
+            </Select>}
+          </div>
         </div>
+
+        {voiceMode && (
+          <Card className="mb-4 border-violet-500/25 bg-gradient-to-r from-violet-500/[.08] via-background to-fuchsia-500/[.05]">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300">
+                <Volume2 className="h-4 w-4" />
+                <span className="absolute inset-0 rounded-full border border-violet-500/30 animate-ping [animation-duration:2.5s]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">Voice mode is on</p>
+                <p className="truncate text-xs text-muted-foreground">Tap the microphone to speak. Agent responses will be read aloud automatically.</p>
+              </div>
+              <Badge variant="outline" className="hidden shrink-0 border-violet-500/30 text-violet-600 dark:text-violet-300 sm:flex">Browser audio</Badge>
+            </div>
+          </Card>
+        )}
+
+        <div className="mb-4 flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs">
+          <FolderOpen className="h-3.5 w-3.5 text-primary" />
+          <span className="font-medium">Knowledge scope</span>
+          <select value={selectedWorkspace} onChange={(e) => setSelectedWorkspace(e.target.value)} className="ml-auto h-8 rounded-md border bg-background px-2 text-xs">
+            <option value="all">All documents</option>
+            <option value="unfiled">Unfiled documents</option>
+            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+          </select>
+        </div>
+
+        {teamMode && (
+          <Card className="mb-4 overflow-hidden border-primary/20 bg-gradient-to-r from-primary/[.06] via-background to-emerald-500/[.05]">
+            <div className="flex items-start gap-3 p-4">
+              <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><Sparkles className="h-4 w-4" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <div><p className="text-sm font-semibold">Build a specialist team</p><p className="text-xs text-muted-foreground">Agents will collaborate on your request in sequence.</p></div>
+                  <Badge variant="outline" className="hidden shrink-0 gap-1 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Ready</Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {teamworkAgents.map((agent) => {
+                    const active = teamAgents.includes(agent.id)
+                    return <button key={agent.id} type="button" onClick={() => setTeamAgents((current) => active ? current.filter((id) => id !== agent.id) : [...current, agent.id])} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-secondary'}`} aria-pressed={active}>
+                      {active ? <CheckCircle2 className="h-3 w-3" /> : <span className="h-3 w-3 rounded-full border" />}{agent.name.replace(' Agent', '')}
+                    </button>
+                  })}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <Card
           className="flex-1 flex flex-col relative"
@@ -503,6 +651,7 @@ export default function ChatPage() {
                           ))}
                         </div>
                       )}
+                      <div className="group relative">
                       <div
                         className={`rounded-lg px-4 py-3 text-sm ${
                           msg.role === 'user'
@@ -511,6 +660,10 @@ export default function ChatPage() {
                         }`}
                       >
                         <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                      </div>
+                      {msg.role === 'assistant' && msg.content && <button type="button" onClick={() => speakMessage(msg.id, msg.content)} className="absolute -bottom-7 left-0 flex items-center gap-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100" aria-label={speakingId === msg.id ? 'Stop speaking' : 'Read response aloud'}>
+                        {speakingId === msg.id ? <><Square className="h-3 w-3 fill-current" /> Stop</> : <><Volume2 className="h-3 w-3" /> Listen</>}
+                      </button>}
                       </div>
                     </div>
                     {msg.role === 'user' && (
@@ -579,14 +732,17 @@ export default function ChatPage() {
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Input
-                placeholder="Ask about your documents or images..."
+                placeholder={teamMode ? 'Give your team a multi-step mission...' : 'Ask about your documents or images...'}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className="flex-1"
                 disabled={sending}
               />
-              <Button onClick={handleSend} disabled={sending || (!input.trim() && attachments.length === 0)} className="gap-2">
+              <Button variant={isListening ? 'default' : 'outline'} size="icon" onClick={toggleVoiceInput} disabled={sending} aria-label={isListening ? 'Stop listening' : 'Start voice input'} className={isListening ? 'animate-pulse' : ''}>
+                {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
+              </Button>
+              <Button onClick={handleSend} disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)} className="gap-2">
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Send
               </Button>

@@ -6,6 +6,7 @@ from src.utils.logger import logger
 class AgentRouter:
     def __init__(self):
         self.routing_rules = [
+            (r"(?i)\b(calendar|schedule|meeting|appointment|event|availability|free time|reschedule)\b", "calendar"),
             (r"(?i)\b(summarize|summarise|summary|extract|what is|explain|tell me about|find|search)\b.*\b(document|pdf|file|knowledge|upload|note|article|paper)\b", "knowledge"),
             (r"(?i)\b(drive|google drive|upload|download|sync|folder|file)\b.*\b(document|file|folder|upload|download)\b", "drive"),
             (r"(?i)\b(note|notes|flashcards?|revision|study note|anki)\b", "notes"),

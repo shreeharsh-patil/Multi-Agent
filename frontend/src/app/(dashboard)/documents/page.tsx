@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { FileText, Upload, Trash2, Loader2, HardDrive } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
 
@@ -18,6 +18,14 @@ interface Document {
   status: string
   chunks: number
   createdAt: string
+  workspaceId?: string
+}
+
+interface Workspace {
+  id: string
+  name: string
+  color: string
+  documentCount: number
 }
 
 export default function DocumentsPage() {
@@ -29,11 +37,15 @@ export default function DocumentsPage() {
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [importingFromDrive, setImportingFromDrive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string>('all')
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false)
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await api.documents.list()
+      const res = await api.documents.list(selectedWorkspace === 'all' ? undefined : selectedWorkspace)
       if (res.success && res.data) {
         setDocuments(res.data)
       }
@@ -42,11 +54,29 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false)
     }
+  }, [selectedWorkspace])
+
+  const fetchWorkspaces = useCallback(async () => {
+    const res = await api.workspaces.list()
+    if (res.success && res.data) setWorkspaces(res.data)
   }, [])
 
   useEffect(() => {
     fetchDocuments()
-  }, [fetchDocuments])
+    fetchWorkspaces()
+  }, [fetchDocuments, fetchWorkspaces])
+
+  const createWorkspace = async () => {
+    if (!newWorkspaceName.trim()) return
+    setCreatingWorkspace(true)
+    const res = await api.workspaces.create({ name: newWorkspaceName.trim() })
+    if (res.success && res.data) {
+      setNewWorkspaceName('')
+      await fetchWorkspaces()
+      setSelectedWorkspace(res.data.id)
+    } else setError(res.error || 'Could not create workspace')
+    setCreatingWorkspace(false)
+  }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -55,7 +85,7 @@ export default function DocumentsPage() {
     setUploadProgress(0)
     setError(null)
     try {
-      const res = await api.documents.upload(file, 'default', setUploadProgress)
+      const res = await api.documents.upload(file, 'default', setUploadProgress, selectedWorkspace === 'all' ? undefined : selectedWorkspace)
       if (res.success) {
         await fetchDocuments()
       } else {
@@ -76,6 +106,14 @@ export default function DocumentsPage() {
     } catch (e) {
       setError('Delete failed')
     }
+  }
+
+  const moveDocument = async (id: string, workspaceId: string) => {
+    const res = await api.documents.moveToWorkspace(id, workspaceId === 'unfiled' ? undefined : workspaceId)
+    if (res.success) {
+      await fetchDocuments()
+      await fetchWorkspaces()
+    } else setError(res.error || 'Could not move document')
   }
 
   const handleImportFromDrive = async () => {
@@ -199,6 +237,24 @@ export default function DocumentsPage() {
         </div>
       )}
 
+      <Card className="border-primary/15 bg-gradient-to-r from-primary/[.05] via-background to-violet-500/[.04]">
+        <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-3 md:flex-1">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary"><FolderOpen className="h-5 w-5" /></div>
+            <div><p className="text-sm font-semibold">Organize your knowledge</p><p className="text-xs text-muted-foreground">Choose a workspace to scope uploads and RAG searches.</p></div>
+          </div>
+          <select value={selectedWorkspace} onChange={(e) => setSelectedWorkspace(e.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm md:w-56">
+            <option value="all">All workspaces</option>
+            <option value="unfiled">Unfiled documents</option>
+            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.documentCount})</option>)}
+          </select>
+          <div className="flex gap-2">
+            <input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createWorkspace()} placeholder="New workspace" className="h-9 w-36 rounded-md border bg-background px-3 text-sm" />
+            <Button variant="outline" size="sm" onClick={createWorkspace} disabled={creatingWorkspace || !newWorkspaceName.trim()} className="gap-1"><Plus className="h-3.5 w-3.5" /> Create</Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>All Documents</CardTitle>
@@ -271,6 +327,10 @@ export default function DocumentsPage() {
                       {doc.status === 'processing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                       {doc.status}
                     </Badge>
+                    <select value={doc.workspaceId || 'unfiled'} onChange={(e) => moveDocument(doc.id, e.target.value)} className="hidden h-8 max-w-36 rounded-md border bg-background px-2 text-xs sm:block">
+                      <option value="unfiled">Unfiled</option>
+                      {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+                    </select>
                     <Button
                       variant="ghost"
                       size="icon"

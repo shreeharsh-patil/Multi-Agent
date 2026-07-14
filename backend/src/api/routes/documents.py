@@ -1,8 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form
 from typing import List
 import os
 import uuid
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi.responses import FileResponse
 from src.models.document import Document
@@ -23,7 +24,7 @@ ALL_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS
 
 
 @router.get("")
-async def list_documents(http_request: Request, user_id: str = "default") -> list[dict]:
+async def list_documents(http_request: Request, user_id: str = "default", workspace_id: str | None = None) -> list[dict]:
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
 
@@ -31,7 +32,12 @@ async def list_documents(http_request: Request, user_id: str = "default") -> lis
     if await should_use_opendocuments(resolved_user_id):
         return await opendocuments_client.list_documents()
 
-    docs = await Document.find(Document.user_id == resolved_user_id).sort(-Document.created_at).to_list()
+    query = Document.find(Document.user_id == resolved_user_id)
+    if workspace_id == "__unfiled__":
+        query = query.find(Document.workspace_id == None)
+    elif workspace_id:
+        query = query.find(Document.workspace_id == workspace_id)
+    docs = await query.sort(-Document.created_at).to_list()
     return [
         {
             "id": str(d.id),
@@ -42,13 +48,14 @@ async def list_documents(http_request: Request, user_id: str = "default") -> lis
             "chunks": d.chunk_count,
             "createdAt": d.created_at.isoformat(),
             "imageUrl": f"/api/documents/{d.id}/download" if d.file_type in IMAGE_EXTENSIONS else None,
+            "workspaceId": d.workspace_id,
         }
         for d in docs
     ]
 
 
 @router.post("/upload")
-async def upload_document(http_request: Request, file: UploadFile = File(...), user_id: str = "default") -> dict:
+async def upload_document(http_request: Request, file: UploadFile = File(...), user_id: str = "default", workspace_id: str | None = Form(None)) -> dict:
     if file.filename is None:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -81,6 +88,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             file_path=str(dest_path),
             status="ready",
             chunk_count=0,
+            workspace_id=workspace_id,
         )
         await doc.insert()
 
@@ -108,6 +116,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             file_size=len(content),
             file_path=tmp_path,
             status="processing",
+            workspace_id=workspace_id,
         )
         await doc.insert()
 
@@ -131,6 +140,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 user_id=resolved_user_id,
                 document_id=str(doc.id),
                 file_name=file.filename,
+                workspace_id=workspace_id,
             )
 
             doc.chunk_count = len(chunks)
@@ -175,7 +185,8 @@ async def get_document(document_id: str) -> dict:
         "status": doc.status,
         "chunks": doc.chunk_count,
         "imageUrl": f"/api/documents/{doc.id}/download" if is_image else None,
-        "createdAt": doc.created_at.isoformat(),
+            "createdAt": doc.created_at.isoformat(),
+        "workspaceId": doc.workspace_id,
     }
 
 
@@ -243,3 +254,23 @@ async def delete_document(document_id: str, http_request: Request) -> dict:
 
     await doc.delete()
     return {"success": True, "message": "Document deleted"}
+
+
+@router.patch("/{document_id}/workspace")
+async def move_document(document_id: str, http_request: Request, workspace_id: str | None = None) -> dict:
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    doc = await Document.get(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.user_id != resolved_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this document")
+    if workspace_id:
+        from src.models.workspace import Workspace
+        workspace = await Workspace.get(workspace_id)
+        if not workspace or workspace.user_id != resolved_user_id:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+    doc.workspace_id = workspace_id
+    doc.updated_at = datetime.now(timezone.utc)
+    await doc.save()
+    return {"id": str(doc.id), "workspaceId": doc.workspace_id}

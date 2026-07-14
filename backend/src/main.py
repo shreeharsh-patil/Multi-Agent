@@ -1,3 +1,4 @@
+import ssl
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -10,7 +11,7 @@ from src.api.middleware import (
     error_handler_middleware,
     jwt_auth_middleware,
 )
-from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner
+from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces
 
 
 @asynccontextmanager
@@ -31,9 +32,14 @@ async def lifespan(app: FastAPI):
         uris_to_try.append(base + sep + "tls=true&tlsInsecure=true&retryWrites=true&w=majority")
     uris_to_try.append("mongodb://localhost:27017/multi-agent-platform")
 
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
     for uri in uris_to_try:
         try:
-            client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=20000)
+            client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=20000, tls=True, tlsContext=ssl_context)
             await client.admin.command("ping")
             mongo_client = client
             logger.info(f"MongoDB connected")
@@ -53,13 +59,14 @@ async def lifespan(app: FastAPI):
     from src.models.research import ResearchReport
     from src.models.planner import PlannerPlan
     from src.models.quiz import QuizSession
+    from src.models.workspace import Workspace
 
     await init_beanie(
         database=mongo_client[settings.mongodb_db_name],
         document_models=[
             User, Document, DocumentChunk, Conversation, MemoryItem,
             AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
-            PlannerPlan, QuizSession,
+            PlannerPlan, QuizSession, Workspace,
         ],
     )
     logger.info("Beanie models initialized")
@@ -106,6 +113,7 @@ app.include_router(notes.router)
 app.include_router(quiz.router)
 app.include_router(research.router)
 app.include_router(planner.router)
+app.include_router(workspaces.router)
 
 
 @app.get("/api/health")

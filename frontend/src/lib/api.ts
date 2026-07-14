@@ -109,17 +109,19 @@ export const api = {
       }),
   },
   chat: {
-    send: (data: ChatRequest) =>
+    send: (data: ChatRequest, googleAccessToken?: string) =>
       fetchApi<ChatResponse>('/api/chat', {
         method: 'POST',
         body: JSON.stringify(data),
+        headers: googleAccessToken ? { 'X-Google-Access-Token': googleAccessToken } : undefined,
       }),
-    stream: (data: ChatRequest) => {
+    stream: (data: ChatRequest, googleAccessToken?: string) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       const token = getAccessToken()
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
       }
+      if (googleAccessToken) headers['X-Google-Access-Token'] = googleAccessToken
       return fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
         headers,
@@ -156,11 +158,12 @@ export const api = {
   },
 
   documents: {
-    list: () => fetchApi<DocumentInfo[]>('/api/documents'),
-    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void) => {
+    list: (workspaceId?: string) => fetchApi<DocumentInfo[]>(`/api/documents${workspaceId ? `?workspace_id=${workspaceId === 'unfiled' ? '__unfiled__' : workspaceId}` : ''}`),
+    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void, workspaceId?: string) => {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('user_id', userId)
+      if (workspaceId) formData.append('workspace_id', workspaceId)
       return uploadApiWithProgress<DocumentInfo & { chunks?: number; imageUrl?: string }>(
         '/api/documents/upload',
         formData,
@@ -172,6 +175,17 @@ export const api = {
     downloadUrl: (id: string) => `${BACKEND_URL}/api/documents/${id}/download`,
     delete: (id: string) =>
       fetchApi<null>(`/api/documents/${id}`, { method: 'DELETE' }),
+    moveToWorkspace: (id: string, workspaceId?: string) =>
+      fetchApi<{ id: string; workspaceId?: string }>(`/api/documents/${id}/workspace${workspaceId ? `?workspace_id=${workspaceId}` : ''}`, { method: 'PATCH' }),
+  },
+
+  workspaces: {
+    list: () => fetchApi<Array<{ id: string; name: string; description?: string; color: string; documentCount: number; createdAt: string; updatedAt: string }>>('/api/workspaces'),
+    create: (data: { name: string; description?: string; color?: string }) =>
+      fetchApi<{ id: string; name: string; description?: string; color: string; documentCount: number }>('/api/workspaces', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { name: string; description?: string; color?: string }) =>
+      fetchApi<{ id: string; name: string; description?: string; color: string }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string) => fetchApi<{ success: boolean }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
   },
 
   drive: {
@@ -239,14 +253,14 @@ export const api = {
   },
 
   knowledge: {
-    query: (query: string, userId?: string, documentIds?: string[]) =>
+    query: (query: string, userId?: string, documentIds?: string[], workspaceId?: string) =>
       fetchApi<{
         results: Array<{ id: string; content: string; metadata: Record<string, unknown>; score: number }>
         citations: Array<{ file_name: string; page_number?: number; section?: string; text: string }>
         answer: string
       }>('/api/knowledge/query', {
         method: 'POST',
-        body: JSON.stringify({ query, user_id: userId, document_ids: documentIds }),
+        body: JSON.stringify({ query, user_id: userId, document_ids: documentIds, workspace_id: workspaceId }),
       }),
   },
 

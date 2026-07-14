@@ -15,6 +15,7 @@ def initialize_agents() -> None:
     from src.agents.coding.agent import CodingAgent
     from src.agents.memory.agent import MemoryAgent
     from src.agents.tool.agent import ToolAgent
+    from src.agents.calendar.agent import CalendarAgent
 
     AgentRegistry.register(KnowledgeAgent())
     AgentRegistry.register(DriveAgent())
@@ -25,6 +26,7 @@ def initialize_agents() -> None:
     AgentRegistry.register(CodingAgent())
     AgentRegistry.register(MemoryAgent())
     AgentRegistry.register(ToolAgent())
+    AgentRegistry.register(CalendarAgent())
 
     AgentRegistry.initialize()
     logger.info(f"Initialized {len(AgentRegistry.get_all_agents())} agents")

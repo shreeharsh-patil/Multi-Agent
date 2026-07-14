@@ -13,6 +13,7 @@ class QueryRequest(BaseModel):
     user_id: str = "default"
     document_ids: Optional[list[str]] = None
     top_k: int = 5
+    workspace_id: Optional[str] = None
 
 
 @router.post("/query")
@@ -28,6 +29,7 @@ async def query_knowledge(request: QueryRequest) -> dict:
             query=request.query,
             user_id=request.user_id,
             top_k=request.top_k,
+            workspace_id=request.workspace_id,
         )
 
         if not docs:

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Search, Upload, BookOpen, Loader2, FileText, Sparkles } from 'lucide-react'
+import { Search, Upload, BookOpen, Loader2, FileText, Sparkles, FolderOpen } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
@@ -20,6 +20,7 @@ interface Document {
   status: string
   chunks: number
   createdAt: string
+  workspaceId?: string
 }
 
 interface QueryResult {
@@ -33,6 +34,8 @@ export default function KnowledgeBasePage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
+  const [selectedWorkspace, setSelectedWorkspace] = useState('all')
 
   // Query state
   const [query, setQuery] = useState('')
@@ -58,6 +61,9 @@ export default function KnowledgeBasePage() {
 
   useEffect(() => {
     fetchDocuments()
+    api.workspaces.list().then((res) => {
+      if (res.success && res.data) setWorkspaces(res.data)
+    })
   }, [])
 
   useEffect(() => {
@@ -73,7 +79,8 @@ export default function KnowledgeBasePage() {
     setResults([])
     setCitations([])
     try {
-      const res = await api.knowledge.query(query)
+      const scope = selectedWorkspace === 'all' ? undefined : selectedWorkspace === 'unfiled' ? '__unfiled__' : selectedWorkspace
+      const res = await api.knowledge.query(query, undefined, undefined, scope)
       if (res.success && res.data) {
         setAnswer(res.data.answer)
         setResults(res.data.results)
@@ -123,6 +130,15 @@ export default function KnowledgeBasePage() {
           {/* Query Input */}
           <Card>
             <CardContent className="p-4">
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-primary/15 bg-primary/[.04] px-3 py-2">
+                <FolderOpen className="h-4 w-4 text-primary" />
+                <span className="text-xs font-medium">Search scope</span>
+                <select value={selectedWorkspace} onChange={(e) => setSelectedWorkspace(e.target.value)} className="ml-auto h-8 rounded-md border bg-background px-2 text-xs">
+                  <option value="all">All documents</option>
+                  <option value="unfiled">Unfiled documents</option>
+                  {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+                </select>
+              </div>
               <div className="flex gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
