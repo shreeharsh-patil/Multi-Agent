@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "mixtral-8x7b-32768"
 
+    firecrawl_api_key: str = ""
+
     google_drive_credentials_path: str = ""
 
     secret_key: str = "change-this-in-production"
@@ -79,5 +81,25 @@ class Settings(BaseSettings):
 settings = Settings()
 
 if settings.gemini_api_key:
-    os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
-    os.environ["GOOGLE_API_KEY"] = settings.gemini_api_key
+    first_key = next((k.strip() for k in settings.gemini_api_key.split(",") if k.strip()), "")
+    if first_key:
+        os.environ["GEMINI_API_KEY"] = first_key
+        os.environ["GOOGLE_API_KEY"] = first_key
+
+if settings.openrouter_api_key:
+    first_key = next((k.strip() for k in settings.openrouter_api_key.split(",") if k.strip()), "")
+    if first_key:
+        os.environ["OPENROUTER_API_KEY"] = first_key
+
+if settings.groq_api_key:
+    first_key = next((k.strip() for k in settings.groq_api_key.split(",") if k.strip()), "")
+    if first_key:
+        os.environ["GROQ_API_KEY"] = first_key
+
+if settings.firecrawl_api_key:
+    first_key = next((k.strip() for k in settings.firecrawl_api_key.split(",") if k.strip()), "")
+    if first_key:
+        os.environ["FIRECRAWL_API_KEY"] = first_key
+
+
+

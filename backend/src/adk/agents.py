@@ -17,6 +17,7 @@ from src.adk.tools import (
     memory_search_tool,
     calculator_tool,
     web_search_tool,
+    scrape_page_tool,
     drive_list_tool,
     drive_upload_tool,
     drive_delete_tool,
@@ -113,9 +114,10 @@ def create_research_agent() -> LlmAgent:
             "You are the Research Agent. Conduct thorough research on topics. "
             "Structure reports with: abstract, methodology, findings, analysis, conclusions. "
             "Compare multiple perspectives and cite sources when possible. "
-            "Use the web_search tool to find current information."
+            "Use the web_search tool to find current information, and "
+            "use the scrape_page tool to fetch the full text content of any website URL."
         ),
-        tools=[web_search_tool],
+        tools=[web_search_tool, scrape_page_tool],
         description="Conducts internet research, compares sources, and generates reports.",
     )
 
@@ -157,12 +159,12 @@ def create_tool_agent() -> LlmAgent:
         model=MODEL,
         instruction=(
             "You are the Tool Agent. Execute tools and integrations for the user. "
-            "Available tools: calculator for math, web_search for internet searches. "
+            "Available tools: calculator for math, web_search for internet searches, and scrape_page to convert a web page into markdown. "
             "For each request, use the appropriate tool and explain the result. "
             "If a tool is not available, let the user know what alternatives exist."
         ),
-        tools=[calculator_tool, web_search_tool],
-        description="Executes tools: calculator, web search, and external API integrations.",
+        tools=[calculator_tool, web_search_tool, scrape_page_tool],
+        description="Executes tools: calculator, web search, scraping, and external API integrations.",
     )
 
 

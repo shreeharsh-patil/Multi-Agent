@@ -5,8 +5,74 @@ so agents can invoke them via function calling.
 """
 
 import json
+import asyncio
+import httpx
 from google.adk.tools import FunctionTool
 from src.utils.logger import logger
+from src.config import settings
+
+class FirecrawlRotator:
+    def __init__(self):
+        self._current_idx = 0
+        self._lock = asyncio.Lock()
+
+    def get_keys(self):
+        raw_keys = settings.firecrawl_api_key or ""
+        return [k.strip() for k in raw_keys.split(",") if k.strip()]
+
+    async def execute_request(self, method: str, endpoint: str, **kwargs) -> dict:
+        keys = self.get_keys()
+        if not keys:
+            raise ValueError("FIRECRAWL_API_KEY is not configured in .env.")
+        
+        attempts = len(keys)
+        async with self._lock:
+            start_idx = self._current_idx
+
+        last_error = None
+        for i in range(attempts):
+            idx = (start_idx + i) % attempts
+            key = keys[idx]
+            masked_key = f"...{key[-4:]}" if len(key) > 4 else "..."
+            
+            # Copy kwargs to prevent mutation between retries
+            req_kwargs = kwargs.copy()
+            headers = req_kwargs.pop("headers", {})
+            headers = headers.copy() if headers else {}
+            headers["Authorization"] = f"Bearer {key}"
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    url = f"https://api.firecrawl.dev/v1{endpoint}"
+                    if method.upper() == "POST":
+                        response = await client.post(url, headers=headers, **req_kwargs)
+                    else:
+                        response = await client.get(url, headers=headers, **req_kwargs)
+                    
+                    if response.status_code == 429:
+                        raise Exception("Rate limit reached (429)")
+                    elif response.status_code in (401, 403):
+                        raise Exception(f"Authentication failure ({response.status_code})")
+                    elif response.status_code != 200:
+                        raise Exception(f"Request failed with status {response.status_code}: {response.text}")
+                    
+                    # Update index to the successful key
+                    async with self._lock:
+                        self._current_idx = idx
+                        
+                    return response.json()
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"Firecrawl API key rotation: Key {masked_key} failed. "
+                    f"Error: {e}. Retrying with next key..."
+                )
+        
+        logger.error(f"All {attempts} Firecrawl keys failed.")
+        raise last_error
+
+firecrawl_rotator = FirecrawlRotator()
+
 
 
 async def knowledge_search(query: str, user_id: str = "default") -> str:
@@ -157,6 +223,28 @@ async def web_search(query: str) -> str:
     Returns:
         Search result summary
     """
+    # If Firecrawl is configured, use it for rich web search!
+    if settings.firecrawl_api_key:
+        try:
+            logger.info(f"Using Firecrawl search for query: {query}")
+            response = await firecrawl_rotator.execute_request(
+                "POST", 
+                "/search", 
+                json={"query": query, "limit": 5, "lang": "en"}
+            )
+            data = response.get("data", [])
+            if not data:
+                return f"No results found on Firecrawl for query: '{query}'"
+            
+            results = []
+            for item in data[:3]:
+                title = item.get("title", "No Title")
+                url = item.get("url", "No URL")
+                snippet = item.get("description", "") or item.get("markdown", "")[:300]
+                results.append(f"### {title}\nURL: {url}\n{snippet}\n")
+            return "\n".join(results)
+        except Exception as e:
+            logger.error(f"Firecrawl search failed, falling back to DuckDuckGo: {e}")
 
     try:
         import httpx
@@ -205,6 +293,33 @@ async def web_search(query: str) -> str:
     except Exception as e:
         logger.error(f"Web search failed: {e}")
         return f"Web search encountered an error: {e}. Please try again later."
+
+
+async def scrape_page(url: str) -> str:
+    """Scrape a web page and convert it into clean markdown format.
+
+    Args:
+        url: The URL of the web page to scrape.
+
+    Returns:
+        The page content in markdown format.
+    """
+    if not settings.firecrawl_api_key:
+        return "Error: Firecrawl API key is not configured. Please configure FIRECRAWL_API_KEY in your env."
+    try:
+        logger.info(f"Using Firecrawl to scrape URL: {url}")
+        response = await firecrawl_rotator.execute_request(
+            "POST",
+            "/scrape",
+            json={"url": url, "formats": ["markdown"]}
+        )
+        markdown = response.get("data", {}).get("markdown", "")
+        if not markdown:
+            return "Error: No content scraped from URL."
+        return markdown[:12000]  # Limit to prevent prompt/context window issues
+    except Exception as e:
+        return f"Failed to scrape page: {e}"
+
 
 
 async def find_user_access_token(user_id: str) -> str:
@@ -338,6 +453,8 @@ memory_store_tool = FunctionTool(func=memory_store)
 memory_search_tool = FunctionTool(func=memory_search)
 calculator_tool = FunctionTool(func=calculator)
 web_search_tool = FunctionTool(func=web_search)
+scrape_page_tool = FunctionTool(func=scrape_page)
 drive_list_tool = FunctionTool(func=drive_list)
 drive_upload_tool = FunctionTool(func=drive_upload)
 drive_delete_tool = FunctionTool(func=drive_delete)
+
