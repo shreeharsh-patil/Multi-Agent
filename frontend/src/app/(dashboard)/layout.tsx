@@ -1,11 +1,14 @@
 import { Sidebar } from '@/components/sidebar'
 import { TopBar } from '@/components/top-bar'
+import { requireAuth } from '@/lib/session'
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  await requireAuth()
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
@@ -18,3 +21,4 @@ export default function DashboardLayout({
     </div>
   )
 }
+
