@@ -3,14 +3,6 @@
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 
-function LogoSpike({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg className={`text-primary fill-current shrink-0 ${className}`} viewBox="0 0 24 24">
-      <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
-    </svg>
-  )
-}
-
 export default function LoginPage() {
   return (
     <div className="w-full max-w-md p-8 rounded-[12px] border border-border bg-card shadow-xs relative overflow-hidden animate-fade-in">
@@ -20,7 +12,7 @@ export default function LoginPage() {
       <div className="text-center space-y-6 mb-8">
         <div className="flex justify-center">
           <div className="h-12 w-12 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
-            <LogoSpike className="h-5 w-5" />
+            <img src="/logo.png" alt="Agents Logo" className="h-6 w-6 object-contain" />
           </div>
         </div>
         <div className="space-y-2">

@@ -18,19 +18,13 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Share2 } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Share2, ChevronDown } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps, extractCodeFromContent } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
 import { FileCode, FileImage, Globe, Play, Code as CodeIcon } from 'lucide-react'
 
-function LogoSpike({ className = "h-4.5 w-4.5" }: { className?: string }) {
-  return (
-    <svg className={`text-primary fill-current shrink-0 ${className}`} viewBox="0 0 24 24">
-      <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
-    </svg>
-  )
-}
+
 
 
 const agents = [
@@ -96,6 +90,41 @@ function ChatContent() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [showCodeSource, setShowCodeSource] = useState(false)
 
+  // Split pane resizing states
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [leftWidthPercent, setLeftWidthPercent] = useState(50)
+  const [isResizing, setIsResizing] = useState(false)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return
+      const containerRect = containerRef.current.getBoundingClientRect()
+      const newLeftWidth = e.clientX - containerRect.left
+      const newPercent = (newLeftWidth / containerRect.width) * 100
+      const clampedPercent = Math.min(Math.max(newPercent, 20), 80)
+      setLeftWidthPercent(clampedPercent)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing])
+
   const searchParams = useSearchParams()
   useEffect(() => {
     const agentParam = searchParams?.get('agent')
@@ -117,7 +146,9 @@ function ChatContent() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<any>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null)
   const lastSpokenRef = useRef<string | null>(null)
   // Tracks the in-flight upload promise for each attachment so Send can await
   // an upload already started on select instead of uploading a second time.
@@ -137,9 +168,12 @@ function ChatContent() {
       const res = await api.documents.upload(att.file, 'default', (progress) => {
         setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, progress } : a))
       }, uploadWorkspace)
-      final = res.success && res.data
-        ? { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
-        : { ...att, status: 'error', progress: 0 }
+      if (res.success && res.data) {
+        final = { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
+        window.dispatchEvent(new Event('refresh-documents-list'))
+      } else {
+        final = { ...att, status: 'error', progress: 0 }
+      }
     } catch {
       final = { ...att, status: 'error', progress: 0 }
     }
@@ -148,46 +182,141 @@ function ChatContent() {
     return final
   }, [selectedWorkspace])
 
-  const speakMessage = useCallback((id: string, content: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    window.speechSynthesis.cancel()
+  const speakMessage = useCallback(async (id: string, content: string) => {
     if (speakingId === id) {
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause()
+        activeAudioRef.current = null
+      }
       setSpeakingId(null)
       return
     }
-    const utterance = new SpeechSynthesisUtterance(content)
-    utterance.rate = 1.02
-    utterance.onend = () => setSpeakingId(null)
-    window.speechSynthesis.speak(utterance)
+    
+    // Stop any existing playing audio
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause()
+      activeAudioRef.current = null
+    }
+
     setSpeakingId(id)
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/voice/synthesize`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: content }),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Failed to synthesize speech')
+      }
+
+      const blob = await response.blob()
+      const audioUrl = URL.createObjectURL(blob)
+      const audio = new Audio(audioUrl)
+      activeAudioRef.current = audio
+      
+      audio.onended = () => {
+        setSpeakingId(null)
+        activeAudioRef.current = null
+        URL.revokeObjectURL(audioUrl)
+      }
+      
+      audio.onerror = () => {
+        setSpeakingId(null)
+        activeAudioRef.current = null
+        URL.revokeObjectURL(audioUrl)
+      }
+      
+      await audio.play()
+    } catch (error) {
+      console.error('Text-to-speech error:', error)
+      setSpeakingId(null)
+    }
   }, [speakingId])
 
-  const toggleVoiceInput = useCallback(() => {
+  const toggleVoiceInput = useCallback(async () => {
     if (isListening) {
-      recognitionRef.current?.stop()
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
       setIsListening(false)
       return
     }
-    if (typeof window === 'undefined') return
-    const browserWindow = window as any
-    const SpeechRecognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
-    if (!SpeechRecognition) return
-    const recognition = new SpeechRecognition()
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0]?.[0]?.transcript
-      if (transcript) setInput((current) => `${current}${current ? ' ' : ''}${transcript}`)
+
+    if (typeof window === 'undefined' || !navigator.mediaDevices) return
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = async () => {
+        // Stop all audio track elements
+        stream.getTracks().forEach((track) => track.stop())
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        if (audioBlob.size === 0) return
+
+        try {
+          const formData = new FormData()
+          const ext = recorder.mimeType?.includes('ogg') ? 'ogg' : 'webm'
+          formData.append('file', audioBlob, `input.${ext}`)
+
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/voice/transcribe`,
+            {
+              method: 'POST',
+              body: formData,
+            }
+          )
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.data?.transcript) {
+              const transcript = data.data.transcript
+              setInput((current) => `${current}${current ? ' ' : ''}${transcript}`)
+            } else if (data.transcript) {
+              const transcript = data.transcript
+              setInput((current) => `${current}${current ? ' ' : ''}${transcript}`)
+            }
+          } else {
+            console.error('Failed to transcribe audio:', response.statusText)
+          }
+        } catch (err) {
+          console.error('Error uploading/transcribing audio:', err)
+        }
+      }
+
+      recorder.start()
+      setIsListening(true)
+    } catch (err) {
+      console.error('Failed to start recording:', err)
     }
-    recognition.onend = () => setIsListening(false)
-    recognitionRef.current = recognition
-    recognition.start()
-    setIsListening(true)
   }, [isListening])
 
   const toggleVoiceMode = useCallback(() => {
     setVoiceMode((current) => {
       if (current) {
-        recognitionRef.current?.stop()
-        window.speechSynthesis?.cancel()
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop()
+        }
+        if (activeAudioRef.current) {
+          activeAudioRef.current.pause()
+          activeAudioRef.current = null
+        }
         setIsListening(false)
         setSpeakingId(null)
       }
@@ -204,8 +333,13 @@ function ChatContent() {
   }, [messages, sending, voiceMode, speakMessage])
 
   useEffect(() => () => {
-    recognitionRef.current?.stop()
-    window.speechSynthesis?.cancel()
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause()
+      activeAudioRef.current = null
+    }
   }, [])
 
   const [conversationId, setConversationId] = useState<string>()
@@ -245,25 +379,6 @@ function ChatContent() {
     }
   }, [])
 
-  // Fetch documents for explorer
-  const fetchDocuments = useCallback(async () => {
-    setLoadingDocuments(true)
-    try {
-      const res = await api.documents.list(selectedWorkspace === 'all' ? undefined : selectedWorkspace)
-      if (res.success && res.data) {
-        setDocuments(res.data)
-      }
-    } catch (e) {
-      // Silently fail
-    } finally {
-      setLoadingDocuments(false)
-    }
-  }, [selectedWorkspace])
-
-  useEffect(() => {
-    fetchDocuments()
-  }, [fetchDocuments])
-
   // Document Click handler to load text/media in right panel tab
   const handleDocumentClick = useCallback(async (doc: DocumentInfo) => {
     const existingTab = tabs.find(t => t.id === doc.id)
@@ -295,6 +410,20 @@ function ChatContent() {
       }
     }
   }, [tabs])
+
+  useEffect(() => {
+    const handleOpenDoc = (e: Event) => {
+      const doc = (e as CustomEvent).detail
+      handleDocumentClick(doc)
+    }
+    window.addEventListener('open-document-tab', handleOpenDoc)
+    return () => window.removeEventListener('open-document-tab', handleOpenDoc)
+  }, [handleDocumentClick])
+
+  useEffect(() => {
+    const event = new CustomEvent('workspace-changed', { detail: selectedWorkspace })
+    window.dispatchEvent(event)
+  }, [selectedWorkspace])
 
   useEffect(() => {
     fetchConversations()
@@ -542,21 +671,24 @@ function ChatContent() {
     } finally {
       setSending(false)
       fetchConversations()
-      fetchDocuments()
+      window.dispatchEvent(new Event('refresh-documents-list'))
     }
-  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, fetchConversations, fetchDocuments])
+  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, fetchConversations])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
     const newAttachments: Attachment[] = fileArray.map((file) => ({
       id: crypto.randomUUID(),
       file,
-      status: 'pending',
+      status: 'uploading',
+      progress: 0,
       previewUrl: isImage(file) ? URL.createObjectURL(file) : undefined,
     }))
     setAttachments((prev) => [...prev, ...newAttachments])
     // Begin uploading immediately on select so files are ready before Send.
-    newAttachments.forEach((att) => { uploadPromises.current.set(att.id, uploadAttachment(att)) })
+    newAttachments.forEach((att) => {
+      uploadPromises.current.set(att.id, uploadAttachment(att))
+    })
   }, [uploadAttachment])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -657,113 +789,16 @@ function ChatContent() {
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   return (
-    <div className="flex h-[calc(100vh-84px)] gap-0 -m-6 overflow-hidden bg-background animate-fade-in relative">
-      {/* 1. LEFT PANEL: Explorer & Past Conversations */}
-      <aside className="hidden md:flex w-[260px] flex-col bg-secondary border-r border-border h-full shrink-0 select-none">
-        {/* Upper Section: Documents Explorer */}
-        <div className="flex-1 flex flex-col min-h-0 border-b border-border">
-          <div className="p-4 border-b border-border flex items-center justify-between bg-secondary">
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Documents Explorer</span>
-            <FolderOpen className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <ScrollArea className="flex-1 p-2">
-            {loadingDocuments ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : documents.length === 0 ? (
-              <div className="text-center py-6 text-[11px] text-muted-foreground font-sans px-2">
-                No documents found. Drag & drop files in chat or use paperclip.
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                {documents.map((doc) => {
-                  const fileType = doc.fileType.toLowerCase()
-                  const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(fileType)
-                  const Icon = isImg ? ImageIcon : FileText
-                  const isTabActive = activeTabId === doc.id
-                  return (
-                <button
-                  key={doc.id}
-                  onClick={() => handleDocumentClick(doc)}
-                  className={`w-full flex items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-xs transition-all hover:bg-background ${
-                    isTabActive ? 'bg-card text-primary font-medium border border-border shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 shrink-0 ${isTabActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className="truncate flex-1 font-sans text-xs">{doc.fileName}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </ScrollArea>
-    </div>
-
-    {/* Lower Section: Past Conversations list */}
-    <div className="flex-1 flex flex-col min-h-0 bg-secondary">
-      <div className="p-4 border-b border-border flex items-center justify-between bg-secondary">
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Conversations</span>
-        <button
-          onClick={startNewConversation}
-          className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          New
-        </button>
-      </div>
-      <ScrollArea className="flex-1 p-2">
-        {loadingConversations ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : conversations.length === 0 ? (
-          <div className="text-center py-6 text-[11px] text-muted-foreground font-sans">
-            No past conversations.
-          </div>
-        ) : (
-              <div className="space-y-0.5">
-                {conversations.map((conv) => {
-                  const isCurrent = conv.id === conversationId
-                  return (
-                    <div
-                      key={conv.id}
-                      className={`group flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-xs cursor-pointer transition-all hover:bg-background ${
-                        isCurrent ? 'bg-card text-primary font-semibold border border-border shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                      onClick={() => loadConversation(conv.id)}
-                    >
-                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <span className="truncate flex-1 font-sans text-[11px]">{conv.title}</span>
-                      <button
-                        type="button"
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-650 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (window.confirm('Delete this conversation?')) {
-                            api.chat.deleteConversation(conv.id).then(() => {
-                              fetchConversations()
-                              if (conversationId === conv.id) {
-                                startNewConversation()
-                              }
-                            })
-                          }
-                        }}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-      </aside>
+    <div
+      ref={containerRef}
+      className={`flex h-screen gap-0 -m-6 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
+    >
+      {/* Explorer panel is merged into the main application sidebar */}
 
       {/* 2. CENTRAL PANEL: Agents Conversation Feed */}
       <div
-        className="flex-1 flex flex-col h-full bg-background relative min-w-0"
+        className="flex flex-col h-full bg-background relative min-w-0"
+        style={tabs.length > 0 ? { width: `${leftWidthPercent}%`, flex: 'none' } : { flex: 1 }}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -820,17 +855,20 @@ function ChatContent() {
             </Button>
 
             {!teamMode && (
-              <select
-                value={selectedAgent}
-                onChange={(e) => setSelectedAgent(e.target.value)}
-                className="h-8 rounded-lg bg-card border border-border px-2 text-xs text-[#26251e] focus:outline-none focus:border-primary w-[160px] font-sans"
-              >
-                {agents.concat(customAgents).map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative flex items-center">
+                <select
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="h-8 rounded-[8px] bg-card border border-border pl-3 pr-8 text-xs font-semibold text-[#26251e] focus:outline-none hover:bg-secondary/60 transition-all cursor-pointer appearance-none shadow-2xs w-[160px] font-sans"
+                >
+                  {agents.concat(customAgents).map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none stroke-[1.5]" />
+              </div>
             )}
           </div>
         </div>
@@ -859,24 +897,6 @@ function ChatContent() {
           </div>
         )}
 
-        {/* Workspace Scope Banner */}
-        <div className="flex items-center gap-2 border-b border-border bg-secondary/35 px-6 py-2 text-[10px] text-muted-foreground shrink-0 select-none">
-          <FolderOpen className="h-3 w-3 text-primary" />
-          <span>Scope:</span>
-          <select
-            value={selectedWorkspace}
-            onChange={(e) => setSelectedWorkspace(e.target.value)}
-            className="h-5 rounded bg-card border border-border px-1 text-[10px] text-[#26251e] focus:outline-none"
-          >
-            <option value="all">All documents</option>
-            <option value="unfiled">Unfiled documents</option>
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </select>
-        </div>
 
         {/* Team Collaboration Banner */}
         {teamMode && (
@@ -917,13 +937,13 @@ function ChatContent() {
                 <div className="space-y-4">
                   <div className="flex justify-center">
                     <div className="h-14 w-14 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
-                      <LogoSpike className="h-6 w-6" />
+                      <img src="/logo.png" alt="Agents Logo" className="h-7 w-7 object-contain" />
                     </div>
                   </div>
-                  <h1 className="text-4xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">
+                  <h1 className="text-4xl font-serif font-normal tracking-[-0.01em] text-[#26251e] mb-1">
                     How can I help you today?
                   </h1>
-                  <p className="text-sm text-[#5a5852] max-w-md mx-auto leading-relaxed font-sans">
+                  <p className="text-sm text-[#5a5852]/80 max-w-md mx-auto leading-relaxed font-sans">
                     Ask anything, analyze documents, or delegate tasks to specialized AI agents in this collaborative workspace.
                   </p>
                 </div>
@@ -940,11 +960,11 @@ function ChatContent() {
                     <button
                       key={card.text}
                       onClick={() => handleSuggestionClick(card.text)}
-                      className="group flex flex-col items-start p-5 rounded-[12px] border border-border bg-card text-left transition-all duration-200 hover:bg-secondary/40 active:scale-[0.99] shadow-xs"
+                      className="group flex flex-col items-start p-5 rounded-[12px] border border-border bg-card text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xs hover:border-primary/25 active:translate-y-0 shadow-2xs cursor-pointer"
                     >
                       <card.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors stroke-[1.5] mb-3" />
-                      <span className="text-[15px] font-semibold text-[#26251e] mb-1 font-sans">{card.text}</span>
-                      <span className="text-xs text-muted-foreground leading-normal font-sans">{card.desc}</span>
+                      <span className="text-[15px] font-serif font-normal text-[#26251e] mb-1.5">{card.text}</span>
+                      <span className="text-xs text-muted-foreground/85 leading-relaxed font-sans">{card.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -1080,7 +1100,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-secondary border border-border rounded-[12px] min-h-20 p-3.5 focus-within:border-primary/60 shadow-xs w-full max-w-3xl mx-auto transition-all duration-200">
+            <div className="relative flex items-center bg-card border border-border rounded-[16px] min-h-[56px] p-2 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 shadow-xs w-full max-w-3xl mx-auto transition-all duration-200">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1094,9 +1114,9 @@ function ChatContent() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="rounded-[8px] h-10 w-10 hover:bg-card text-muted-foreground hover:text-foreground shrink-0"
+                className="rounded-[10px] h-9 w-9 hover:bg-secondary text-muted-foreground hover:text-foreground shrink-0 flex items-center justify-center"
               >
-                <Paperclip className="h-5 w-5 stroke-[1.5]" />
+                <Paperclip className="h-4.5 w-4.5 stroke-[1.5]" />
               </Button>
               <textarea
                 ref={textareaRef}
@@ -1109,27 +1129,32 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-4 py-2 text-[15px] text-[#26251e] placeholder:text-[#5a5852] min-h-[40px] max-h-[140px] scrollbar-thin"
-                disabled={sending}
+                className="flex-1 bg-transparent border-0 px-3 py-1.5 text-xs sm:text-sm text-[#26251e] placeholder-muted-foreground focus:outline-none focus:ring-0 resize-none font-sans min-h-[28px] max-h-[140px] leading-relaxed"
               />
-              <Button
-                variant={isListening ? 'default' : 'ghost'}
-                size="icon"
-                onClick={toggleVoiceInput}
-                disabled={sending}
-                className={`rounded-[8px] h-10 w-10 text-muted-foreground hover:text-foreground shrink-0 ${isListening ? 'bg-primary/10 text-primary animate-pulse' : 'hover:bg-card/40'}`}
-              >
-                {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5 stroke-[1.5]" />}
-              </Button>
-              <Button
-                onClick={handleSend}
-                disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
-                className="rounded-[8px] h-10 w-10 hover:scale-[1.03] transition-all bg-primary hover:bg-[#d04200] text-primary-foreground shadow-xs font-medium shrink-0 ml-2"
-                size="icon"
-                title="Send"
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 stroke-[2]" />}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleVoiceInput}
+                  disabled={sending}
+                  className={`rounded-[10px] h-9 w-9 text-muted-foreground shrink-0 flex items-center justify-center transition-colors ${
+                    isListening 
+                      ? 'bg-red-50 text-red-500 animate-pulse hover:bg-red-100' 
+                      : 'hover:bg-secondary hover:text-foreground'
+                  }`}
+                >
+                  {isListening ? <Square className="h-3 w-3 fill-current text-red-500" /> : <Mic className="h-4.5 w-4.5 stroke-[1.5]" />}
+                </Button>
+                <Button
+                  onClick={handleSend}
+                  disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
+                  className="rounded-[10px] h-9 w-9 hover:scale-[1.02] transition-all bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs shrink-0 flex items-center justify-center cursor-pointer"
+                  size="icon"
+                  title="Send"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 stroke-[1.8]" />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -1137,7 +1162,19 @@ function ChatContent() {
 
       {/* 3. RIGHT PANEL: Cursor-Style Editor Canvas */}
       {tabs.length > 0 && (
-        <aside className="flex flex-col flex-1 h-full bg-secondary border-l border-border overflow-hidden min-w-0">
+        <>
+          <div
+            onMouseDown={handleMouseDown}
+            className={`w-1 hover:w-1.5 active:w-1.5 h-full cursor-col-resize select-none shrink-0 transition-all duration-150 z-30 relative ${
+              isResizing ? 'bg-primary/50 w-1.5' : 'bg-border hover:bg-primary/30'
+            }`}
+          >
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-border" />
+          </div>
+          <aside
+            className="flex flex-col h-full bg-secondary border-l border-border overflow-hidden min-w-0"
+            style={{ width: `${100 - leftWidthPercent}%`, flex: 'none' }}
+          >
           {/* Tab Header bar */}
           <div className="flex bg-[#efe9de]/65 border-b border-border h-9 shrink-0 overflow-x-auto scrollbar-thin select-none">
             {tabs.map((tab) => {
@@ -1274,7 +1311,8 @@ function ChatContent() {
             </div>
           )}
         </aside>
-      )}
+      </>
+    )}
 
       {codePreview && (
         <div className="fixed inset-0 z-30 bg-black/30 animate-fade-in" onClick={() => setCodePreview(null)}>

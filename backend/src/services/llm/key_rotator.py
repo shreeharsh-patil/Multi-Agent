@@ -1,6 +1,7 @@
 import asyncio
 from typing import Callable, Any
 from google import genai
+from google.genai import types
 from src.config import settings
 from src.utils.logger import logger
 
@@ -22,7 +23,10 @@ class GeminiClientRotator:
         
         for key in self.keys:
             try:
-                client = genai.Client(api_key=key)
+                client = genai.Client(
+                    api_key=key,
+                    http_options=types.HttpOptions(api_version='v1')
+                )
                 self.clients.append((key, client))
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client for a key: {e}")

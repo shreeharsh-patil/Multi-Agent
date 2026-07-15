@@ -24,6 +24,9 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Agents - AI Workspace',
   description: 'An elegant, editorial collaborative multi-agent platform',
+  icons: {
+    icon: '/logo.png',
+  },
 }
 
 export default function RootLayout({

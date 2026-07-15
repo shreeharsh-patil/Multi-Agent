@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -20,7 +20,10 @@ import {
   PanelLeft,
   Plus,
   ChevronDown,
-  Trash2
+  Trash2,
+  FolderOpen,
+  FileText,
+  ImageIcon
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -60,6 +63,49 @@ export function Sidebar() {
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
   const [selectedWorkspace, setSelectedWorkspace] = useState('Personal Space')
+
+  const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/')
+  const [documents, setDocuments] = useState<any[]>([])
+  const [loadingDocuments, setLoadingDocuments] = useState(false)
+  const [currentWorkspace, setCurrentWorkspace] = useState('all')
+
+  const fetchDocuments = useCallback(async () => {
+    if (!isChatRoute) return
+    setLoadingDocuments(true)
+    try {
+      const res = await api.documents.list(currentWorkspace === 'all' ? undefined : currentWorkspace === 'unfiled' ? '__unfiled__' : currentWorkspace)
+      if (res.success && res.data) {
+        setDocuments(res.data)
+      }
+    } catch (err) {
+      console.error("Error loading sidebar documents", err)
+    } finally {
+      setLoadingDocuments(false)
+    }
+  }, [isChatRoute, currentWorkspace])
+
+  useEffect(() => {
+    if (isChatRoute && session) {
+      fetchDocuments()
+    }
+  }, [isChatRoute, session, fetchDocuments])
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchDocuments()
+    }
+    window.addEventListener('refresh-documents-list', handleRefresh)
+    return () => window.removeEventListener('refresh-documents-list', handleRefresh)
+  }, [fetchDocuments])
+
+  useEffect(() => {
+    const handleWorkspaceChange = (e: Event) => {
+      const workspaceId = (e as CustomEvent).detail
+      setCurrentWorkspace(workspaceId)
+    }
+    window.addEventListener('workspace-changed', handleWorkspaceChange)
+    return () => window.removeEventListener('workspace-changed', handleWorkspaceChange)
+  }, [])
 
   // Fetch recent conversations for history section
   useEffect(() => {
@@ -204,7 +250,7 @@ export function Sidebar() {
             <>
               <Link href="/dashboard" className="flex items-center gap-2.5 group">
                 <div className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-xs shrink-0">
-                  <LogoSpike className="h-4.5 w-4.5" />
+                  <img src="/logo.png" alt="Agents Logo" className="h-6 w-6 object-contain" />
                 </div>
                 <span className="font-sans font-normal text-lg tracking-[-0.03em] text-[#26251e]">
                   Agents
@@ -327,6 +373,51 @@ export function Sidebar() {
             )
           })}
         </div>
+
+        {/* Documents Explorer Section (Only on Chat route and when not collapsed) */}
+        {isChatRoute && !isCollapsed && (
+          <div className="space-y-2 pt-4 border-t border-border">
+            <div className="px-3 flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider select-none">
+                Documents Explorer
+              </span>
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            
+            <div className="px-1 max-h-[220px] overflow-y-auto scrollbar-thin">
+              {loadingDocuments ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="text-center py-6 text-[10px] text-muted-foreground px-2">
+                  No documents index. Drag & drop files in chat to upload.
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {documents.map((doc) => {
+                    const fileType = doc.fileType.toLowerCase()
+                    const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(fileType)
+                    const Icon = isImg ? ImageIcon : FileText
+                    return (
+                      <button
+                        key={doc.id}
+                        onClick={() => {
+                          const event = new CustomEvent('open-document-tab', { detail: doc })
+                          window.dispatchEvent(event)
+                        }}
+                        className="w-full flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-left text-xs transition-all hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate flex-1 text-[11px] font-sans">{doc.fileName}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* History / Conversations Section (Hidden when collapsed) */}
         <div className={cn(

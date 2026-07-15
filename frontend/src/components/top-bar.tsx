@@ -47,13 +47,7 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
-function LogoSpike({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={cn("text-[#cc785c] fill-current shrink-0", className)} viewBox="0 0 24 24">
-      <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
-    </svg>
-  )
-}
+
 
 export function TopBar() {
   const { data: session } = useSession()
@@ -85,7 +79,7 @@ export function TopBar() {
             <div className="flex items-center justify-between mb-8">
               <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
                 <div className="h-8 w-8 rounded-lg bg-[#faf9f5] border border-[#e6dfd8] flex items-center justify-center shadow-sm">
-                  <LogoSpike className="h-4.5 w-4.5" />
+                  <img src="/logo.png" alt="Agents Logo" className="h-5 w-5 object-contain" />
                 </div>
                 <span className="font-serif font-normal text-lg text-[#141413]">Agents</span>
               </Link>

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     groq_model: str = "mixtral-8x7b-32768"
 
     firecrawl_api_key: str = ""
+    deepgram_api_key: str = ""
 
     google_client_id: str = ""
     google_client_secret: str = ""
