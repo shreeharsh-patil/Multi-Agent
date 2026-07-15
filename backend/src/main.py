@@ -69,13 +69,14 @@ async def lifespan(app: FastAPI):
     from src.models.planner import PlannerPlan
     from src.models.quiz import QuizSession
     from src.models.workspace import Workspace, ChatShare
+    from src.models.search_history import SearchHistory
 
     await init_beanie(
         database=mongo_client[settings.mongodb_db_name],
         document_models=[
             User, Document, DocumentChunk, Conversation, MemoryItem,
             AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
-            PlannerPlan, QuizSession, Workspace, ChatShare,
+            PlannerPlan, QuizSession, Workspace, ChatShare, SearchHistory,
         ],
     )
     logger.info("Beanie models initialized")

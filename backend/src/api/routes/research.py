@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from src.models.research import ResearchReport
+from src.api.middleware import resolve_user_id
 from src.utils.logger import logger
 from src.agents.research.agent import ResearchAgent
 
@@ -27,8 +28,9 @@ class DeepResearchRequest(BaseModel):
 
 
 @router.get("")
-async def list_reports(user_id: str = "default") -> list[ReportResponse]:
+async def list_reports(http_request: Request, user_id: str = "default") -> list[ReportResponse]:
     """List all research reports for a user, newest first."""
+    user_id = resolve_user_id(http_request, user_id)
     reports = await ResearchReport.find(
         ResearchReport.user_id == user_id
     ).sort(-ResearchReport.created_at).to_list()
@@ -45,10 +47,11 @@ async def list_reports(user_id: str = "default") -> list[ReportResponse]:
 
 
 @router.get("/{report_id}")
-async def get_report(report_id: str) -> ReportResponse:
+async def get_report(report_id: str, http_request: Request) -> ReportResponse:
     """Get a single research report."""
+    user_id = resolve_user_id(http_request)
     report = await ResearchReport.get(report_id)
-    if not report:
+    if not report or report.user_id != user_id:
         raise HTTPException(404, "Report not found")
 
     return ReportResponse(
@@ -60,10 +63,10 @@ async def get_report(report_id: str) -> ReportResponse:
 
 
 @router.post("", status_code=201)
-async def create_report(body: CreateReportRequest) -> ReportResponse:
+async def create_report(body: CreateReportRequest, http_request: Request) -> ReportResponse:
     """Create a new research report."""
     report = ResearchReport(
-        user_id=body.user_id,
+        user_id=resolve_user_id(http_request, body.user_id),
         query=body.query,
         content=body.content,
     )
@@ -78,12 +81,12 @@ async def create_report(body: CreateReportRequest) -> ReportResponse:
 
 
 @router.post("/deep", status_code=201)
-async def deep_research(body: DeepResearchRequest) -> dict:
+async def deep_research(body: DeepResearchRequest, http_request: Request) -> dict:
     if not body.query.strip():
         raise HTTPException(400, "Research query is required")
     try:
         result = await ResearchAgent().deep_research(body.query.strip())
-        report = ResearchReport(user_id=body.user_id, query=body.query.strip(), content=result["output"])
+        report = ResearchReport(user_id=resolve_user_id(http_request, body.user_id), query=body.query.strip(), content=result["output"])
         await report.insert()
         return {
             "id": str(report.id), "query": report.query, "content": report.content,
@@ -95,10 +98,11 @@ async def deep_research(body: DeepResearchRequest) -> dict:
 
 
 @router.delete("/{report_id}")
-async def delete_report(report_id: str) -> dict:
+async def delete_report(report_id: str, http_request: Request) -> dict:
     """Delete a research report."""
+    user_id = resolve_user_id(http_request)
     report = await ResearchReport.get(report_id)
-    if not report:
+    if not report or report.user_id != user_id:
         raise HTTPException(404, "Report not found")
     await report.delete()
     return {"success": True, "message": "Report deleted"}

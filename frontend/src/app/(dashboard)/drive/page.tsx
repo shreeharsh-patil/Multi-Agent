@@ -43,7 +43,8 @@ interface DriveStorage {
 
 export default function DrivePage() {
   const { data: session } = useSession()
-  const accessToken = (session as any)?.accessToken || ''
+  const sessionError = (session as any)?.error
+  const accessToken = !sessionError ? (session as any)?.accessToken || '' : ''
   const refreshToken = (session as any)?.refreshToken || ''
   const [files, setFiles] = useState<DriveFile[]>([])
   const [storage, setStorage] = useState<DriveStorage | null>(null)
@@ -147,10 +148,13 @@ export default function DrivePage() {
           <CardContent className="py-16">
             <div className="text-center text-muted-foreground">
               <HardDrive className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <h2 className="text-xl font-semibold mb-2">Connect Google Drive</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                {sessionError ? 'Session expired' : 'Connect Google Drive'}
+              </h2>
               <p className="mb-6 max-w-md mx-auto">
-                Sign in with Google to access, upload, and manage your Drive files
-                directly from this platform.
+                {sessionError
+                  ? 'Your Google session expired and could not be refreshed. Sign in again to continue managing your Drive files.'
+                  : 'Sign in with Google to access, upload, and manage your Drive files directly from this platform.'}
               </p>
               <Button size="lg" className="gap-3" onClick={() => signIn('google', { callbackUrl: '/drive' })}>
                 <LogIn className="h-5 w-5" />

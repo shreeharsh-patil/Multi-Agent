@@ -17,7 +17,47 @@ PUBLIC_PATHS = {
     "/api/auth/login",
 }
 
-PUBLIC_PREFIXES = ("/api/shares/chat/",)
+# Prefixes that are public only for specific HTTP methods. The shared-chat
+# read view (GET) must stay open, but creating/revoking a share (POST/DELETE)
+# requires an authenticated user so request.state.user is populated.
+PUBLIC_METHOD_PREFIXES = (
+    ("GET", "/api/shares/chat/"),
+)
+
+# Suffixes for GET routes the browser opens directly (<img src>, download/export
+# links) with no Authorization header, so they cannot be user-scoped and must
+# stay public regardless of the (dynamic) id in the middle of the path.
+PUBLIC_GET_SUFFIXES = (
+    "/download",
+    "/download/content",
+    "/export",
+)
+
+
+def _is_public(method: str, path: str) -> bool:
+    # PUBLIC_PATHS are matched exactly. Using a prefix match here would be a
+    # security hole: "/api" would make every "/api/..." route public and stop
+    # jwt_auth_middleware from ever setting request.state.user.
+    if path in PUBLIC_PATHS:
+        return True
+    if any(method == m and path.startswith(p) for m, p in PUBLIC_METHOD_PREFIXES):
+        return True
+    if method == "GET" and path.startswith("/api/") and any(path.endswith(s) for s in PUBLIC_GET_SUFFIXES):
+        return True
+    return False
+
+
+def resolve_user_id(request: Request, fallback: str = "default") -> str:
+    """Resolve the authenticated user id set by ``jwt_auth_middleware``.
+
+    Routes should use this instead of trusting a body/query ``user_id`` so that
+    persisted records (notes, research, plans, search history) are scoped to the
+    signed-in user rather than the shared ``"default"`` bucket.
+    """
+    user = getattr(request.state, "user", None)
+    if user and user.get("sub"):
+        return user["sub"]
+    return fallback
 
 
 async def get_user_id_from_request(request: Request) -> str:
@@ -61,7 +101,7 @@ async def jwt_auth_middleware(request: Request, call_next):
     path = request.url.path
 
     # Skip auth for public paths
-    if any(path.startswith(p) for p in PUBLIC_PATHS) or any(path.startswith(p) for p in PUBLIC_PREFIXES):
+    if _is_public(request.method, path):
         return await call_next(request)
 
     # Skip auth for OPTIONS (CORS preflight)

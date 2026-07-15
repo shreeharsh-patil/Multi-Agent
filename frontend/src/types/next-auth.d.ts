@@ -9,11 +9,15 @@ declare module 'next-auth' {
       image?: string | null
     }
     accessToken?: string
+    refreshToken?: string
+    error?: string
   }
 
   interface Token {
     accessToken?: string
     refreshToken?: string
+    expiresAt?: number
+    error?: string
     sub?: string
   }
 }
@@ -22,6 +26,8 @@ declare module 'next-auth/jwt' {
   interface JWT {
     accessToken?: string
     refreshToken?: string
+    expiresAt?: number
+    error?: string
     sub?: string
   }
 }

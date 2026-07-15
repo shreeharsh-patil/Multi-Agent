@@ -276,6 +276,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ query, user_id: userId, document_ids: documentIds, workspace_id: workspaceId }),
       }),
+    history: () =>
+      fetchApi<Array<{ id: string; query: string; answer: string; createdAt: string }>>('/api/knowledge/history'),
+    deleteHistory: (id: string) =>
+      fetchApi<{ success: boolean }>(`/api/knowledge/history/${id}`, { method: 'DELETE' }),
   },
 
   research: {

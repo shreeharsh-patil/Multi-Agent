@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Search, Upload, BookOpen, Loader2, FileText, Sparkles, FolderOpen } from 'lucide-react'
+import { Search, Upload, BookOpen, Loader2, FileText, Sparkles, FolderOpen, History, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
@@ -43,7 +43,13 @@ export default function KnowledgeBasePage() {
   const [answer, setAnswer] = useState('')
   const [results, setResults] = useState<QueryResult[]>([])
   const [citations, setCitations] = useState<Array<{ file_name: string; page_number?: number }>>([])
+  const [history, setHistory] = useState<Array<{ id: string; query: string; answer: string; createdAt: string }>>([])
   const resultsRef = useRef<HTMLDivElement>(null)
+
+  const fetchHistory = async () => {
+    const res = await api.knowledge.history()
+    if (res.success && res.data) setHistory(res.data)
+  }
 
   const fetchDocuments = async () => {
     setLoading(true)
@@ -61,6 +67,7 @@ export default function KnowledgeBasePage() {
 
   useEffect(() => {
     fetchDocuments()
+    fetchHistory()
     api.workspaces.list().then((res) => {
       if (res.success && res.data) setWorkspaces(res.data)
     })
@@ -72,19 +79,22 @@ export default function KnowledgeBasePage() {
     }
   }, [answer])
 
-  const handleQuery = async () => {
-    if (!query.trim()) return
+  const handleQuery = async (overrideQuery?: string) => {
+    const q = (overrideQuery ?? query).trim()
+    if (!q) return
+    if (overrideQuery) setQuery(overrideQuery)
     setQuerying(true)
     setAnswer('')
     setResults([])
     setCitations([])
     try {
       const scope = selectedWorkspace === 'all' ? undefined : selectedWorkspace === 'unfiled' ? '__unfiled__' : selectedWorkspace
-      const res = await api.knowledge.query(query, undefined, undefined, scope)
+      const res = await api.knowledge.query(q, undefined, undefined, scope)
       if (res.success && res.data) {
         setAnswer(res.data.answer)
         setResults(res.data.results)
         setCitations(res.data.citations)
+        fetchHistory()
       } else {
         setError(res.error || 'Query failed')
       }
@@ -93,6 +103,11 @@ export default function KnowledgeBasePage() {
     } finally {
       setQuerying(false)
     }
+  }
+
+  const deleteHistoryItem = async (id: string) => {
+    setHistory((prev) => prev.filter((h) => h.id !== id))
+    await api.knowledge.deleteHistory(id)
   }
 
   const readyDocs = documents.filter((d) => d.status === 'ready')
@@ -151,7 +166,7 @@ export default function KnowledgeBasePage() {
                     disabled={querying}
                   />
                 </div>
-                <Button onClick={handleQuery} disabled={querying || !query.trim()} className="gap-2">
+                <Button onClick={() => handleQuery()} disabled={querying || !query.trim()} className="gap-2">
                   {querying ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -281,6 +296,46 @@ export default function KnowledgeBasePage() {
                     </div>
                   ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <History className="h-5 w-5" />
+                Recent Searches
+              </CardTitle>
+              <CardDescription>Your saved knowledge queries</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {history.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No searches yet
+                </p>
+              ) : (
+                <ScrollArea className="max-h-[280px]">
+                  <div className="space-y-1">
+                    {history.map((h) => (
+                      <div key={h.id} className="group flex items-start gap-2 rounded-md p-2 hover:bg-secondary/50 transition-colors">
+                        <button
+                          onClick={() => handleQuery(h.query)}
+                          className="flex-1 min-w-0 text-left"
+                        >
+                          <p className="truncate text-sm font-medium">{h.query}</p>
+                          <p className="text-[11px] text-muted-foreground">{formatDate(h.createdAt)}</p>
+                        </button>
+                        <button
+                          onClick={() => deleteHistoryItem(h.id)}
+                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          aria-label="Delete search"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>

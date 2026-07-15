@@ -92,6 +92,9 @@ function ChatContent() {
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const lastSpokenRef = useRef<string | null>(null)
+  // Tracks the in-flight upload promise for each attachment so Send can await
+  // an upload already started on select instead of uploading a second time.
+  const uploadPromises = useRef<Map<string, Promise<Attachment>>>(new Map())
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -101,18 +104,21 @@ function ChatContent() {
 
   const uploadAttachment = useCallback(async (att: Attachment): Promise<Attachment> => {
     setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, status: 'uploading', progress: 0 } : a))
+    let final: Attachment
     try {
       const uploadWorkspace = selectedWorkspace !== 'all' && selectedWorkspace !== 'unfiled' ? selectedWorkspace : undefined
       const res = await api.documents.upload(att.file, 'default', (progress) => {
         setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, progress } : a))
       }, uploadWorkspace)
-      if (res.success && res.data) {
-        return { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
-      }
-      return { ...att, status: 'error', progress: 0 }
+      final = res.success && res.data
+        ? { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
+        : { ...att, status: 'error', progress: 0 }
     } catch {
-      return { ...att, status: 'error', progress: 0 }
+      final = { ...att, status: 'error', progress: 0 }
     }
+    setAttachments((prev) => prev.map((a) => a.id === att.id ? final : a))
+    uploadPromises.current.delete(att.id)
+    return final
   }, [selectedWorkspace])
 
   const speakMessage = useCallback((id: string, content: string) => {
@@ -260,11 +266,20 @@ function ChatContent() {
 
     setSending(true)
 
-    // Upload attachments first, collecting results
+    // Attachments already began uploading on select. Await any in-flight
+    // upload; only kick off a fresh upload for ones that never started
+    // (e.g. added programmatically) or previously errored.
     const uploadedAttachments: Array<{ name: string; size: number; documentId?: string }> = []
     for (const att of attachments) {
-      const updated = await uploadAttachment(att)
-      setAttachments((prev) => prev.map((a) => a.id === att.id ? updated : a))
+      let updated: Attachment
+      const inFlight = uploadPromises.current.get(att.id)
+      if (inFlight) {
+        updated = await inFlight
+      } else if (att.status === 'done') {
+        updated = att
+      } else {
+        updated = await uploadAttachment(att)
+      }
       uploadedAttachments.push({
         name: att.file.name,
         size: att.file.size,
@@ -461,7 +476,9 @@ function ChatContent() {
       previewUrl: isImage(file) ? URL.createObjectURL(file) : undefined,
     }))
     setAttachments((prev) => [...prev, ...newAttachments])
-  }, [])
+    // Begin uploading immediately on select so files are ready before Send.
+    newAttachments.forEach((att) => { uploadPromises.current.set(att.id, uploadAttachment(att)) })
+  }, [uploadAttachment])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     addFiles(e.target.files || [])

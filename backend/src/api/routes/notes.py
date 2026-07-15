@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Literal
 import io
 from src.models.note import Note
+from src.api.middleware import resolve_user_id
 from src.services.notes.exporter import notes_exporter
 from src.utils.logger import logger
 
@@ -25,8 +26,9 @@ class UpdateNoteRequest(BaseModel):
 
 
 @router.get("")
-async def list_notes(user_id: str = "default") -> list[dict]:
+async def list_notes(http_request: Request, user_id: str = "default") -> list[dict]:
     """List all notes for a user."""
+    user_id = resolve_user_id(http_request, user_id)
     notes = await Note.find(Note.user_id == user_id).sort(-Note.updated_at).to_list()
     return [
         {
@@ -44,10 +46,10 @@ async def list_notes(user_id: str = "default") -> list[dict]:
 
 
 @router.post("")
-async def create_note(request: CreateNoteRequest) -> dict:
+async def create_note(request: CreateNoteRequest, http_request: Request) -> dict:
     """Create a new note."""
     note = Note(
-        user_id=request.user_id,
+        user_id=resolve_user_id(http_request, request.user_id),
         title=request.title,
         content=request.content,
         tags=request.tags,
@@ -65,10 +67,11 @@ async def create_note(request: CreateNoteRequest) -> dict:
 
 
 @router.get("/{note_id}")
-async def get_note(note_id: str) -> dict:
+async def get_note(note_id: str, http_request: Request) -> dict:
     """Get a single note by ID."""
+    user_id = resolve_user_id(http_request)
     note = await Note.get(note_id)
-    if not note:
+    if not note or note.user_id != user_id:
         raise HTTPException(404, "Note not found")
     return {
         "id": str(note.id),
@@ -82,10 +85,11 @@ async def get_note(note_id: str) -> dict:
 
 
 @router.put("/{note_id}")
-async def update_note(note_id: str, request: UpdateNoteRequest) -> dict:
+async def update_note(note_id: str, request: UpdateNoteRequest, http_request: Request) -> dict:
     """Update an existing note."""
+    user_id = resolve_user_id(http_request)
     note = await Note.get(note_id)
-    if not note:
+    if not note or note.user_id != user_id:
         raise HTTPException(404, "Note not found")
 
     if request.title is not None:
@@ -106,10 +110,11 @@ async def update_note(note_id: str, request: UpdateNoteRequest) -> dict:
 
 
 @router.delete("/{note_id}")
-async def delete_note(note_id: str) -> dict:
+async def delete_note(note_id: str, http_request: Request) -> dict:
     """Delete a note."""
+    user_id = resolve_user_id(http_request)
     note = await Note.get(note_id)
-    if not note:
+    if not note or note.user_id != user_id:
         raise HTTPException(404, "Note not found")
     await note.delete()
     return {"success": True, "message": "Note deleted"}
@@ -120,7 +125,11 @@ async def export_note(
     note_id: str,
     format: Literal["pdf", "docx", "markdown"] = Query("markdown", alias="format"),
 ) -> Response:
-    """Export a note as PDF, DOCX, or Markdown."""
+    """Export a note as PDF, DOCX, or Markdown.
+
+    Accessed via a direct browser link (no Authorization header), so it is not
+    user-scoped; the note id itself is the capability.
+    """
     note = await Note.get(note_id)
     if not note:
         raise HTTPException(404, "Note not found")
