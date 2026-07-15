@@ -447,6 +447,17 @@ function ChatContent() {
     setTabs(prev => [...prev, newTab])
     setActiveTabId(doc.id)
 
+    // Fetch full document metadata (includes Drive info)
+    const metaRes = await api.documents.get(doc.id)
+    if (metaRes.success && metaRes.data) {
+      const d = metaRes.data as any
+      setTabs(prev => prev.map(t => t.id === doc.id ? {
+        ...t,
+        driveFileId: d.driveFileId,
+        driveWebViewLink: d.driveWebViewLink,
+      } : t))
+    }
+
     const fileTypeLower = doc.fileType.toLowerCase()
     if (['txt', 'md'].includes(fileTypeLower)) {
       try {
@@ -1335,12 +1346,28 @@ function ChatContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      alert('Saved to Drive successfully!')
+                    onClick={async () => {
+                      if (activeTab.driveWebViewLink) {
+                        window.open(activeTab.driveWebViewLink, '_blank', 'noopener')
+                      } else if (activeTab.docId) {
+                        const btn = (document.activeElement as HTMLElement)
+                        btn.textContent = 'Uploading...'
+                        try {
+                          const res = await api.documents.uploadToDrive(activeTab.docId, googleAccessToken)
+                          if (res.success && res.data) {
+                            setTabs(prev => prev.map(t => t.id === activeTab.id ? {
+                              ...t, driveFileId: res.data!.driveFileId, driveWebViewLink: res.data!.driveWebViewLink,
+                            } : t))
+                            window.open(res.data.driveWebViewLink, '_blank', 'noopener')
+                          }
+                        } catch {
+                          // ignore
+                        }
+                      }
                     }}
                     className="h-6 px-2.5 text-[10px] rounded-[6px] border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
                   >
-                    Save to Drive
+                    {activeTab.driveWebViewLink ? 'Open in Drive' : 'Save to Drive'}
                   </button>
                 </div>
               </div>

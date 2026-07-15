@@ -335,6 +335,53 @@ async def download_document(document_id: str):
     )
 
 
+@router.post("/{document_id}/drive-upload")
+async def upload_document_to_drive(document_id: str, http_request: Request) -> dict:
+    """Upload an existing document to Google Drive."""
+    doc = await Document.get(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    drive_access_token = http_request.headers.get("X-Drive-Access-Token", "")
+    if not drive_access_token:
+        raise HTTPException(status_code=400, detail="X-Drive-Access-Token header is required")
+
+    if doc.drive_file_id:
+        return {"driveFileId": doc.drive_file_id, "driveWebViewLink": doc.drive_web_view_link}
+
+    file_path = doc.file_path
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    drive_refresh_token = http_request.headers.get("X-Drive-Refresh-Token", "")
+    media_type_map = {
+        "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml",
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "txt": "text/plain", "md": "text/markdown",
+    }
+
+    try:
+        from src.services.drive.service import DriveService
+        drive = DriveService()
+        result = await drive.upload_file(
+            access_token=drive_access_token,
+            file_path=file_path,
+            file_name=doc.file_name,
+            mime_type=media_type_map.get(doc.file_type, "application/octet-stream"),
+            refresh_token=drive_refresh_token,
+        )
+        doc.drive_file_id = result.get("id")
+        doc.drive_web_view_link = result.get("webViewLink")
+        await doc.save()
+        return {"driveFileId": doc.drive_file_id, "driveWebViewLink": doc.drive_web_view_link}
+    except Exception as e:
+        logger.error(f"Failed to upload document to Drive: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @router.delete("/{document_id}")
 async def delete_document(document_id: str, http_request: Request) -> dict:
     from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client

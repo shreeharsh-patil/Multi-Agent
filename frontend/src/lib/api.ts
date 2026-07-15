@@ -191,6 +191,16 @@ export const api = {
       fetchApi<null>(`/api/documents/${id}`, { method: 'DELETE' }),
     moveToWorkspace: (id: string, workspaceId?: string) =>
       fetchApi<{ id: string; workspaceId?: string }>(`/api/documents/${id}/workspace${workspaceId ? `?workspace_id=${workspaceId}` : ''}`, { method: 'PATCH' }),
+    uploadToDrive: (id: string, googleAccessToken?: string) => {
+      const headers: Record<string, string> = {}
+      const token = getAccessToken()
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (googleAccessToken) headers['X-Drive-Access-Token'] = googleAccessToken
+      return fetchApi<{ driveFileId: string; driveWebViewLink: string }>(
+        `/api/documents/${id}/drive-upload`,
+        { method: 'POST', headers, body: '{}' },
+      )
+    },
   },
 
   workspaces: {
