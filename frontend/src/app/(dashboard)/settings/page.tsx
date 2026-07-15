@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState('')
   const [preferences, setPreferences] = useState({
-    theme: 'system',
+    theme: 'light',
     defaultModel: 'gemini-2.0-flash',
     notifications: true,
     language: 'en',
@@ -34,7 +34,7 @@ export default function SettingsPage() {
         if (res.success && res.data) {
           setName(res.data.name || '')
           setPreferences({
-            theme: res.data.preferences?.theme ?? 'system',
+            theme: res.data.preferences?.theme ?? 'light',
             defaultModel: res.data.preferences?.defaultModel ?? 'gemini-2.0-flash',
             notifications: res.data.preferences?.notifications ?? true,
             language: res.data.preferences?.language ?? 'en',
@@ -77,44 +77,44 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex h-[50vh] items-center justify-center bg-[#faf9f5]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#cc785c]" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-3xl font-serif font-normal text-[#141413]">Settings</h1>
+        <p className="text-sm text-[#6c6a64] mt-1">
           Manage your account and platform preferences
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <User className="h-4.5 w-4.5 text-[#cc785c]" />
               Profile
             </CardTitle>
-            <CardDescription>Manage your account information</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Manage your account information</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-5 pt-0">
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name" className="text-xs text-[#141413]">Name</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" defaultValue={session?.user?.email || 'user@example.com'} disabled />
+              <Label htmlFor="email" className="text-xs text-[#141413]">Email</Label>
+              <Input id="email" type="email" defaultValue={session?.user?.email || 'user@example.com'} disabled className="opacity-80" />
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            <div className="flex items-center gap-2 text-xs text-[#6c6a64]">
+              <CheckCircle2 className="h-4 w-4 text-[#5db872]" />
               Signed in with Google
             </div>
-            <Button onClick={handleProfileSave} disabled={saving}>
+            <Button onClick={handleProfileSave} disabled={saving} className="shadow-sm">
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save Changes
             </Button>
@@ -122,26 +122,26 @@ export default function SettingsPage() {
         </Card>
 
         {/* Google Drive Integration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HardDrive className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <HardDrive className="h-4.5 w-4.5 text-[#cc785c]" />
               Google Drive
             </CardTitle>
-            <CardDescription>Connect and manage your Google Drive</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Connect and manage your Google Drive</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
-              <HardDrive className="h-8 w-8 text-green-500" />
+          <CardContent className="space-y-4 p-5 pt-0">
+            <div className="flex items-center gap-3 p-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5]">
+              <HardDrive className="h-8 w-8 text-[#cc785c]" />
               <div className="flex-1">
-                <p className="font-medium">Google Drive</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="font-semibold text-sm text-[#141413]">Google Drive</p>
+                <p className="text-xs text-[#6c6a64] mt-0.5">
                   {accessToken
                     ? 'Connected — you can access your Drive files'
                     : 'Sign in to access, upload, and manage Drive files'}
                 </p>
               </div>
-              <Badge variant={accessToken ? 'default' : 'secondary'}>
+              <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full">
                 {accessToken ? (
                   <span className="flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" />
@@ -158,7 +158,7 @@ export default function SettingsPage() {
             {!accessToken ? (
               <Button
                 variant="default"
-                className="w-full gap-2"
+                className="w-full gap-2 shadow-sm"
                 onClick={() => signIn('google', { callbackUrl: '/drive' })}
               >
                 <HardDrive className="h-4 w-4" />
@@ -166,13 +166,13 @@ export default function SettingsPage() {
               </Button>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-[#6c6a64] leading-relaxed">
                   You have Drive access through your Google authentication.
                   Visit the Drive page to manage your files.
                 </p>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 gap-2" onClick={() => window.location.href = '/drive'}>
-                    <ExternalLink className="h-4 w-4" />
+                  <Button variant="outline" className="flex-1 gap-2 shadow-sm h-10 text-xs" onClick={() => window.location.href = '/drive'}>
+                    <ExternalLink className="h-4 w-4 text-[#cc785c]" />
                     Open Drive
                   </Button>
                 </div>
@@ -181,42 +181,45 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <CalendarDays className="h-4.5 w-4.5 text-[#cc785c]" />
               Google Calendar
             </CardTitle>
-            <CardDescription>Let the Calendar Agent manage your schedule</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Let the Calendar Agent manage your schedule</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-3">
-              <CalendarDays className="h-8 w-8 text-blue-500" />
-              <div className="flex-1"><p className="font-medium">Calendar access</p><p className="text-sm text-muted-foreground">{accessToken ? 'Available to the Calendar Agent' : 'Reconnect Google to grant calendar access'}</p></div>
-              <Badge variant={accessToken ? 'default' : 'secondary'}>{accessToken ? 'Connected' : 'Not connected'}</Badge>
+          <CardContent className="space-y-4 p-5 pt-0">
+            <div className="flex items-center gap-3 p-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5]">
+              <CalendarDays className="h-8 w-8 text-[#cc785c]" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm text-[#141413]">Calendar access</p>
+                <p className="text-xs text-[#6c6a64] mt-0.5">{accessToken ? 'Available to the Calendar Agent' : 'Reconnect Google to grant calendar access'}</p>
+              </div>
+              <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full">{accessToken ? 'Connected' : 'Not connected'}</Badge>
             </div>
-            <Button variant="outline" className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
-              <CalendarDays className="h-4 w-4" />
+            <Button variant="outline" className="w-full gap-2 shadow-sm h-10 text-xs" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
+              <CalendarDays className="h-4 w-4 text-[#cc785c]" />
               {accessToken ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}
             </Button>
-            <p className="text-xs text-muted-foreground">After connecting, ask the Calendar Agent in Chat to list events, create meetings, check availability, or reschedule.</p>
+            <p className="text-[10px] text-[#6c6a64] leading-relaxed">After connecting, ask the Calendar Agent in Chat to list events, create meetings, check availability, or reschedule.</p>
           </CardContent>
         </Card>
 
         {/* OpenDocuments Integration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <BookOpen className="h-4.5 w-4.5 text-[#cc785c]" />
               OpenDocuments RAG
             </CardTitle>
-            <CardDescription>Use OpenDocuments as your self-hosted RAG backend</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Use OpenDocuments as your self-hosted RAG backend</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
+          <CardContent className="space-y-4 p-5 pt-0">
+            <div className="flex items-center justify-between text-sm">
               <div className="space-y-0.5">
-                <Label>Enable OpenDocuments</Label>
-                <p className="text-sm text-muted-foreground">
+                <Label className="text-[#141413] text-xs">Enable OpenDocuments</Label>
+                <p className="text-xs text-[#6c6a64]">
                   Route document searches and knowledge base queries to OpenDocuments
                 </p>
               </div>
@@ -225,127 +228,127 @@ export default function SettingsPage() {
                 onCheckedChange={(checked) => handleTogglePreference('useOpendocumentsRag', checked)}
               />
             </div>
-            <Separator />
+            <Separator className="bg-[#e6dfd8]" />
             <div className="grid gap-2">
-              <Label htmlFor="opendocuments-url">API URL</Label>
+              <Label htmlFor="opendocuments-url" className="text-xs text-[#141413]">API URL</Label>
               <Input
                 id="opendocuments-url"
                 value="http://localhost:5001"
                 disabled
-                className="bg-secondary/50"
+                className="opacity-75"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] text-[#6c6a64]">
                 Configured globally in backend settings.
               </p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Palette className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <Palette className="h-4.5 w-4.5 text-[#cc785c]" />
               Appearance
             </CardTitle>
-            <CardDescription>Customize your interface</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Customize your interface</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-5 pt-0">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Dark Mode</Label>
-                <p className="text-sm text-muted-foreground">Toggle dark mode theme</p>
+                <Label className="text-xs text-[#141413]">Warm Cream Theme</Label>
+                <p className="text-xs text-[#6c6a64]">Forced editorial warm-canvas floor</p>
               </div>
-              <Switch checked={preferences.theme === 'dark'} onCheckedChange={(checked) => handleTogglePreference('theme', checked ? 'dark' : 'light')} />
+              <Switch checked={true} disabled />
             </div>
-            <Separator />
+            <Separator className="bg-[#e6dfd8]" />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Compact Mode</Label>
-                <p className="text-sm text-muted-foreground">Reduce spacing in the interface</p>
+                <Label className="text-xs text-[#141413]">Compact Mode</Label>
+                <p className="text-xs text-[#6c6a64]">Reduce spacing in the interface</p>
               </div>
               <Switch />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <Bell className="h-4.5 w-4.5 text-[#cc785c]" />
               Notifications
             </CardTitle>
-            <CardDescription>Configure notification preferences</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Configure notification preferences</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-5 pt-0">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Push Notifications</Label>
-                <p className="text-sm text-muted-foreground">Receive push notifications</p>
+                <Label className="text-xs text-[#141413]">Push Notifications</Label>
+                <p className="text-xs text-[#6c6a64]">Receive push notifications</p>
               </div>
               <Switch checked={preferences.notifications} onCheckedChange={(checked) => handleTogglePreference('notifications', checked)} />
             </div>
-            <Separator />
+            <Separator className="bg-[#e6dfd8]" />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Email Notifications</Label>
-                <p className="text-sm text-muted-foreground">Receive email updates</p>
+                <Label className="text-xs text-[#141413]">Email Notifications</Label>
+                <p className="text-xs text-[#6c6a64]">Receive email updates</p>
               </div>
               <Switch />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <Globe className="h-4.5 w-4.5 text-[#cc785c]" />
               Language & Region
             </CardTitle>
-            <CardDescription>Set your preferences</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Set your preferences</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-5 pt-0">
             <div className="grid gap-2">
-              <Label>Language</Label>
+              <Label className="text-xs text-[#141413]">Language</Label>
               <Input value={preferences.language} onChange={(e) => setPreferences({ ...preferences, language: e.target.value })} />
             </div>
             <div className="grid gap-2">
-              <Label>Timezone</Label>
+              <Label className="text-xs text-[#141413]">Timezone</Label>
               <Input defaultValue="America/New_York" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <Key className="h-4.5 w-4.5 text-[#cc785c]" />
               API Keys
             </CardTitle>
-            <CardDescription>Manage your API integrations</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Manage your API integrations</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+          <CardContent className="space-y-4 p-5 pt-0">
+            <p className="text-xs text-[#6c6a64] leading-relaxed">
               No API keys configured. Connect to external services in the integrations settings.
             </p>
-            <Button variant="outline">Configure API Keys</Button>
+            <Button variant="outline" className="shadow-sm">Configure API Keys</Button>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-base text-[#141413]">
+              <Database className="h-4.5 w-4.5 text-[#cc785c]" />
               Data Management
             </CardTitle>
-            <CardDescription>Manage your data and storage</CardDescription>
+            <CardDescription className="text-[#6c6a64]">Manage your data and storage</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+          <CardContent className="space-y-4 p-5 pt-0">
+            <p className="text-xs text-[#6c6a64] leading-relaxed">
               Manage your stored data, export options, and connected services.
             </p>
             <div className="flex gap-3">
-              <Button variant="outline">Export Data</Button>
-              <Button variant="outline" className="text-destructive">Clear Cache</Button>
+              <Button variant="outline" className="shadow-sm">Export Data</Button>
+              <Button variant="outline" className="text-[#c64545] hover:bg-[#c64545]/10 border-[#e6dfd8] shadow-sm">Clear Cache</Button>
             </div>
           </CardContent>
         </Card>

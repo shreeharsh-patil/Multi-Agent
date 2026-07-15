@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -82,52 +82,6 @@ export default function ResearchPage() {
       setResearching(false)
       setQuery('')
     }
-    return
-
-    /*
-    try {
-      const res = await api.chat.send({
-        message: `Conduct thorough research on: ${query}
-        
-Please structure your response with:
-1. **Abstract** — Brief overview of the topic
-2. **Key Findings** — Main points discovered
-3. **Analysis** — Deeper dive into the topic
-4. **Sources** — Any sources or references
-
-Make this comprehensive and well-structured.`,
-        agent_id: 'research',
-      })
-
-      if (res.success && res.data) {
-        const content = res.data.output
-
-        // Persist to backend
-        const createRes = await api.research.create({ query, content })
-        if (createRes.success && createRes.data) {
-          setCurrentReport(createRes.data)
-          setReports((prev) => [createRes.data!, ...prev])
-        } else {
-          // Save locally even if persistence fails
-          const localReport: Report = {
-            id: crypto.randomUUID(),
-            query,
-            content,
-            createdAt: new Date().toISOString(),
-          }
-          setCurrentReport(localReport)
-          setReports((prev) => [localReport, ...prev])
-        }
-      } else {
-        setError(res.error || 'Research failed')
-      }
-    } catch (e) {
-      setError('Failed to complete research. Ensure the backend is running.')
-    } finally {
-      setResearching(false)
-      setQuery('')
-    }
-    */
   }
 
   useEffect(() => {
@@ -152,38 +106,38 @@ Make this comprehensive and well-structured.`,
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Research</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-3xl font-serif font-normal text-[#141413]">Research</h1>
+        <p className="text-sm text-[#6c6a64] mt-1">
           Internet research, source comparison, and report generation
         </p>
       </div>
 
       {error && (
-        <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-[8px]">
           {error}
-          <Button variant="link" size="sm" className="ml-2" onClick={() => setError(null)}>
+          <Button variant="link" size="sm" className="ml-2 text-red-700 underline" onClick={() => setError(null)}>
             Dismiss
           </Button>
         </div>
       )}
 
-      <Card>
-        <CardContent className="p-6">
+      <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+        <CardContent className="p-4">
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6c6a64]" />
               <Input
                 placeholder="Research a topic..."
-                className="pl-10"
+                className="pl-10 shadow-sm"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleResearch()}
                 disabled={researching}
               />
             </div>
-            <Button onClick={handleResearch} disabled={researching || !query.trim()} className="gap-2">
+            <Button onClick={handleResearch} disabled={researching || !query.trim()} className="gap-2 shadow-sm">
               {researching ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -196,27 +150,56 @@ Make this comprehensive and well-structured.`,
       </Card>
 
       {researching && (
-        <Card>
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
           <CardContent className="space-y-4 py-6">
-            <div className="flex items-center gap-3"><Loader2 className="h-5 w-5 animate-spin text-primary" /><div><p className="font-medium">Deep Research is running</p><p className="text-sm text-muted-foreground">A bounded multi-step investigation is in progress.</p></div></div>
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-[#cc785c]" />
+              <div>
+                <p className="font-semibold text-sm text-[#141413]">Deep Research is running</p>
+                <p className="text-xs text-[#6c6a64] mt-0.5">A bounded multi-step investigation is in progress.</p>
+              </div>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {stages.map((stage, index) => <div key={stage.label} className={`rounded-lg border p-3 transition-colors ${index === activeStage ? 'border-primary/40 bg-primary/[.06]' : index < activeStage ? 'border-emerald-500/30 bg-emerald-500/[.04]' : 'opacity-50'}`}><div className="flex items-center gap-2 text-sm font-medium">{index < activeStage ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : index === activeStage ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <span className="h-4 w-4 rounded-full border" />}{stage.label}</div><p className="mt-1 text-xs text-muted-foreground">{stage.detail}</p></div>)}
+              {stages.map((stage, index) => (
+                <div 
+                  key={stage.label} 
+                  className={`rounded-[8px] border p-3 transition-colors ${
+                    index === activeStage 
+                      ? 'border-[#cc785c]/40 bg-[#cc785c]/5' 
+                      : index < activeStage 
+                        ? 'border-[#5db872]/30 bg-[#5db872]/5' 
+                        : 'opacity-50 border-[#e6dfd8] bg-[#faf9f5]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#141413]">
+                    {index < activeStage ? (
+                      <CheckCircle2 className="h-4 w-4 text-[#5db872]" />
+                    ) : index === activeStage ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
+                    ) : (
+                      <span className="h-4 w-4 rounded-full border border-[#e6dfd8] bg-[#faf9f5]" />
+                    )}
+                    {stage.label}
+                  </div>
+                  <p className="mt-1 text-[10px] text-[#6c6a64] leading-normal">{stage.detail}</p>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
 
       {currentReport && !researching && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
+              <Sparkles className="h-4.5 w-4.5 text-[#cc785c]" />
               Research Report: {currentReport.query}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-5 pt-0">
             <ScrollArea ref={resultsRef} className="max-h-[600px]">
-              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+              <div className="max-w-none whitespace-pre-wrap text-sm text-[#141413] leading-relaxed font-sans pr-2">
                 {currentReport.content}
               </div>
             </ScrollArea>
@@ -227,43 +210,43 @@ Make this comprehensive and well-structured.`,
       {!currentReport && !researching && (
         <>
           {loading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
-                <p className="font-medium">Loading reports...</p>
+            <Card className="border-[#e6dfd8] bg-[#efe9de]">
+              <CardContent className="py-8 text-center text-[#6c6a64]">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+                <p>Loading reports...</p>
               </CardContent>
             </Card>
           ) : reports.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileText className="h-5 w-5" />
+            <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+              <CardHeader className="p-5">
+                <CardTitle className="flex items-center gap-2 text-base font-serif font-normal text-[#141413]">
+                  <FileText className="h-4.5 w-4.5 text-[#cc785c]" />
                   Previous Reports
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="p-5 pt-0">
+                <div className="space-y-2">
                   {reports.map((report) => (
                     <div
                       key={report.id}
-                      className="group flex items-center justify-between p-3 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer"
+                      className="group flex items-center justify-between p-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#efe9de]/50 transition-colors cursor-pointer shadow-xs"
                       onClick={() => setCurrentReport(report)}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{report.query}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="font-medium text-sm text-[#141413] truncate">{report.query}</p>
+                        <p className="text-[10px] text-[#6c6a64] mt-0.5">
                           {formatDate(report.createdAt)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary">Report</Badge>
+                        <Badge variant="secondary" className="bg-[#efe9de] text-[#6c6a64] border border-[#e6dfd8] text-[10px] px-2 py-0.5">Report</Badge>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity rounded-[8px] text-[#c64545] hover:bg-[#c64545]/10"
                           onClick={(e) => handleDelete(report.id, e)}
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -272,10 +255,10 @@ Make this comprehensive and well-structured.`,
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="text-lg font-medium">No research reports yet</p>
+            <Card className="border-[#e6dfd8] bg-[#efe9de]">
+              <CardContent className="py-12 text-center text-[#6c6a64]">
+                <FileText className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
+                <p className="font-serif font-normal text-lg text-[#141413]">No research reports yet</p>
                 <p className="text-sm mt-1">Enter a topic above and click Research to generate a report</p>
               </CardContent>
             </Card>

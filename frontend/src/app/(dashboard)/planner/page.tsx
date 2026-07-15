@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Plus, CheckCircle2, Clock, AlertCircle, Loader2, Sparkles, ListTodo, Trash2 } from 'lucide-react'
+import { Calendar, Plus, Loader2, Sparkles, ListTodo, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 
@@ -111,48 +111,48 @@ Format the response with clear sections and bullet points.`,
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Planner</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-serif font-normal text-[#141413]">Planner</h1>
+          <p className="text-sm text-[#6c6a64] mt-1">
             Study planning, task management, and schedule tracking
           </p>
         </div>
         <div className="flex gap-2">
           <Button
-            variant={view === 'list' ? 'default' : 'outline'}
+            variant={view === 'list' ? 'secondary' : 'outline'}
             size="sm"
-            className="gap-2"
+            className="gap-2 h-9 rounded-[8px]"
             onClick={() => { setView('list'); setCurrentPlan(null) }}
           >
-            <ListTodo className="h-4 w-4" />
+            <ListTodo className="h-4 w-4 text-[#cc785c]" />
             Plans
           </Button>
           <Button
-            variant={view === 'plan' ? 'default' : 'outline'}
+            variant={view === 'plan' ? 'secondary' : 'outline'}
             size="sm"
-            className="gap-2"
+            className="gap-2 h-9 rounded-[8px]"
             onClick={() => setView('plan')}
             disabled={!currentPlan}
           >
-            <Calendar className="h-4 w-4" />
+            <Calendar className="h-4 w-4 text-[#cc785c]" />
             Plan
           </Button>
         </div>
       </div>
 
       {error && (
-        <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-[8px]">
           {error}
-          <Button variant="link" size="sm" className="ml-2" onClick={() => setError(null)}>
+          <Button variant="link" size="sm" className="ml-2 text-red-700 underline" onClick={() => setError(null)}>
             Dismiss
           </Button>
         </div>
       )}
 
       {/* Input */}
-      <Card>
+      <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
         <CardContent className="p-4">
           <div className="flex gap-3">
             <Input
@@ -161,9 +161,9 @@ Format the response with clear sections and bullet points.`,
               onChange={(e) => setTaskInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreatePlan()}
               disabled={planning}
-              className="flex-1"
+              className="flex-1 shadow-sm"
             />
-            <Button onClick={handleCreatePlan} disabled={planning || !taskInput.trim()} className="gap-2">
+            <Button onClick={handleCreatePlan} disabled={planning || !taskInput.trim()} className="gap-2 shadow-sm">
               {planning ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -177,27 +177,27 @@ Format the response with clear sections and bullet points.`,
 
       {/* Loading */}
       {planning && (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
-            <p className="font-medium">Creating your plan...</p>
-            <p className="text-sm mt-1">Breaking down tasks and organizing priorities</p>
+        <Card className="border-[#e6dfd8] bg-[#efe9de]">
+          <CardContent className="py-8 text-center text-[#6c6a64]">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+            <p className="font-serif font-normal text-lg text-[#141413]">Creating your plan...</p>
+            <p className="text-xs mt-1">Breaking down tasks and organizing priorities</p>
           </CardContent>
         </Card>
       )}
 
       {/* Plan View */}
       {view === 'plan' && currentPlan && !planning && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
+              <Sparkles className="h-4.5 w-4.5 text-[#cc785c]" />
               {currentPlan.title}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-5 pt-0">
             <ScrollArea className="max-h-[500px]">
-              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+              <div className="max-w-none whitespace-pre-wrap text-sm text-[#141413] leading-relaxed font-sans pr-2">
                 {currentPlan.content}
               </div>
             </ScrollArea>
@@ -209,57 +209,57 @@ Format the response with clear sections and bullet points.`,
       {view === 'list' && (
         <>
           <div className="grid gap-6 md:grid-cols-1">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
+            <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+              <CardHeader className="pb-2 p-5">
+                <CardTitle className="text-base font-serif font-normal text-[#141413] flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-[#cc785c]" />
                   Total Plans
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold">{plans.length}</p>
+              <CardContent className="p-5 pt-0">
+                <p className="text-4.5xl font-serif font-normal text-[#141413]">{plans.length}</p>
               </CardContent>
             </Card>
           </div>
 
           {loading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
-                <p className="font-medium">Loading plans...</p>
+            <Card className="border-[#e6dfd8] bg-[#efe9de]">
+              <CardContent className="py-8 text-center text-[#6c6a64]">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+                <p>Loading plans...</p>
               </CardContent>
             </Card>
           ) : plans.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
+            <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+              <CardHeader className="p-5">
+                <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
+                  <Calendar className="h-4.5 w-4.5 text-[#cc785c]" />
                   My Plans
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="p-5 pt-0">
+                <div className="space-y-2">
                   {plans.map((plan) => (
                     <div
                       key={plan.id}
-                      className="group flex items-center justify-between p-3 rounded-lg border hover:bg-secondary/50 transition-colors cursor-pointer"
+                      className="group flex items-center justify-between p-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#efe9de]/50 transition-colors cursor-pointer shadow-xs"
                       onClick={() => { setCurrentPlan(plan); setView('plan') }}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{plan.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="font-medium text-sm text-[#141413] truncate">{plan.title}</p>
+                        <p className="text-[10px] text-[#6c6a64] mt-0.5 font-sans">
                           {formatDate(plan.createdAt)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary">Plan</Badge>
+                        <Badge variant="secondary" className="bg-[#efe9de] text-[#6c6a64] border border-[#e6dfd8] text-[10px] px-2 py-0.5">Plan</Badge>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity rounded-[8px] text-[#c64545] hover:bg-[#c64545]/10"
                           onClick={(e) => handleDelete(plan.id, e)}
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -268,17 +268,17 @@ Format the response with clear sections and bullet points.`,
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
+            <Card className="border-[#e6dfd8] bg-[#efe9de]">
+              <CardHeader className="p-5">
+                <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
+                  <Calendar className="h-4.5 w-4.5 text-[#cc785c]" />
                   My Plans
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-lg font-medium">No plans yet</p>
+              <CardContent className="p-5 pt-0">
+                <div className="text-center py-12 text-[#6c6a64]">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
+                  <p className="font-serif font-normal text-lg text-[#141413]">No plans yet</p>
                   <p className="text-sm mt-1">
                     Describe a task or goal above to create an AI-generated plan
                   </p>

@@ -137,26 +137,26 @@ export default function DrivePage() {
 
   if (!accessToken) {
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Google Drive</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-serif font-normal text-[#141413]">Google Drive</h1>
+          <p className="text-sm text-[#6c6a64] mt-1">
             Manage your Google Drive files
           </p>
         </div>
-        <Card>
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
           <CardContent className="py-16">
-            <div className="text-center text-muted-foreground">
-              <HardDrive className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <h2 className="text-xl font-semibold mb-2">
+            <div className="text-center text-[#6c6a64]">
+              <HardDrive className="h-16 w-16 mx-auto mb-4 opacity-40 text-[#cc785c]" />
+              <h2 className="text-xl font-serif font-normal text-[#141413] mb-2">
                 {sessionError ? 'Session expired' : 'Connect Google Drive'}
               </h2>
-              <p className="mb-6 max-w-md mx-auto">
+              <p className="mb-6 max-w-md mx-auto text-sm">
                 {sessionError
                   ? 'Your Google session expired and could not be refreshed. Sign in again to continue managing your Drive files.'
                   : 'Sign in with Google to access, upload, and manage your Drive files directly from this platform.'}
               </p>
-              <Button size="lg" className="gap-3" onClick={() => signIn('google', { callbackUrl: '/drive' })}>
+              <Button size="lg" className="gap-3 shadow-sm" onClick={() => signIn('google', { callbackUrl: '/drive' })}>
                 <LogIn className="h-5 w-5" />
                 Sign in with Google
               </Button>
@@ -168,22 +168,22 @@ export default function DrivePage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Google Drive</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-serif font-normal text-[#141413]">Google Drive</h1>
+          <p className="text-sm text-[#6c6a64] mt-1">
             {files.length} file{files.length !== 1 ? 's' : ''} · Connected as {session?.user?.email}
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           {storage && (
-            <div className="text-sm text-muted-foreground self-center">
+            <div className="text-xs text-[#6c6a64] self-center">
               {formatBytes(storage.usageInDrive)} / {formatBytes(storage.limit)}
             </div>
           )}
-          <Button variant="outline" size="icon" onClick={fetchFiles} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="icon" onClick={fetchFiles} disabled={loading} className="h-10 w-10 rounded-[8px]">
+            <RefreshCw className={`h-4 w-4 text-[#6c6a64] ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <label>
             <input
@@ -192,10 +192,10 @@ export default function DrivePage() {
               onChange={handleUpload}
               disabled={uploading}
             />
-           <Button variant="outline" className="gap-2" disabled={uploading} asChild>
+            <Button variant="outline" className="gap-2 h-10 rounded-[8px] cursor-pointer shadow-sm animate-fade-in" disabled={uploading} asChild>
               <span>
                 {uploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
@@ -207,17 +207,17 @@ export default function DrivePage() {
       </div>
 
       {uploading && (
-        <div className="bg-secondary/40 border rounded-xl p-4 space-y-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="bg-[#efe9de] border border-[#e6dfd8] rounded-[8px] p-4 space-y-3 shadow-xs animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <span className="font-medium">Uploading to Google Drive...</span>
+              <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
+              <span className="font-medium text-[#141413]">Uploading to Google Drive...</span>
             </div>
-            <span className="font-semibold text-primary">{uploadProgress}%</span>
+            <span className="font-semibold text-[#cc785c]">{uploadProgress}%</span>
           </div>
-          <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden">
+          <div className="w-full bg-[#faf9f5] h-2.5 rounded-full overflow-hidden border border-[#e6dfd8]">
             <div 
-              className="bg-gradient-to-r from-primary/80 to-primary h-full transition-all duration-300 ease-out" 
+              className="bg-[#cc785c] h-full transition-all duration-300 ease-out" 
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
@@ -225,54 +225,54 @@ export default function DrivePage() {
       )}
 
       {error && (
-        <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-[8px]">
           {error}
-          <Button variant="link" size="sm" className="ml-2" onClick={() => setError(null)}>
+          <Button variant="link" size="sm" className="ml-2 text-red-700 underline" onClick={() => setError(null)}>
             Dismiss
           </Button>
         </div>
       )}
 
       {loading && files.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
+        <Card className="border-[#e6dfd8] bg-[#efe9de]">
+          <CardContent className="py-16 text-center text-[#6c6a64]">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
             <p>Loading files from Google Drive...</p>
           </CardContent>
         </Card>
       ) : files.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center text-muted-foreground">
-            <HardDrive className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-lg font-medium">Drive is empty</p>
+        <Card className="border-[#e6dfd8] bg-[#efe9de]">
+          <CardContent className="py-16 text-center text-[#6c6a64]">
+            <HardDrive className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
+            <p className="text-lg font-serif font-normal text-[#141413]">Drive is empty</p>
             <p className="text-sm mt-1">Upload a file to get started</p>
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs overflow-hidden">
           <ScrollArea className="h-[600px]">
-            <div className="divide-y">
+            <div className="divide-y divide-[#e6dfd8]">
               {files.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center gap-4 p-4 hover:bg-secondary/50 transition-colors group"
+                  className="flex items-center gap-4 p-4 bg-[#faf9f5] hover:bg-[#efe9de]/50 transition-colors group"
                 >
-                  <div className="p-2 rounded-lg bg-secondary shrink-0">
+                  <div className="p-2 rounded-[8px] bg-[#efe9de] text-[#cc785c] border border-[#e6dfd8] shrink-0">
                     {file.isFolder ? (
-                      <Folder className="h-5 w-5 text-amber-500" />
+                      <Folder className="h-5 w-5" />
                     ) : file.mimeType.startsWith('image/') ? (
-                      <Image className="h-5 w-5 text-purple-500" />
+                      <Image className="h-5 w-5" />
                     ) : file.mimeType.includes('spreadsheet') || file.mimeType.includes('csv') ? (
-                      <FileSpreadsheet className="h-5 w-5 text-green-500" />
+                      <FileSpreadsheet className="h-5 w-5" />
                     ) : file.mimeType.includes('document') || file.mimeType.includes('pdf') ? (
-                      <FileText className="h-5 w-5 text-blue-500" />
+                      <FileText className="h-5 w-5" />
                     ) : (
-                      <File className="h-5 w-5 text-muted-foreground" />
+                      <File className="h-5 w-5" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{file.name}</p>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <p className="font-medium text-sm text-[#141413] truncate">{file.name}</p>
+                    <div className="flex items-center gap-3 text-xs text-[#6c6a64] mt-0.5">
                       <span>{file.isFolder ? 'Folder' : formatBytes(file.size)}</span>
                       <span>{formatDate(file.modifiedTime)}</span>
                     </div>
@@ -283,6 +283,7 @@ export default function DrivePage() {
                       size="icon"
                       onClick={() => handleDownload(file)}
                       title="Download"
+                      className="rounded-[8px] hover:bg-[#efe9de] text-[#6c6a64] hover:text-[#141413] h-8 w-8"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -292,6 +293,7 @@ export default function DrivePage() {
                         size="icon"
                         onClick={() => window.open(file.webViewLink, '_blank')}
                         title="Open in Drive"
+                        className="rounded-[8px] hover:bg-[#efe9de] text-[#6c6a64] hover:text-[#141413] h-8 w-8"
                       >
                         <ExternalLink className="h-4 w-4" />
                       </Button>
@@ -301,8 +303,9 @@ export default function DrivePage() {
                       size="icon"
                       onClick={() => handleDelete(file.id)}
                       title="Delete"
+                      className="rounded-[8px] hover:bg-[#efe9de] text-[#c64545] hover:bg-[#c64545]/10 h-8 w-8"
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -313,26 +316,26 @@ export default function DrivePage() {
       )}
 
       {storage && (
-        <Card>
+        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <HardDrive className="h-4 w-4" />
-              Storage
+            <CardTitle className="text-base font-serif font-normal text-[#141413] flex items-center gap-2">
+              <HardDrive className="h-4.5 w-4.5 text-[#cc785c]" />
+              Storage Status
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Used</span>
-                <span className="font-medium">{formatBytes(storage.usageInDrive)}</span>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#6c6a64]">Used</span>
+                <span className="font-semibold text-[#141413]">{formatBytes(storage.usageInDrive)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Limit</span>
-                <span className="font-medium">{formatBytes(storage.limit)}</span>
+              <div className="flex justify-between">
+                <span className="text-[#6c6a64]">Limit</span>
+                <span className="font-semibold text-[#141413]">{formatBytes(storage.limit)}</span>
               </div>
-              <div className="w-full bg-secondary rounded-full h-2 mt-2">
+              <div className="w-full bg-[#faf9f5] rounded-full h-2 mt-2 border border-[#e6dfd8] overflow-hidden">
                 <div
-                  className="bg-primary h-2 rounded-full transition-all"
+                  className="bg-[#cc785c] h-full rounded-full transition-all"
                   style={{ width: `${Math.min((storage.usageInDrive / storage.limit) * 100, 100)}%` }}
                 />
               </div>

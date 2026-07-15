@@ -185,7 +185,7 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "hidden md:flex flex-col border-r h-full bg-[#efe9de] border-[#e6dfd8] transition-all duration-300 ease-in-out relative shrink-0",
+        "flex flex-col border-r h-full bg-[#efe9de] border-[#e6dfd8] transition-all duration-300 ease-in-out relative shrink-0",
         isCollapsed ? "w-[68px]" : "w-[280px]"
       )}
     >
