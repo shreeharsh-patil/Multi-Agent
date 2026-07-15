@@ -177,20 +177,74 @@ async def process_message(
         return await _fallback_process_message(message, user_id, conversation_id)
 
 
+async def _build_conversation_context(conversation_id: str) -> str:
+    """Load conversation history from MongoDB and format it.
+
+    Returns a formatted string of previous messages, or an empty string
+    if the conversation doesn't exist yet or has no history.
+    """
+    if conversation_id in ("default", ""):
+        return ""
+    try:
+        from src.models.conversation import Conversation
+        conv = await Conversation.get(conversation_id)
+        if not conv or not conv.messages:
+            return ""
+
+        # Take all messages except the last user message (that's the current one)
+        # to build the prior context
+        context_parts = []
+        for m in conv.messages:
+            role = "User" if m.role == "user" else "Assistant"
+            if m.content.strip():
+                context_parts.append(f"{role}: {m.content.strip()}")
+
+        if not context_parts:
+            return ""
+
+        context_str = "\n".join(context_parts)
+        # Keep last ~8000 chars to fit within context windows
+        if len(context_str) > 8000:
+            context_str = "... (earlier messages omitted)\n" + context_str[-8000:]
+        return context_str
+    except Exception as e:
+        logger.warning(f"Could not load conversation context: {e}")
+        return ""
+
+
 async def _fallback_process_message(
     message: str,
     user_id: str = "default",
     conversation_id: str = "default",
 ) -> dict:
-    """Fallback: use the LLM provider directly without ADK."""
+    """Fallback: use the LLM provider directly without ADK.
+
+    Includes prior conversation history so the model understands context.
+    """
     from src.services.llm import llm_service
 
     try:
+        # Load prior conversation history for context
+        history = await _build_conversation_context(conversation_id)
+        if history:
+            full_prompt = (
+                f"Previous conversation:\n{history}\n\n"
+                f"User: {message}\n\n"
+                f"Assistant:"
+            )
+        else:
+            full_prompt = message
+
         output = await llm_service.generate(
-            prompt=message,
+            prompt=full_prompt,
             system_instruction=(
                 "You are a helpful AI assistant on a multi-agent platform. "
-                "Answer the user's question directly and concisely."
+                "You are having a conversation with a user. Use the conversation "
+                "history provided before the latest message to understand context. "
+                "Be creative, expressive, and provide thorough, well-structured "
+                "answers. Use rich formatting: **bold** for emphasis, *italic* for "
+                "terms, bullet points for lists, headings for structure, and "
+                "examples or analogies to explain concepts."
             ),
         )
         return {
@@ -291,19 +345,38 @@ async def _fallback_process_message_stream(
     user_id: str = "default",
     conversation_id: str = "default",
 ):
-    """Fallback streaming: yield tokens from the LLM provider as they arrive."""
+    """Fallback streaming: yield tokens from the LLM provider as they arrive.
+
+    Includes prior conversation history so the model understands context.
+    """
     from src.services.llm import llm_service
 
     yield {"event": "start", "data": {"conversation_id": conversation_id}}
     yield {"event": "agent", "data": {"agent_id": "direct"}}
 
+    # Load prior conversation history for context
+    history = await _build_conversation_context(conversation_id)
+    if history:
+        prompt_with_context = (
+            f"Previous conversation:\n{history}\n\n"
+            f"User: {message}\n\n"
+            f"Assistant:"
+        )
+    else:
+        prompt_with_context = message
+
     accumulated = ""
     try:
         async for chunk in llm_service.generate_stream(
-            prompt=message,
+            prompt=prompt_with_context,
             system_instruction=(
                 "You are a helpful AI assistant on a multi-agent platform. "
-                "Answer the user's question directly and concisely."
+                "You are having a conversation with a user. Use the conversation "
+                "history provided before the latest message to understand context. "
+                "Be creative, expressive, and provide thorough, well-structured "
+                "answers. Use rich formatting: **bold** for emphasis, *italic* for "
+                "terms, bullet points for lists, headings for structure, and "
+                "examples or analogies to explain concepts."
             ),
         ):
             if chunk:

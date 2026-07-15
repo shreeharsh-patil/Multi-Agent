@@ -63,6 +63,8 @@ interface Attachment {
   documentId?: string
   imageUrl?: string
   previewUrl?: string
+  driveFileId?: string
+  driveWebViewLink?: string
 }
 
 const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
@@ -75,6 +77,8 @@ interface PanelTab {
   content?: string
   sandboxProps?: CodeSandboxProps
   docId?: string
+  driveFileId?: string
+  driveWebViewLink?: string
 }
 
 function ChatContent() {
@@ -142,6 +146,14 @@ function ChatContent() {
       setSelectedAgent(agentParam)
     }
   }, [searchParams, customAgents])
+  useEffect(() => {
+    const idParam = searchParams?.get('id')
+    if (idParam) {
+      loadConversation(idParam)
+    } else {
+      startNewConversation()
+    }
+  }, [searchParams, loadConversation, startNewConversation])
   const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState('all')
   const [voiceMode, setVoiceMode] = useState(false)
@@ -177,9 +189,13 @@ function ChatContent() {
       const uploadWorkspace = selectedWorkspace !== 'all' && selectedWorkspace !== 'unfiled' ? selectedWorkspace : undefined
       const res = await api.documents.upload(att.file, 'default', (progress) => {
         setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, progress } : a))
-      }, uploadWorkspace)
+      }, uploadWorkspace, googleAccessToken)
       if (res.success && res.data) {
         final = { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
+        if (res.data.driveFileId) {
+          final.driveFileId = res.data.driveFileId
+          final.driveWebViewLink = res.data.driveWebViewLink
+        }
         window.dispatchEvent(new Event('refresh-documents-list'))
       } else {
         final = { ...att, status: 'error', progress: 0 }
@@ -190,7 +206,7 @@ function ChatContent() {
     setAttachments((prev) => prev.map((a) => a.id === att.id ? final : a))
     uploadPromises.current.delete(att.id)
     return final
-  }, [selectedWorkspace])
+  }, [selectedWorkspace, googleAccessToken])
 
   const speakMessage = useCallback(async (id: string, content: string) => {
     if (speakingId === id) {

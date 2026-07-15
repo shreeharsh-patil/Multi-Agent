@@ -167,15 +167,21 @@ export const api = {
 
   documents: {
     list: (workspaceId?: string) => fetchApi<DocumentInfo[]>(`/api/documents${workspaceId ? `?workspace_id=${workspaceId === 'unfiled' ? '__unfiled__' : workspaceId}` : ''}`),
-    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void, workspaceId?: string) => {
+    storage: () => fetchApi<{ used: number }>('/api/documents/storage'),
+    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void, workspaceId?: string, driveAccessToken?: string) => {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('user_id', userId)
       if (workspaceId) formData.append('workspace_id', workspaceId)
-      return uploadApiWithProgress<DocumentInfo & { chunks?: number; imageUrl?: string }>(
+      const headers: Record<string, string> = {}
+      if (driveAccessToken) {
+        headers['X-Drive-Access-Token'] = driveAccessToken
+      }
+      return uploadApiWithProgress<DocumentInfo & { chunks?: number; imageUrl?: string; driveFileId?: string; driveWebViewLink?: string }>(
         '/api/documents/upload',
         formData,
         onProgress,
+        headers,
       )
     },
     get: (id: string) =>

@@ -44,6 +44,7 @@ export default function DocumentsPage() {
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [creatingWorkspace, setCreatingWorkspace] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
+  const [storageUsed, setStorageUsed] = useState<number | null>(null)
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
@@ -71,10 +72,22 @@ export default function DocumentsPage() {
     }
   }, [])
 
+  const fetchStorage = useCallback(async () => {
+    try {
+      const res = await api.documents.storage()
+      if (res.success && res.data) {
+        setStorageUsed(res.data.used)
+      }
+    } catch {
+      // Storage info is non-critical; fall back to client-side total
+    }
+  }, [])
+
   useEffect(() => {
     fetchDocuments()
     fetchWorkspaces()
-  }, [fetchDocuments, fetchWorkspaces])
+    fetchStorage()
+  }, [fetchDocuments, fetchWorkspaces, fetchStorage])
 
   const createWorkspace = async () => {
     if (!newWorkspaceName.trim()) return
@@ -419,17 +432,11 @@ export default function DocumentsPage() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Used</span>
-                <span className="font-semibold text-foreground">{formatBytes(totalSize)}</span>
+                <span className="font-semibold text-foreground">{storageUsed !== null ? formatBytes(storageUsed) : formatBytes(totalSize)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Limit</span>
-                <span className="font-semibold text-foreground">1 GB</span>
-              </div>
-              <div className="w-full bg-secondary rounded-full h-2 mt-2 border border-border overflow-hidden">
-                <div
-                  className="bg-primary h-full rounded-full transition-all"
-                  style={{ width: `${Math.min((totalSize / (1024 * 1024 * 1024)) * 100, 100)}%` }}
-                />
+                <span className="text-muted-foreground">Documents</span>
+                <span className="font-semibold text-foreground">{documents.length} file{documents.length !== 1 ? 's' : ''}</span>
               </div>
             </div>
           </CardContent>

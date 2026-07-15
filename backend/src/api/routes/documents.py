@@ -32,6 +32,37 @@ async def can_use_workspace(workspace_id: str | None, user_id: str) -> bool:
     return bool(workspace and (workspace.user_id == user_id or user_id in workspace.member_ids))
 
 
+@router.get("/storage")
+async def document_storage(http_request: Request, user_id: str = "default") -> dict:
+    """Return total storage used by documents for a user.
+
+    Calculates aggregated file sizes from MongoDB rather than relying
+    on client-side computation or hardcoded limits.
+    """
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
+
+    from src.models.document import Document
+
+    total_used = 0
+    try:
+        pipeline = [
+            {"$match": {"user_id": resolved_user_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$file_size"}}},
+        ]
+        result = await Document.aggregate(pipeline).to_list()
+        if result:
+            total_used = result[0].get("total", 0)
+    except Exception as e:
+        logger.warning(f"Storage aggregation failed, falling back to sum: {e}")
+        docs = await Document.find(Document.user_id == resolved_user_id).to_list()
+        total_used = sum(d.file_size for d in docs)
+
+    return {
+        "used": total_used,
+    }
+
+
 @router.get("")
 async def list_documents(http_request: Request, user_id: str = "default", workspace_id: str | None = None) -> list[dict]:
     auth_user = getattr(http_request.state, "user", None)
@@ -87,6 +118,10 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
     is_image = ext in IMAGE_EXTENSIONS
     content = await file.read()
 
+    # Optional Google Drive sync
+    drive_access_token = http_request.headers.get("X-Drive-Access-Token", "")
+    drive_refresh_token = http_request.headers.get("X-Drive-Refresh-Token", "")
+
     from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
     if not workspace_id and not is_image and await should_use_opendocuments(resolved_user_id):
         return await opendocuments_client.upload_document(file.filename, content)
@@ -110,6 +145,25 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
         )
         await doc.insert()
 
+        if drive_access_token:
+            try:
+                from src.services.drive.service import DriveService
+                drive = DriveService()
+                mime_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml"}
+                drive_result = await drive.upload_file(
+                    access_token=drive_access_token,
+                    file_path=str(dest_path),
+                    file_name=file.filename,
+                    mime_type=mime_map.get(ext, "application/octet-stream"),
+                    refresh_token=drive_refresh_token,
+                )
+                doc.drive_file_id = drive_result.get("id")
+                doc.drive_web_view_link = drive_result.get("webViewLink")
+                await doc.save()
+                logger.info(f"Image synced to Drive: {file.filename} (id={doc.drive_file_id})")
+            except Exception as e:
+                logger.warning(f"Failed to sync image to Drive: {e}")
+
         logger.info(f"Stored image: {file.filename}")
 
         return {
@@ -120,6 +174,8 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             "status": doc.status,
             "chunks": doc.chunk_count,
             "imageUrl": f"/api/documents/{doc.id}/download",
+            "driveFileId": doc.drive_file_id,
+            "driveWebViewLink": doc.drive_web_view_link,
         }
     else:
         # Documents: parse, chunk, store in vector DB
@@ -169,6 +225,25 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             doc.status = "ready"
             await doc.save()
 
+            if drive_access_token:
+                try:
+                    from src.services.drive.service import DriveService
+                    drive = DriveService()
+                    media_type_map = {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "txt": "text/plain", "md": "text/markdown"}
+                    drive_result = await drive.upload_file(
+                        access_token=drive_access_token,
+                        file_path=tmp_path,
+                        file_name=file.filename,
+                        mime_type=media_type_map.get(ext, "application/octet-stream"),
+                        refresh_token=drive_refresh_token,
+                    )
+                    doc.drive_file_id = drive_result.get("id")
+                    doc.drive_web_view_link = drive_result.get("webViewLink")
+                    await doc.save()
+                    logger.info(f"Document synced to Drive: {file.filename} (id={doc.drive_file_id})")
+                except Exception as e:
+                    logger.warning(f"Failed to sync document to Drive: {e}")
+
             logger.info(f"Processed document: {file.filename} ({len(chunks)} chunks)")
 
             return {
@@ -180,6 +255,8 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 "chunks": doc.chunk_count,
                 "imageUrl": None,
                 "ocrPages": ocr_pages,
+                "driveFileId": doc.drive_file_id,
+                "driveWebViewLink": doc.drive_web_view_link,
             }
         except Exception as e:
             doc.status = "error"
@@ -208,9 +285,11 @@ async def get_document(document_id: str) -> dict:
         "status": doc.status,
         "chunks": doc.chunk_count,
         "imageUrl": f"/api/documents/{doc.id}/download" if is_image else None,
-            "createdAt": doc.created_at.isoformat(),
+        "createdAt": doc.created_at.isoformat(),
         "workspaceId": doc.workspace_id,
         "ocrPages": doc.ocr_pages,
+        "driveFileId": doc.drive_file_id,
+        "driveWebViewLink": doc.drive_web_view_link,
     }
 
 
@@ -220,6 +299,11 @@ async def download_document(document_id: str):
     doc = await Document.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Redirect to Drive if the file is stored there and local file is missing
+    if doc.drive_web_view_link and not os.path.exists(doc.file_path):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=doc.drive_web_view_link)
 
     file_path = doc.file_path
     if not os.path.exists(file_path):
@@ -240,10 +324,14 @@ async def download_document(document_id: str):
     }
     media_type = media_type_map.get(doc.file_type, "application/octet-stream")
 
+    inline_types = {"pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "txt", "md"}
+    disposition = "inline" if doc.file_type in inline_types else "attachment"
+
     return FileResponse(
         path=file_path,
         media_type=media_type,
         filename=doc.file_name,
+        content_disposition_type=disposition,
     )
 
 
