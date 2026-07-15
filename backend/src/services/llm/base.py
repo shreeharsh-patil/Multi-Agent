@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from typing import Optional
 
 
@@ -12,6 +13,26 @@ class BaseLLMProvider(ABC):
         max_output_tokens: int = 4096,
     ) -> str:
         ...
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: int = 4096,
+    ) -> AsyncGenerator[str, None]:
+        """Stream tokens from the LLM.
+
+        Default implementation yields the full non-streaming response as
+        a single chunk so that providers without native streaming still work.
+        """
+        text = await self.generate(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        yield text
 
     async def generate_with_citations(
         self,

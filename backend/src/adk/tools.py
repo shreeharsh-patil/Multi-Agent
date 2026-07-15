@@ -229,7 +229,7 @@ async def web_search(query: str, for_research: bool = False) -> str:
     if settings.firecrawl_api_key:
         try:
             logger.info(f"Using Firecrawl search for query: {query}")
-            max_items = 7 if for_research else 3
+            max_items = 5 if for_research else 3
             response = await firecrawl_rotator.execute_request(
                 "POST",
                 "/search",

@@ -2,8 +2,12 @@
 
 Instead of picking a single provider, returns a RotatingProvider that wraps
 all configured providers and falls back through them when one fails.
+
+On first load, kicks off a background warmup of the AIand (Qwen) provider
+so its free-tier cold start (~30-60s) doesn't delay the first real request.
 """
 
+import asyncio
 from typing import Optional
 from src.config import settings
 from src.utils.logger import logger
@@ -17,11 +21,21 @@ _LLMProvider: Optional[BaseLLMProvider] = None
 def _build_providers() -> list[BaseLLMProvider]:
     """Build a list of all configured LLM providers, in priority order.
 
-    AIand (Qwen) is the default provider and is tried first.
-    Gemini is always included as the final fallback (if configured)
-    because ADK orchestrator requires it for multi-agent orchestration.
+    Groq is first because it's proven fast (1-2s replies) and has a generous
+    free tier (14,400 req/day with llama-3.1-8b-instant).
+    AIand (Qwen) is second as a free fallback with warmup handling.
+    Gemini is the final fallback for ADK multi-agent orchestration.
     """
     providers: list[BaseLLMProvider] = []
+
+    if settings.groq_api_key:
+        providers.append(OpenAICompatibleProvider(
+            name="Groq",
+            api_key=settings.groq_api_key,
+            model=settings.groq_model,
+            base_url="https://api.groq.com/openai/v1",
+            timeout_seconds=10,
+        ))
 
     if settings.aiand_api_key:
         providers.append(OpenAICompatibleProvider(
@@ -29,6 +43,7 @@ def _build_providers() -> list[BaseLLMProvider]:
             api_key=settings.aiand_api_key,
             model=settings.aiand_model,
             base_url=settings.aiand_base_url,
+            timeout_seconds=60,  # Cold start on free tier can take ~30-60s
         ))
 
     if settings.openrouter_api_key:
@@ -37,14 +52,7 @@ def _build_providers() -> list[BaseLLMProvider]:
             api_key=settings.openrouter_api_key,
             model=settings.openrouter_model,
             base_url=settings.openrouter_base_url,
-        ))
-
-    if settings.groq_api_key:
-        providers.append(OpenAICompatibleProvider(
-            name="Groq",
-            api_key=settings.groq_api_key,
-            model=settings.groq_model,
-            base_url="https://api.groq.com/openai/v1",
+            timeout_seconds=10,
         ))
 
     if settings.mistral_api_key:
@@ -53,6 +61,7 @@ def _build_providers() -> list[BaseLLMProvider]:
             api_key=settings.mistral_api_key,
             model=settings.mistral_model,
             base_url=settings.mistral_base_url,
+            timeout_seconds=10,
         ))
 
     if settings.nararouter_api_key:
@@ -61,6 +70,7 @@ def _build_providers() -> list[BaseLLMProvider]:
             api_key=settings.nararouter_api_key,
             model=settings.nararouter_model,
             base_url=settings.nararouter_base_url,
+            timeout_seconds=10,
         ))
 
     if settings.gemini_api_key:
@@ -70,12 +80,39 @@ def _build_providers() -> list[BaseLLMProvider]:
     return providers
 
 
+async def _warmup_aiand(providers: list[BaseLLMProvider]) -> None:
+    """Fire a tiny warmup request to AIand in the background.
+
+    The free-tier model unloads after inactivity and takes ~30-60s
+    to cold-start. This keeps it warm after the first real use or
+    primes it for a fast first reply.
+    """
+    for p in providers:
+        name = getattr(p, "name", "")
+        if name == "AIand":
+            logger.info("Warming up AIand (Qwen) in background...")
+            try:
+                await asyncio.wait_for(
+                    p.generate(prompt="Hello"),
+                    timeout=70.0,
+                )
+                logger.info("AIand (Qwen) warmup complete")
+            except asyncio.TimeoutError:
+                logger.warning("AIand warmup timed out (cold start slow) — will warm on first real request")
+            except Exception as e:
+                logger.warning(f"AIand warmup failed: {e}")
+            return
+
+
 def get_llm_provider() -> BaseLLMProvider:
     """Return a RotatingProvider that wraps all configured LLM providers.
 
-    Each call to ``generate()`` starts with the preferred provider (AIand/Qwen)
-    and falls back through OpenRouter → Groq → Mistral → NaraRouter → Gemini
-    if the current provider's keys are exhausted or the service is unavailable.
+    Each call to ``generate()`` starts with Groq (fastest) and falls back
+    through AIand → OpenRouter → Mistral → NaraRouter → Gemini if the
+    current provider's keys are exhausted or the service is unavailable.
+
+    On first initialization, kicks off a background warmup of AIand so its
+    free-tier cold start doesn't affect the user experience.
     """
     global _LLMProvider
     if _LLMProvider is not None:
@@ -91,9 +128,14 @@ def get_llm_provider() -> BaseLLMProvider:
             "MISTRAL_API_KEY, NARAROUTER_API_KEY, AIAND_API_KEY in your .env file."
         )
 
-    _LLMProvider = RotatingProvider(providers)
+    _LLMProvider = RotatingProvider(providers, rate_limit_rpm=30)
     logger.info(
         f"LLM service ready with {len(providers)} provider(s) — "
-        f"auto-rotation enabled"
+        f"auto-rotation enabled, rate-limited to ~30 RPM (free-tier safe)"
     )
+
+    # Fire-and-forget AIand warmup so its cold start doesn't
+    # affect the first real user request.
+    asyncio.create_task(_warmup_aiand(providers))
+
     return _LLMProvider

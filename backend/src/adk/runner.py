@@ -291,29 +291,34 @@ async def _fallback_process_message_stream(
     user_id: str = "default",
     conversation_id: str = "default",
 ):
-    """Fallback streaming: yield the complete response as a single chunk."""
+    """Fallback streaming: yield tokens from the LLM provider as they arrive."""
     from src.services.llm import llm_service
 
     yield {"event": "start", "data": {"conversation_id": conversation_id}}
     yield {"event": "agent", "data": {"agent_id": "direct"}}
 
+    accumulated = ""
     try:
-        output = await llm_service.generate(
+        async for chunk in llm_service.generate_stream(
             prompt=message,
             system_instruction=(
                 "You are a helpful AI assistant on a multi-agent platform. "
                 "Answer the user's question directly and concisely."
             ),
-        )
-        yield {"event": "chunk", "data": {"text": output}}
+        ):
+            if chunk:
+                accumulated += chunk
+                yield {"event": "chunk", "data": {"text": chunk}}
         yield {
             "event": "complete",
-            "data": {"output": output, "conversation_id": conversation_id},
+            "data": {"output": accumulated, "conversation_id": conversation_id},
         }
     except Exception as e:
+        if accumulated:
+            yield {"event": "chunk", "data": {"text": "\n\n[Error during streaming, partial response returned]"}}
         error_msg = f"I encountered an error: {e}"
         yield {"event": "chunk", "data": {"text": error_msg}}
         yield {
             "event": "complete",
-            "data": {"output": error_msg, "conversation_id": conversation_id},
+            "data": {"output": accumulated + error_msg, "conversation_id": conversation_id},
         }

@@ -1,5 +1,6 @@
 """LLM service - delegates to the configured provider."""
 
+from collections.abc import AsyncGenerator
 from typing import Optional
 from src.config import settings
 from src.utils.logger import logger
@@ -30,6 +31,22 @@ class LLMService:
             temperature=temperature,
             max_output_tokens=max_output_tokens,
         )
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: int = 4096,
+    ) -> AsyncGenerator[str, None]:
+        provider = await self._get_provider()
+        async for chunk in provider.generate_stream(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        ):
+            yield chunk
 
     async def generate_with_citations(
         self,

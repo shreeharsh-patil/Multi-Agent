@@ -1,17 +1,19 @@
 """OpenAI-compatible LLM provider (used by OpenRouter, Groq, etc.)."""
 
 import asyncio
+from collections.abc import AsyncGenerator
 from typing import Optional
 from src.utils.logger import logger
 from src.services.llm.base import BaseLLMProvider
 
 
 class OpenAICompatibleProvider(BaseLLMProvider):
-    def __init__(self, name: str, api_key: str, model: str, base_url: str):
+    def __init__(self, name: str, api_key: str, model: str, base_url: str, timeout_seconds: int = 30):
         self.name = name
         self.keys = [k.strip() for k in api_key.split(",") if k.strip()]
         self.model = model
         self.base_url = base_url
+        self.timeout_seconds = timeout_seconds
         self.clients = []
         self._current_idx = 0
         self._lock = asyncio.Lock()
@@ -29,6 +31,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 client = AsyncOpenAI(
                     api_key=key,
                     base_url=self.base_url,
+                    timeout=self.timeout_seconds,
                 )
                 self.clients.append((key, client))
             except Exception as e:
@@ -92,5 +95,65 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     )
         
         logger.error(f"All {attempts} API keys for {self.name} failed.")
+        raise last_error
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: int = 4096,
+    ) -> AsyncGenerator[str, None]:
+        self._init_clients()
+        attempts = len(self.clients)
+
+        async with self._lock:
+            start_idx = self._current_idx
+
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+
+        last_error = None
+        for i in range(attempts):
+            idx = (start_idx + i) % attempts
+            key, client = self.clients[idx]
+            masked_key = f"...{key[-4:]}" if len(key) > 4 else "..."
+
+            try:
+                stream = await client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_output_tokens,
+                    stream=True,
+                )
+
+                async with self._lock:
+                    self._current_idx = idx
+
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    if delta and delta.content:
+                        yield delta.content
+
+                return
+
+            except Exception as e:
+                last_error = e
+                err_msg = str(e)
+                if "429" in err_msg or "quota" in err_msg.lower() or "rate" in err_msg.lower() or "limit" in err_msg.lower():
+                    logger.warning(
+                        f"{self.name} API key rotation: Key {masked_key} rate limited/exhausted. "
+                        f"Error: {err_msg}. Retrying with next key..."
+                    )
+                else:
+                    logger.warning(
+                        f"{self.name} API key rotation: Call failed with key {masked_key}. "
+                        f"Error: {err_msg}. Retrying with next key..."
+                    )
+
+        logger.error(f"All {attempts} API keys for {self.name} failed for streaming.")
         raise last_error
 
