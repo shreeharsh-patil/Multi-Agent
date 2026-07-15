@@ -23,10 +23,7 @@ import {
   ChevronRight,
   Plus,
   ChevronDown,
-  Trash2,
-  Pin,
-  Edit3,
-  MoreHorizontal
+  Trash2
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -36,9 +33,9 @@ const navigation = [
   { name: 'Search', href: '/research', icon: Search },
   { name: 'Library', href: '/documents', icon: BookOpen },
   { name: 'Drive', href: '/drive', icon: HardDrive },
-  { name: 'Agents / Plugins', href: '/agents', icon: Bot },
+  { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Notes', href: '/notes', icon: StickyNote },
-  { name: 'Scheduled / Planner', href: '/planner', icon: Calendar },
+  { name: 'Scheduled', href: '/planner', icon: Calendar },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -52,7 +49,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
-  const { isCollapsed, toggle, setCollapsed } = useSidebar()
+  const { isCollapsed, toggle } = useSidebar()
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
@@ -141,7 +138,7 @@ export function Sidebar() {
     if (list.length === 0) return null
     return (
       <div className="space-y-1 mb-4">
-        <h4 className="px-3 text-[10px] font-semibold text-[#71717A] uppercase tracking-wider select-none">
+        <h4 className="px-3 text-[10px] font-semibold text-[#B4B4B4] uppercase tracking-wider select-none">
           {title}
         </h4>
         <div className="space-y-0.5">
@@ -152,13 +149,13 @@ export function Sidebar() {
                 key={conv.id}
                 onClick={() => router.push(`/chat?id=${conv.id}`)}
                 className={cn(
-                  "group relative flex items-center justify-between px-3 py-2 rounded-[12px] text-sm cursor-pointer transition-all duration-150",
+                  "group relative flex items-center justify-between px-3 py-2 rounded-[8px] text-sm cursor-pointer transition-all duration-150",
                   isActive 
-                    ? "bg-[#1A1A1D] text-[#F5F5F7] border border-[#2A2A2F]" 
-                    : "text-[#A1A1AA] hover:text-[#F5F5F7] hover:bg-[#1A1A1D]/60"
+                    ? "bg-[#2F2F2F] text-white" 
+                    : "text-[#B4B4B4] hover:text-white hover:bg-[#2F2F2F]/60"
                 )}
               >
-                <span className="truncate w-full pr-6 font-medium text-xs">
+                <span className="truncate w-full pr-6 text-xs">
                   {conv.title}
                 </span>
 
@@ -166,7 +163,7 @@ export function Sidebar() {
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
                   <button 
                     onClick={(e) => handleDeleteConversation(conv.id, e)}
-                    className="p-1 hover:bg-[#232326] rounded text-[#71717A] hover:text-white transition-colors"
+                    className="p-1 hover:bg-[#3F3F3F] rounded text-[#B4B4B4] hover:text-white transition-colors"
                   >
                     <Trash2 className="h-3 w-3 stroke-[1.5]" />
                   </button>
@@ -182,21 +179,33 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "hidden md:flex flex-col border-r h-full bg-[#111111] border-[#2A2A2F] transition-all duration-250 ease-in-out relative shrink-0",
-        isCollapsed ? "w-[68px]" : "w-[300px]"
+        "hidden md:flex flex-col border-r h-full bg-[#171717] border-[#2F2F2F] transition-all duration-250 ease-in-out relative shrink-0",
+        isCollapsed ? "w-[68px]" : "w-[280px]"
       )}
     >
+      {/* Collapse Toggle Button */}
+      <button
+        onClick={toggle}
+        className="absolute top-7 -right-3 h-6 w-6 rounded-full border border-[#2F2F2F] bg-[#171717] flex items-center justify-center text-[#B4B4B4] hover:text-white transition-colors z-50 shadow-md"
+        title={isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+      >
+        {isCollapsed ? (
+          <ChevronRight className="h-3.5 w-3.5 stroke-[1.5]" />
+        ) : (
+          <ChevronLeft className="h-3.5 w-3.5 stroke-[1.5]" />
+        )}
+      </button>
 
       {/* Top Header Section */}
-      <div className="p-4 flex flex-col gap-4 border-b border-[#2A2A2F]">
+      <div className="p-4 flex flex-col gap-4 border-b border-[#2F2F2F]">
         <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
           <Link href="/dashboard" className="flex items-center gap-2.5 group">
-            <div className="h-9 w-9 rounded-[12px] border border-[#2A2A2F] bg-[#1A1A1D] flex items-center justify-center transition-all group-hover:scale-105 duration-200">
+            <div className="h-9 w-9 rounded-[8px] border border-[#2F2F2F] bg-[#2F2F2F] flex items-center justify-center transition-all group-hover:scale-105 duration-200">
               <Sparkles className="h-4 w-4 text-white stroke-[1.25]" />
             </div>
             {!isCollapsed && (
-              <span className="font-semibold text-[15px] tracking-tight text-[#F5F5F7]">
-                AI Workspace
+              <span className="font-semibold text-sm tracking-tight text-white">
+                ChatGPT AI
               </span>
             )}
           </Link>
@@ -207,19 +216,19 @@ export function Sidebar() {
           <div className="relative">
             <button
               onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-[12px] bg-[#1A1A1D] border border-[#2A2A2F] text-xs font-medium text-[#F5F5F7] hover:bg-[#232326] transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-[8px] bg-[#2F2F2F] border border-[#2F2F2F] text-xs font-medium text-white hover:bg-[#3F3F3F] transition-colors"
             >
               <div className="flex items-center gap-2 truncate">
                 <div className="h-2 w-2 rounded-full bg-emerald-500" />
                 <span className="truncate">{selectedWorkspace}</span>
               </div>
-              <ChevronDown className="h-3.5 w-3.5 text-[#71717A] stroke-[1.5]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#B4B4B4] stroke-[1.5]" />
             </button>
             
             {showWorkspaceMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowWorkspaceMenu(false)} />
-                <div className="absolute top-full left-0 right-0 mt-1.5 p-1 rounded-[12px] bg-[#1A1A1D] border border-[#2A2A2F] shadow-lg z-20 space-y-0.5">
+                <div className="absolute top-full left-0 right-0 mt-1.5 p-1 rounded-[8px] bg-[#2F2F2F] border border-[#2F2F2F] shadow-lg z-20 space-y-0.5">
                   {['Personal Space', 'Project Alpha', 'Engineering Team'].map((space) => (
                     <button
                       key={space}
@@ -228,10 +237,10 @@ export function Sidebar() {
                         setShowWorkspaceMenu(false)
                       }}
                       className={cn(
-                        "w-full text-left px-3 py-1.5 rounded-[8px] text-xs transition-colors",
+                        "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors",
                         selectedWorkspace === space
-                          ? "bg-[#232326] text-white"
-                          : "text-[#A1A1AA] hover:text-white hover:bg-[#232326]/60"
+                          ? "bg-[#3F3F3F] text-white"
+                          : "text-[#B4B4B4] hover:text-white hover:bg-[#3F3F3F]/65"
                       )}
                     >
                       {space}
@@ -247,10 +256,10 @@ export function Sidebar() {
         <button
           onClick={handleNewChat}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-[16px] border border-[#2A2A2F] text-[14px] font-medium text-white transition-all active:scale-[0.98]",
+            "flex items-center justify-center gap-2 rounded-[24px] border border-[#2F2F2F] text-[13px] font-medium text-white transition-all active:scale-[0.98]",
             isCollapsed 
-              ? "h-9 w-9 bg-[#1A1A1D] hover:bg-[#232326]" 
-              : "w-full py-2.5 bg-[#1A1A1D] hover:bg-[#232326]"
+              ? "h-9 w-9 bg-[#2F2F2F] hover:bg-[#3F3F3F]" 
+              : "w-full py-2 bg-transparent hover:bg-[#2F2F2F]"
           )}
           title="New Chat"
         >
@@ -269,20 +278,20 @@ export function Sidebar() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-[12px] font-medium text-[15px] transition-all duration-150 relative",
+                    "flex items-center gap-3 px-3 py-2 rounded-[8px] font-medium text-sm transition-all duration-150 relative",
                     isCollapsed ? "justify-center px-0 h-10 w-10 mx-auto" : "w-full h-10",
                     isActive 
-                      ? "bg-[#1A1A1D] text-white border border-[#2A2A2F]" 
-                      : "text-[#A1A1AA] hover:text-[#F5F5F7] hover:bg-[#1A1A1D]/60"
+                      ? "bg-[#2F2F2F] text-white border border-[#2F2F2F]" 
+                      : "text-[#B4B4B4] hover:text-white hover:bg-[#2F2F2F]/60"
                   )}
                 >
-                  <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-white" : "text-[#71717A] group-hover/tooltip:text-[#F5F5F7]")} />
+                  <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-white" : "text-[#B4B4B4] group-hover/tooltip:text-white")} />
                   {!isCollapsed && <span className="truncate">{item.name}</span>}
                 </Link>
 
                 {/* Collapsed Tooltip */}
                 {isCollapsed && (
-                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 rounded-[8px] bg-[#232326] border border-[#2A2A2F] text-xs font-medium text-[#F5F5F7] whitespace-nowrap opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50 shadow-lg">
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 rounded-[6px] bg-[#2F2F2F] border border-[#3F3F3F] text-xs font-medium text-white whitespace-nowrap opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50 shadow-lg">
                     {item.name}
                   </div>
                 )}
@@ -293,7 +302,7 @@ export function Sidebar() {
 
         {/* History / Conversations Section (Hidden when collapsed) */}
         {!isCollapsed && conversations.length > 0 && (
-          <div className="pt-4 border-t border-[#2A2A2F]/60">
+          <div className="pt-4 border-t border-[#2F2F2F]">
             {renderHistorySection("Today", today)}
             {renderHistorySection("Yesterday", yesterday)}
             {renderHistorySection("Previous 7 Days", previous7Days)}
@@ -303,21 +312,21 @@ export function Sidebar() {
       </div>
 
       {/* Footer Profile Section */}
-      <div className="p-4 border-t border-[#2A2A2F] bg-[#0B0B0D]/30">
+      <div className="p-4 border-t border-[#2F2F2F] bg-[#171717]">
         <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
           <div className="relative group/tooltip">
-            <Avatar className="h-9 w-9 border border-[#2A2A2F] cursor-pointer" onClick={() => router.push('/settings')}>
+            <Avatar className="h-9 w-9 border border-[#2F2F2F] cursor-pointer" onClick={() => router.push('/settings')}>
               <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
-              <AvatarFallback className="bg-[#1A1A1D] text-xs text-[#A1A1AA] font-semibold uppercase">
+              <AvatarFallback className="bg-[#2F2F2F] text-xs text-[#B4B4B4] font-semibold uppercase">
                 {session?.user?.name?.charAt(0) ?? 'U'}
               </AvatarFallback>
             </Avatar>
 
             {/* Collapsed profile tooltip */}
             {isCollapsed && (
-              <div className="absolute left-full bottom-0 ml-3 p-3 rounded-[12px] bg-[#1A1A1D] border border-[#2A2A2F] shadow-lg z-50 flex flex-col gap-1.5 pointer-events-none opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+              <div className="absolute left-full bottom-0 ml-3 p-3 rounded-[8px] bg-[#2F2F2F] border border-[#3F3F3F] shadow-lg z-50 flex flex-col gap-1.5 pointer-events-none opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
                 <span className="text-xs font-semibold text-white whitespace-nowrap">{session?.user?.name}</span>
-                <span className="text-[10px] text-[#71717A] whitespace-nowrap">{session?.user?.email}</span>
+                <span className="text-[10px] text-[#B4B4B4] whitespace-nowrap">{session?.user?.email}</span>
                 <span className="text-[9px] bg-white text-black px-1.5 py-0.5 rounded-[4px] font-bold w-fit uppercase">
                   Pro
                 </span>
@@ -329,21 +338,21 @@ export function Sidebar() {
             <div className="flex-1 min-w-0 flex items-center justify-between">
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[13px] font-semibold text-[#F5F5F7] truncate leading-tight">
+                  <span className="text-[13px] font-semibold text-white truncate leading-tight">
                     {session?.user?.name}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded-[6px] bg-white text-black text-[9px] font-black tracking-wider uppercase select-none">
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-white text-black text-[9px] font-black tracking-wider uppercase select-none">
                     Pro
                   </span>
                 </div>
-                <span className="text-[11px] text-[#71717A] truncate">
+                <span className="text-[11px] text-[#B4B4B4] truncate">
                   {session?.user?.email}
                 </span>
               </div>
               
               <Link 
                 href="/settings"
-                className="p-1.5 hover:bg-[#1A1A1D] rounded-[8px] text-[#71717A] hover:text-white transition-colors"
+                className="p-1.5 hover:bg-[#2F2F2F] rounded-[8px] text-[#B4B4B4] hover:text-white transition-colors"
                 title="Settings"
               >
                 <Settings className="h-4 w-4 stroke-[1.5]" />

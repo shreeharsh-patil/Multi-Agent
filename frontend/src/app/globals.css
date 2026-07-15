@@ -33,30 +33,30 @@
   }
 
   .dark {
-    /* Premium Minimalist dark mode palette */
-    --background: 240 8% 5%; /* #0B0B0D */
-    --foreground: 240 5% 96%; /* #F5F5F7 */
-    --card: 240 5% 11%; /* #1A1A1D */
-    --card-foreground: 240 5% 96%; /* #F5F5F7 */
-    --popover: 240 5% 11%; /* #1A1A1D */
-    --popover-foreground: 240 5% 96%; /* #F5F5F7 */
-    --primary: 0 0% 100%; /* Pure White */
-    --primary-foreground: 240 8% 5%; /* #0B0B0D */
-    --secondary: 0 0% 7%; /* #111111 */
-    --secondary-foreground: 240 5% 96%;
-    --muted: 240 5% 11%; /* #1A1A1D */
-    --muted-foreground: 240 5% 65%; /* #A1A1AA */
-    --accent: 240 4% 14%; /* #232326 */
+    /* ChatGPT Dark Mode theme */
+    --background: 0 0% 13%; /* #212121 */
+    --foreground: 0 0% 98%; /* #F9F9F9 */
+    --card: 0 0% 18%; /* #2F2F2F */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 18%; /* #2F2F2F */
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 13%;
+    --secondary: 0 0% 9%; /* #171717 */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 18%; /* #2F2F2F */
+    --muted-foreground: 0 0% 70%; /* #B4B4B4 */
+    --accent: 0 0% 25%; /* #3F3F3F */
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 6% 17%; /* #2A2A2F */
-    --input: 240 6% 17%; /* #2A2A2F */
+    --border: 0 0% 18%; /* #2F2F2F */
+    --input: 0 0% 18%;
     --ring: 0 0% 100%;
-    --sidebar-background: 0 0% 7%; /* #111111 */
-    --sidebar-foreground: 240 5% 65%; /* #A1A1AA */
-    --sidebar-border: 240 6% 17%; /* #2A2A2F */
-    --sidebar-accent: 240 5% 11%; /* #1A1A1D */
+    --sidebar-background: 0 0% 9%; /* #171717 */
+    --sidebar-foreground: 0 0% 70%; /* #B4B4B4 */
+    --sidebar-border: 0 0% 18%; /* #2F2F2F */
+    --sidebar-accent: 0 0% 18%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-ring: 0 0% 100%;
   }
