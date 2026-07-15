@@ -216,6 +216,49 @@ class RotatingProvider(BaseLLMProvider):
 
     # ── public generation ──────────────────────────────────────────────
 
+    async def generate(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: int = 4096,
+    ) -> str:
+        return await self._try_all(
+            "generate",
+            prompt=prompt,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+
+    async def generate_with_citations(
+        self,
+        prompt: str,
+        context: list[dict],
+        system_instruction: Optional[str] = None,
+    ) -> tuple[str, list[dict]]:
+        return await self._try_all(
+            "generate_with_citations",
+            prompt=prompt,
+            context=context,
+            system_instruction=system_instruction,
+        )
+
+    async def generate_multimodal(
+        self,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        max_output_tokens: int = 4096,
+    ) -> str:
+        return await self._try_all(
+            "generate_multimodal",
+            prompt=prompt,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            max_output_tokens=max_output_tokens,
+        )
+
     async def generate_stream(
         self,
         prompt: str,

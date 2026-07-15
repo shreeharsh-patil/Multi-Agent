@@ -364,13 +364,34 @@ function ChatContent() {
   const [loadingConversations, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
 
+  const shareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (shareTimerRef.current) clearTimeout(shareTimerRef.current)
+  }, [])
+
   const shareConversation = useCallback(async () => {
-    if (!conversationId) return
-    const res = await api.chat.createShare(conversationId)
-    if (res.success && res.data) {
-      const url = `${window.location.origin}/shared/chat/${res.data.token}`
-      setShareUrl(url)
-      await navigator.clipboard?.writeText(url)
+    if (!conversationId) {
+      setShareUrl('error')
+      return
+    }
+    // Clear any existing dismiss timer
+    if (shareTimerRef.current) clearTimeout(shareTimerRef.current)
+    try {
+      const res = await api.chat.createShare(conversationId)
+      if (res.success && res.data) {
+        const url = `${window.location.origin}/shared/chat/${res.data.token}`
+        setShareUrl(url)
+        await navigator.clipboard?.writeText(url)
+        // Auto-dismiss after 8 seconds
+        shareTimerRef.current = setTimeout(() => setShareUrl(null), 8000)
+      } else {
+        setShareUrl('error')
+        console.error('Share failed:', res.error || 'Unknown error')
+      }
+    } catch (e) {
+      setShareUrl('error')
+      console.error('Share failed:', e)
     }
   }, [conversationId])
 
@@ -897,11 +918,25 @@ function ChatContent() {
           </div>
         </div>
 
-        {shareUrl && (
+        {shareUrl && shareUrl !== 'error' && (
           <div className="mx-6 mt-4 flex items-center gap-2 rounded-[8px] border border-[#1f8a65]/20 bg-[#1f8a65]/5 px-3 py-2 text-xs">
             <Share2 className="h-3.5 w-3.5 text-[#1f8a65]" />
             <span className="font-medium text-[#1f8a65]">Conversation link copied:</span>
             <Input readOnly value={shareUrl} className="ml-auto h-7 max-w-sm text-[10px] bg-card border-border text-[#26251e]" />
+          </div>
+        )}
+        {shareUrl === 'error' && (
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-xs">
+            <X className="h-3.5 w-3.5 text-red-500" />
+            <span className="font-medium text-red-600">Failed to create share link.</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-6 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-100"
+              onClick={() => setShareUrl(null)}
+            >
+              Dismiss
+            </Button>
           </div>
         )}
 
