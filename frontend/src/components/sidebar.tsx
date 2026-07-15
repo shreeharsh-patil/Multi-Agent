@@ -185,8 +185,8 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "flex flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out relative shrink-0 overflow-hidden",
-        isCollapsed ? "w-[68px]" : "w-[280px]"
+        "hidden md:flex flex-col border-r h-full bg-[#111111] border-[#2A2A2F] transition-all duration-250 ease-in-out relative shrink-0 overflow-x-hidden",
+        isCollapsed ? "w-[68px]" : "w-[300px]"
       )}
     >
       {/* Top Header Section */}
@@ -287,7 +287,7 @@ export function Sidebar() {
       </div>
 
       {/* Main Navigation Links */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-6 scrollbar-thin">
         <div className="space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -340,7 +340,7 @@ export function Sidebar() {
       </div>
 
       {/* Footer Profile Section */}
-      <div className="p-4 border-t border-border bg-secondary/85 shrink-0">
+      <div className={cn("p-4 border-t border-border bg-secondary/85 shrink-0", isCollapsed ? "px-2" : "px-4")}>
         <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
           <div className="relative group/tooltip">
             <Avatar className="h-9 w-9 border border-border cursor-pointer shrink-0" onClick={() => router.push('/settings')}>
