@@ -38,13 +38,16 @@ export default function ResearchPage() {
   // Fetch existing reports from backend on mount
   const fetchReports = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await api.research.list()
       if (res.success && res.data) {
         setReports(res.data)
+      } else {
+        setError(res.error || 'Failed to load reports')
       }
     } catch {
-      // Silently fail — user sees empty state
+      setError('Failed to load reports. Ensure the backend is running.')
     } finally {
       setLoading(false)
     }
@@ -95,7 +98,11 @@ export default function ResearchPage() {
     if (!window.confirm('Delete this report?')) return
 
     try {
-      await api.research.delete(id)
+      const res = await api.research.delete(id)
+      if (!res.success) {
+        setError(res.error || 'Failed to delete report')
+        return
+      }
       setReports((prev) => prev.filter((r) => r.id !== id))
       if (currentReport?.id === id) {
         setCurrentReport(null)

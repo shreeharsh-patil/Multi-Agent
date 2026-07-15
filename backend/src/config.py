@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     chroma_persist_dir: str = "./chroma_data"
 
-    llm_provider: str = "gemini"
+    llm_provider: str = "aiand"
 
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     groq_api_key: str = ""
     groq_model: str = "mixtral-8x7b-32768"
+
+    aiand_api_key: str = ""
+    aiand_model: str = "qwen/qwen3.5-9b"
+    aiand_base_url: str = "https://api.aiand.com/v1"
 
     firecrawl_api_key: str = ""
     deepgram_api_key: str = ""
@@ -127,6 +131,11 @@ if settings.groq_api_key:
     first_key = next((k.strip() for k in settings.groq_api_key.split(",") if k.strip()), "")
     if first_key:
         os.environ["GROQ_API_KEY"] = first_key
+
+if settings.aiand_api_key:
+    first_key = next((k.strip() for k in settings.aiand_api_key.split(",") if k.strip()), "")
+    if first_key:
+        os.environ["AIAND_API_KEY"] = first_key
 
 if settings.firecrawl_api_key:
     first_key = next((k.strip() for k in settings.firecrawl_api_key.split(",") if k.strip()), "")

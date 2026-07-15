@@ -96,7 +96,11 @@ export default function AgentsPage() {
 
   const refreshAgents = async () => {
     const res = await api.agents.list()
-    if (res.success && res.data) setAgents(res.data)
+    if (res.success && res.data) {
+      setAgents(res.data)
+    } else {
+      setError(res.error || 'Failed to refresh agents')
+    }
   }
 
   const createAgent = async () => {

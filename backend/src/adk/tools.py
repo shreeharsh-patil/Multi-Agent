@@ -214,11 +214,13 @@ async def calculator(expression: str) -> str:
         return f"Calculation error: {e}"
 
 
-async def web_search(query: str) -> str:
+async def web_search(query: str, for_research: bool = False) -> str:
     """Search the internet for current information.
 
     Args:
         query: The search query
+        for_research: If True, returns more results with full markdown content
+                       (used by the Research Agent for deep research)
 
     Returns:
         Search result summary
@@ -227,10 +229,12 @@ async def web_search(query: str) -> str:
     if settings.firecrawl_api_key:
         try:
             logger.info(f"Using Firecrawl search for query: {query}")
+            max_items = 7 if for_research else 3
             response = await firecrawl_rotator.execute_request(
                 "POST",
                 "/search",
-                json={"query": query, "limit": 5, "lang": "en", "scrapeOptions": {"formats": ["markdown"]}}
+                json={"query": query, "limit": max_items, "lang": "en",
+                      "scrapeOptions": {"formats": ["markdown"]}}
             )
             # v2 returns results at top-level key "data" (list of objects)
             data = response.get("data", []) or response.get("results", [])
@@ -238,14 +242,19 @@ async def web_search(query: str) -> str:
                 return f"No results found on Firecrawl for query: '{query}'"
 
             results = []
-            for item in data[:3]:
+            for item in data[:max_items]:
                 title = item.get("title", "No Title")
                 url = item.get("url", "No URL")
-                snippet = (
-                    item.get("description", "")
-                    or item.get("markdown", "")[:300]
-                    or item.get("content", "")[:300]
-                )
+                # For research, include full markdown content when available
+                if for_research:
+                    content = item.get("markdown", "") or item.get("content", "") or item.get("description", "")
+                    snippet = content[:2000] if content else "No content extracted"
+                else:
+                    snippet = (
+                        item.get("description", "")
+                        or item.get("markdown", "")[:300]
+                        or item.get("content", "")[:300]
+                    )
                 results.append(f"### {title}\nURL: {url}\n{snippet}\n")
             return "\n".join(results)
         except Exception as e:
@@ -303,41 +312,73 @@ async def web_search(query: str) -> str:
 async def scrape_page(url: str) -> str:
     """Scrape a web page and convert it into clean markdown format.
 
+    Uses Firecrawl when the API key is configured (recommended), otherwise
+    falls back to a basic HTTP fetch + HTML-to-text extraction so the
+    Research Agent can always gather source content.
+
     Args:
         url: The URL of the web page to scrape.
 
     Returns:
         The page content in markdown format.
     """
-    if not settings.firecrawl_api_key:
-        return "Error: Firecrawl API key is not configured. Please configure FIRECRAWL_API_KEY in your env."
+    # Try Firecrawl first when configured
+    if settings.firecrawl_api_key:
+        try:
+            logger.info(f"Using Firecrawl to scrape URL: {url}")
+            response = await firecrawl_rotator.execute_request(
+                "POST",
+                "/scrape",
+                json={"url": url, "formats": ["markdown"], "onlyMainContent": True}
+            )
+            markdown = response.get("data", {}).get("markdown", "")
+            if markdown:
+                return markdown[:15000]  # Limit to prevent prompt/context window issues
+        except Exception as e:
+            logger.warning(f"Firecrawl scrape failed, falling back to HTTP fetch: {e}")
+
+    # Basic fallback: fetch HTML and strip tags
     try:
-        logger.info(f"Using Firecrawl to scrape URL: {url}")
-        response = await firecrawl_rotator.execute_request(
-            "POST",
-            "/scrape",
-            json={"url": url, "formats": ["markdown"], "onlyMainContent": True}
-        )
-        markdown = response.get("data", {}).get("markdown", "")
-        if not markdown:
-            return "Error: No content scraped from URL."
-        return markdown[:12000]  # Limit to prevent prompt/context window issues
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code == 200:
+                import re
+                html = resp.text
+                # Remove script/style tags and their content
+                html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+                html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+                # Strip remaining HTML tags
+                text = re.sub(r'<[^>]+>', '', html)
+                # Collapse whitespace
+                text = re.sub(r'\n\s*\n', '\n\n', text)
+                text = re.sub(r' {2,}', ' ', text)
+                text = text.strip()[:15000]
+                if text:
+                    logger.info(f"Successfully scraped URL via HTTP fallback: {url}")
+                    return text
     except Exception as e:
-        return f"Failed to scrape page: {e}"
+        logger.warning(f"HTTP fallback scrape failed for {url}: {e}")
+
+    return "Error: Could not scrape page content."
 
 
 
 async def find_user_access_token(user_id: str) -> str:
-    """Retrieve the user's Google Drive access token from the database."""
+    """Retrieve the user's Google Drive access token from the database.
+
+    Tries by MongoDB ObjectId first, then by email as fallback.
+    The ADK receives user_id as an ObjectId string from the session.
+    """
     from src.models.user import User
 
-    user = await User.find_one(User.email == user_id)
+    # Try by MongoDB _id first (most common case)
+    user = await User.get(user_id)
     if user and user.access_token:
         return user.access_token
 
-    # Also try by matching user_id to _id or other fields
-    user = await User.get(user_id)
-    if user and hasattr(user, 'access_token') and user.access_token:
+    # Fallback: try by email
+    user = await User.find_one(User.email == user_id)
+    if user and user.access_token:
         return user.access_token
 
     return ""

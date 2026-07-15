@@ -76,6 +76,8 @@ export function Sidebar() {
       const res = await api.documents.list(currentWorkspace === 'all' ? undefined : currentWorkspace === 'unfiled' ? '__unfiled__' : currentWorkspace)
       if (res.success && res.data) {
         setDocuments(res.data)
+      } else {
+        console.warn("Failed to load sidebar documents:", res.error)
       }
     } catch (err) {
       console.error("Error loading sidebar documents", err)
@@ -182,6 +184,8 @@ export function Sidebar() {
         if (pathname === `/chat` || pathname.startsWith(`/chat/`)) {
           router.push('/chat')
         }
+      } else {
+        console.error('Failed to delete conversation:', res.error)
       }
     }
   }

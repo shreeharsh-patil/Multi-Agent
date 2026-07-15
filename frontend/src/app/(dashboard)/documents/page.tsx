@@ -47,10 +47,13 @@ export default function DocumentsPage() {
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await api.documents.list(selectedWorkspace === 'all' ? undefined : selectedWorkspace)
       if (res.success && res.data) {
         setDocuments(res.data)
+      } else {
+        setError(res.error || 'Failed to load documents')
       }
     } catch (e) {
       setError('Failed to load documents')
@@ -61,7 +64,11 @@ export default function DocumentsPage() {
 
   const fetchWorkspaces = useCallback(async () => {
     const res = await api.workspaces.list()
-    if (res.success && res.data) setWorkspaces(res.data)
+    if (res.success && res.data) {
+      setWorkspaces(res.data)
+    } else {
+      console.warn('Failed to load workspaces:', res.error)
+    }
   }, [])
 
   useEffect(() => {
@@ -111,8 +118,12 @@ export default function DocumentsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this document?')) return
     try {
-      await api.documents.delete(id)
-      setDocuments((prev) => prev.filter((d) => d.id !== id))
+      const res = await api.documents.delete(id)
+      if (res.success) {
+        setDocuments((prev) => prev.filter((d) => d.id !== id))
+      } else {
+        setError(res.error || 'Delete failed')
+      }
     } catch (e) {
       setError('Delete failed')
     }

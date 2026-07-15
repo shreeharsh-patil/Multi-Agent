@@ -25,12 +25,19 @@ class ResearchAgent(BaseAgent):
         return AgentResult(success=True, output=response)
 
     async def deep_research(self, query: str) -> dict:
-        """Run a bounded research loop with one deliberate follow-up pass."""
+        """Run a bounded research loop with one deliberate follow-up pass.
+
+        When Firecrawl is configured (recommended), the web_search and scrape_page
+        tools use it for richer results with full markdown content extraction.
+        """
         import re
         from src.adk.tools import web_search, scrape_page
         from src.services.llm import llm_service
 
         stages = []
+        sources_found = []
+
+        # 1. Research plan
         plan = await llm_service.generate(
             prompt=query,
             system_instruction=(
@@ -40,24 +47,39 @@ class ResearchAgent(BaseAgent):
         )
         stages.append({"id": "plan", "label": "Research plan", "detail": "Defined questions and source strategy"})
 
-        initial_search = await web_search(f"{query}\nResearch plan:\n{plan}")
+        # 2. Initial deep search — Firecrawl returns rich content with markdown per result
+        initial_search = await web_search(f"{query}\nResearch plan:\n{plan}", for_research=True)
         stages.append({"id": "search", "label": "Initial search", "detail": "Collected broad evidence and candidate sources"})
+
+        # 3. Extract URLs from search results and scrape full content
         urls = []
         for url in re.findall(r"https?://[^\s)<>]+", initial_search):
             clean = url.rstrip(".,;\"'")
             if clean not in urls:
                 urls.append(clean)
-        urls = urls[:3]
+        # Scrape up to 5 unique pages for deeper analysis
+        urls = urls[:5]
 
         scraped_sources = []
         for url in urls:
             content = await scrape_page(url)
-            scraped_sources.append({"url": url, "content": content[:9000]})
-        stages.append({"id": "sources", "label": "Source review", "detail": f"Read {len(scraped_sources)} primary pages"})
+            if content and "Error:" not in content:
+                scraped_sources.append({"url": url, "content": content[:12000]})
+                sources_found.append(url)
+        stages.append({"id": "sources", "label": "Source review", "detail": f"Read {len(scraped_sources)} primary pages from {len(urls)} candidates"})
 
-        source_block = "\n\n".join(f"SOURCE {i + 1}: {s['url']}\n{s['content']}" for i, s in enumerate(scraped_sources))
+        # 4. Draft synthesis combining search results + scraped content
+        source_block = "\n\n".join(
+            f"SOURCE {i + 1}: {s['url']}\n{s['content']}"
+            for i, s in enumerate(scraped_sources)
+        )
         draft = await llm_service.generate(
-            prompt=f"Topic: {query}\n\nPlan:\n{plan}\n\nSearch results:\n{initial_search[:10000]}\n\nScraped sources:\n{source_block}",
+            prompt=(
+                f"Topic: {query}\n\n"
+                f"Plan:\n{plan}\n\n"
+                f"Search results:\n{initial_search[:12000]}\n\n"
+                f"Scraped sources:\n{source_block}"
+            ),
             system_instruction=(
                 "You are a research analyst. Synthesize a factual draft, distinguish evidence from inference, "
                 "and explicitly list unanswered questions or weakly supported claims under INFORMATION GAPS."
@@ -65,6 +87,7 @@ class ResearchAgent(BaseAgent):
         )
         stages.append({"id": "draft", "label": "Draft synthesis", "detail": "Compared evidence and identified gaps"})
 
+        # 5. Identify information gaps and do a targeted follow-up search
         gaps = await llm_service.generate(
             prompt=draft,
             system_instruction=(
@@ -74,16 +97,17 @@ class ResearchAgent(BaseAgent):
         )
         follow_up = ""
         if "COMPLETE" not in gaps.upper():
-            follow_up = await web_search(f"Follow-up research for {query}: {gaps}")
+            follow_up = await web_search(f"Follow-up research for {query}: {gaps}", for_research=True)
             stages.append({"id": "followup", "label": "Gap search", "detail": "Ran a targeted secondary search"})
         else:
             stages.append({"id": "followup", "label": "Gap search", "detail": "No material gaps required a second search"})
 
+        # 6. Final publication-grade report
         final = await llm_service.generate(
             prompt=(
                 f"Research topic: {query}\n\nPLAN:\n{plan}\n\nDRAFT:\n{draft}\n\n"
-                f"INFORMATION GAPS:\n{gaps}\n\nFOLLOW-UP EVIDENCE:\n{follow_up[:10000]}\n\n"
-                f"SOURCE URLS:\n{chr(10).join(urls)}"
+                f"INFORMATION GAPS:\n{gaps}\n\nFOLLOW-UP EVIDENCE:\n{follow_up[:12000]}\n\n"
+                f"SOURCE URLS:\n{chr(10).join(sources_found)}"
             ),
             system_instruction=(
                 "You are a publication-grade research editor. Produce a rigorous Markdown report with: "
@@ -93,4 +117,4 @@ class ResearchAgent(BaseAgent):
             ),
         )
         stages.append({"id": "final", "label": "Final report", "detail": "Published Markdown with bibliography"})
-        return {"output": final, "stages": stages, "sources": urls}
+        return {"output": final, "stages": stages, "sources": sources_found}

@@ -371,9 +371,11 @@ function ChatContent() {
       const res = await api.chat.listConversations()
       if (res.success && res.data) {
         setConversations(res.data)
+      } else {
+        console.warn('Failed to load conversations:', res.error)
       }
     } catch (e) {
-      // Silently fail
+      console.error('Failed to load conversations:', e)
     } finally {
       setLoadingConversations(false)
     }
@@ -428,10 +430,18 @@ function ChatContent() {
   useEffect(() => {
     fetchConversations()
     api.workspaces.list().then((res) => {
-      if (res.success && res.data) setWorkspaces(res.data)
+      if (res.success && res.data) {
+        setWorkspaces(res.data)
+      } else {
+        console.warn('Failed to load workspaces:', res.error)
+      }
     })
     api.agents.list().then((res) => {
-      if (res.success && res.data) setCustomAgents(res.data.filter((agent) => agent.custom).map((agent) => ({ id: agent.id, name: agent.name })))
+      if (res.success && res.data) {
+        setCustomAgents(res.data.filter((agent) => agent.custom).map((agent) => ({ id: agent.id, name: agent.name })))
+      } else {
+        console.warn('Failed to load agents:', res.error)
+      }
     })
   }, [fetchConversations])
 
@@ -449,9 +459,11 @@ function ChatContent() {
           agentId: m.agentId,
           attachments: (m.metadata as { attachments?: Array<{ name: string; size: number; documentId?: string }> } | undefined)?.attachments,
         })))
+      } else {
+        console.error('Failed to load conversation:', res.error)
       }
     } catch (e) {
-      // Silently fail
+      console.error('Failed to load conversation:', e)
     }
   }, [])
 

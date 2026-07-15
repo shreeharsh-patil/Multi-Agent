@@ -93,8 +93,17 @@ async def delete_custom_agent(agent_id: str, request: Request) -> dict:
 
 
 @router.get("/{agent_id}")
-async def get_agent(agent_id: str) -> dict:
+async def get_agent(agent_id: str, request: Request) -> dict:
+    # Check built-in agents first
     for agent in AGENT_METADATA:
         if agent["id"] == agent_id:
             return {**agent, "version": "0.1.0", "enabled": True}
-    return {"error": f"Agent '{agent_id}' not found"}
+    # Check custom agents in database
+    custom_agent = await AgentConfig.find_one(
+        AgentConfig.agent_id == agent_id,
+        AgentConfig.user_id == resolved_user(request),
+        AgentConfig.custom == True,
+    )
+    if custom_agent:
+        return serialize_custom(custom_agent)
+    raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")

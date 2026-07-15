@@ -29,13 +29,16 @@ export default function PlannerPage() {
   // Fetch existing plans from backend on mount
   const fetchPlans = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await api.planner.list()
       if (res.success && res.data) {
         setPlans(res.data)
+      } else {
+        setError(res.error || 'Failed to load plans')
       }
     } catch {
-      // Silently fail
+      setError('Failed to load plans. Ensure the backend is running.')
     } finally {
       setLoading(false)
     }
@@ -99,7 +102,11 @@ Format the response with clear sections and bullet points.`,
     if (!window.confirm('Delete this plan?')) return
 
     try {
-      await api.planner.delete(id)
+      const res = await api.planner.delete(id)
+      if (!res.success) {
+        setError(res.error || 'Failed to delete plan')
+        return
+      }
       setPlans((prev) => prev.filter((p) => p.id !== id))
       if (currentPlan?.id === id) {
         setCurrentPlan(null)

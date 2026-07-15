@@ -327,7 +327,8 @@ async def chat_stream(
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new, workspace_id=body.workspace_id)
+                attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new, attachments=attachments_data, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 

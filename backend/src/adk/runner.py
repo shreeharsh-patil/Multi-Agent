@@ -19,8 +19,12 @@ APP_NAME = "multi-agent-platform"
 
 
 def use_adk() -> bool:
-    """ADK only works with the Gemini provider."""
-    return settings.llm_provider == "gemini"
+    """ADK only works with the Gemini provider.
+
+    Returns True if a Gemini API key is configured (even if other
+    fallback providers are available via the RotatingProvider).
+    """
+    return bool(settings.gemini_api_key)
 
 
 async def get_or_create_session(user_id: str, conversation_id: str):

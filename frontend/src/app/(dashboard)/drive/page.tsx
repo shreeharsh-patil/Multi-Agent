@@ -93,6 +93,8 @@ export default function DrivePage() {
       const res = await api.drive.uploadToDrive(file, accessToken, refreshToken, undefined, setUploadProgress)
       if (res.success) {
         await fetchFiles()
+      } else {
+        setError(res.error || 'Upload failed')
       }
     } catch {
       setError('Upload failed')
@@ -108,6 +110,8 @@ export default function DrivePage() {
       const res = await api.drive.deleteFile(fileId, accessToken, refreshToken)
       if (res.success) {
         setFiles((prev) => prev.filter((f) => f.id !== fileId))
+      } else {
+        setError(res.error || 'Delete failed')
       }
     } catch (e) {
       setError('Delete failed')

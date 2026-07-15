@@ -48,15 +48,22 @@ export default function KnowledgeBasePage() {
 
   const fetchHistory = async () => {
     const res = await api.knowledge.history()
-    if (res.success && res.data) setHistory(res.data)
+    if (res.success && res.data) {
+      setHistory(res.data)
+    } else {
+      console.warn('Failed to load search history:', res.error)
+    }
   }
 
   const fetchDocuments = async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await api.documents.list()
       if (res.success && res.data) {
         setDocuments(res.data)
+      } else {
+        setError(res.error || 'Failed to load documents')
       }
     } catch (e) {
       setError('Failed to load documents')
@@ -106,8 +113,14 @@ export default function KnowledgeBasePage() {
   }
 
   const deleteHistoryItem = async (id: string) => {
+    const deletedItem = history.find((h) => h.id === id)
     setHistory((prev) => prev.filter((h) => h.id !== id))
-    await api.knowledge.deleteHistory(id)
+    const res = await api.knowledge.deleteHistory(id)
+    if (!res.success && deletedItem) {
+      // Restore the item on failure
+      setHistory((prev) => [...prev, deletedItem])
+      setError(res.error || 'Failed to delete search history')
+    }
   }
 
   const readyDocs = documents.filter((d) => d.status === 'ready')

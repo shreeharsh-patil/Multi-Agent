@@ -13,7 +13,7 @@ class LLMService:
     async def _get_provider(self):
         if self._provider is None:
             self._provider = get_llm_provider()
-            logger.info(f"LLM service ready (provider: {settings.llm_provider})")
+            logger.info(f"LLM service ready — primary provider: AIand (Qwen), auto-rotation active")
         return self._provider
 
     async def generate(

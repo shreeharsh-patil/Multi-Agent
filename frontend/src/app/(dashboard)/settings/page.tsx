@@ -18,6 +18,8 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [preferences, setPreferences] = useState({
     theme: 'light',
@@ -51,25 +53,40 @@ export default function SettingsPage() {
   }, [])
 
   const handleTogglePreference = async (key: string, value: any) => {
-    const updatedPrefs = { ...preferences, [key]: value }
+    const prevPrefs = preferences
+    const updatedPrefs = { ...prevPrefs, [key]: value }
     setPreferences(updatedPrefs)
+    setSettingsError(null)
     try {
-      await api.auth.updateMe({
+      const res = await api.auth.updateMe({
         preferences: updatedPrefs,
       })
+      if (!res.success) {
+        setSettingsError(res.error || 'Failed to save preference')
+        // Revert on failure
+        setPreferences(prevPrefs)
+      }
     } catch (e) {
-      console.error('Failed to save preference', e)
+      setSettingsError('Failed to save preference')
+      setPreferences(prevPrefs)
     }
   }
 
   const handleProfileSave = async () => {
     setSaving(true)
+    setSettingsError(null)
+    setSettingsSuccess(null)
     try {
-      await api.auth.updateMe({
+      const res = await api.auth.updateMe({
         name,
       })
+      if (res.success) {
+        setSettingsSuccess('Profile updated successfully')
+      } else {
+        setSettingsError(res.error || 'Failed to update profile')
+      }
     } catch (e) {
-      console.error('Failed to update profile', e)
+      setSettingsError('Failed to update profile')
     } finally {
       setSaving(false)
     }
@@ -120,6 +137,24 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+      {settingsError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-[8px] col-span-full">
+          {settingsError}
+          <Button variant="link" size="sm" className="ml-2 text-red-700 underline" onClick={() => setSettingsError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {settingsSuccess && (
+        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-[8px] col-span-full">
+          {settingsSuccess}
+          <Button variant="link" size="sm" className="ml-2 text-green-700 underline" onClick={() => setSettingsSuccess(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
         {/* Google Drive Integration */}
         <Card className="shadow-xs">

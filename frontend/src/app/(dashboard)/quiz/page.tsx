@@ -128,9 +128,11 @@ export default function QuizPage() {
       const res = await api.quiz.history()
       if (res.success && res.data) {
         setHistory(res.data)
+      } else {
+        console.warn('Failed to load quiz history:', res.error)
       }
     } catch {
-      // silently fail
+      console.error('Failed to load quiz history')
     } finally {
       setLoadingHistory(false)
     }
@@ -317,9 +319,11 @@ export default function QuizPage() {
           setCurrentIndex(0)
           setPhase('answering')
         }
+      } else {
+        setError(res.error || 'Failed to load quiz')
       }
     } catch {
-      // silently fail
+      setError('Failed to load quiz')
     }
   }
 
@@ -328,11 +332,15 @@ export default function QuizPage() {
   const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     try {
-      await api.quiz.delete(id)
+      const res = await api.quiz.delete(id)
+      if (!res.success) {
+        console.error('Failed to delete quiz history:', res.error)
+        return
+      }
       setHistory((prev) => prev.filter((h) => h.id !== id))
       if (quizId === id) handleReset()
     } catch {
-      // silently fail
+      console.error('Failed to delete quiz history')
     }
   }
 

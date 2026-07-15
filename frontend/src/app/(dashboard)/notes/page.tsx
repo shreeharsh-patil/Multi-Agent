@@ -58,6 +58,8 @@ export default function NotesPage() {
       const res = await api.notes.list()
       if (res.success && res.data) {
         setNotes(res.data)
+      } else {
+        setError(res.error || 'Failed to load notes')
       }
     } catch (e) {
       setError('Failed to load notes')
@@ -95,9 +97,11 @@ export default function NotesPage() {
         const res = await api.notes.get(note.id)
         if (res.success && res.data) {
           setSelectedNote(res.data)
+        } else {
+          console.warn('Failed to load full note content:', res.error)
         }
       } catch (e) {
-        // Keep what we have
+        console.error('Failed to load note content:', e)
       }
     }
   }
@@ -113,10 +117,16 @@ export default function NotesPage() {
         .filter(Boolean)
       const data = { title: formTitle, content: formContent, tags }
 
+      let res
       if (selectedNote && !isCreating) {
-        await api.notes.update(selectedNote.id, data)
+        res = await api.notes.update(selectedNote.id, data)
       } else {
-        await api.notes.create(data)
+        res = await api.notes.create(data)
+      }
+
+      if (!res.success) {
+        setError(res.error || 'Failed to save note')
+        return
       }
 
       await fetchNotes()
@@ -133,7 +143,11 @@ export default function NotesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this note?')) return
     try {
-      await api.notes.delete(id)
+      const res = await api.notes.delete(id)
+      if (!res.success) {
+        setError(res.error || 'Failed to delete note')
+        return
+      }
       setNotes((prev) => prev.filter((n) => n.id !== id))
       if (selectedNote?.id === id) {
         setSelectedNote(null)

@@ -127,11 +127,10 @@ async def should_use_opendocuments(user_id: str = "default") -> bool:
     
     try:
         from src.models.user import User
-        # Try finding by email
-        user = await User.find_one(User.email == user_id)
+        # Try finding by MongoDB ObjectId first (most common), then by email
+        user = await User.get(user_id)
         if not user:
-            # Try finding by MongoDB ID
-            user = await User.get(user_id)
+            user = await User.find_one(User.email == user_id)
         
         if user and hasattr(user, 'preferences'):
             return getattr(user.preferences, "use_opendocuments_rag", False)

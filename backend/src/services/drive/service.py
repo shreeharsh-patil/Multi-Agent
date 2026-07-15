@@ -30,6 +30,12 @@ class DriveService:
                 client_id=settings.google_client_id,
                 client_secret=settings.google_client_secret,
             )
+        elif refresh_token and not (settings.google_client_id and settings.google_client_secret):
+            logger.warning(
+                "Refresh token provided but GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not configured. "
+                "The Drive access token will not be refreshed when it expires. "
+                "Set these environment variables to enable automatic token refresh."
+            )
         creds = Credentials(**kwargs)
         service = await asyncio.to_thread(build, "drive", "v3", credentials=creds)
         return service
