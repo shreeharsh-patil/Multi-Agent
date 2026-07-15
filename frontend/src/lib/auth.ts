@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
 import GoogleProvider from 'next-auth/providers/google'
+import CredentialsProvider from 'next-auth/providers/credentials'
 
 /**
  * Refresh an expired Google OAuth access token using the stored refresh token.
@@ -48,6 +49,21 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
+    CredentialsProvider({
+      name: 'Developer Login',
+      credentials: {
+        username: { label: "Username", type: "text", placeholder: "developer" }
+      },
+      async authorize(credentials) {
+        // Return a mock developer session profile
+        return {
+          id: 'dev-user-123',
+          name: 'Developer User',
+          email: 'developer@example.com',
+          image: 'https://api.dicebear.com/7.x/bottts/svg?seed=developer'
+        }
+      }
+    })
   ],
   callbacks: {
     async jwt({ token, account }) {

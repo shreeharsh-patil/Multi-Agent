@@ -19,9 +19,10 @@ import {
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
 import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Share2 } from 'lucide-react'
-import type { AgentId } from '@shared/types'
-import { CodePreviewButton, type CodeSandboxProps } from '@/components/code-sandbox'
+import type { AgentId, DocumentInfo } from '@shared/types'
+import { CodePreviewButton, CodeSandbox, type CodeSandboxProps, extractCodeFromContent } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
+import { FileCode, FileImage, Globe, Play, Code as CodeIcon } from 'lucide-react'
 
 const agents = [
   { id: 'auto', name: 'Auto (Orchestrator)' },
@@ -53,6 +54,16 @@ interface Attachment {
 
 const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
 
+interface PanelTab {
+  id: string
+  title: string
+  type: 'document' | 'code'
+  fileType?: string
+  content?: string
+  sandboxProps?: CodeSandboxProps
+  docId?: string
+}
+
 function ChatContent() {
   const { data: session } = useSession()
   const googleAccessToken = (session as any)?.accessToken as string | undefined
@@ -68,6 +79,13 @@ function ChatContent() {
   const [customAgents, setCustomAgents] = useState<Array<{ id: string; name: string }>>([])
   const [teamMode, setTeamMode] = useState(false)
   const [teamAgents, setTeamAgents] = useState<string[]>(['research', 'coding', 'planner'])
+
+  // Hybrid layout UI states
+  const [documents, setDocuments] = useState<DocumentInfo[]>([])
+  const [loadingDocuments, setLoadingDocuments] = useState(false)
+  const [tabs, setTabs] = useState<PanelTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  const [showCodeSource, setShowCodeSource] = useState(false)
 
   const searchParams = useSearchParams()
   useEffect(() => {
@@ -217,6 +235,57 @@ function ChatContent() {
       setLoadingConversations(false)
     }
   }, [])
+
+  // Fetch documents for explorer
+  const fetchDocuments = useCallback(async () => {
+    setLoadingDocuments(true)
+    try {
+      const res = await api.documents.list(selectedWorkspace === 'all' ? undefined : selectedWorkspace)
+      if (res.success && res.data) {
+        setDocuments(res.data)
+      }
+    } catch (e) {
+      // Silently fail
+    } finally {
+      setLoadingDocuments(false)
+    }
+  }, [selectedWorkspace])
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [fetchDocuments])
+
+  // Document Click handler to load text/media in right panel tab
+  const handleDocumentClick = useCallback(async (doc: DocumentInfo) => {
+    const existingTab = tabs.find(t => t.id === doc.id)
+    if (existingTab) {
+      setActiveTabId(doc.id)
+      return
+    }
+
+    const newTab: PanelTab = {
+      id: doc.id,
+      title: doc.fileName,
+      type: 'document',
+      fileType: doc.fileType,
+      docId: doc.id
+    }
+
+    setTabs(prev => [...prev, newTab])
+    setActiveTabId(doc.id)
+
+    const fileTypeLower = doc.fileType.toLowerCase()
+    if (['txt', 'md'].includes(fileTypeLower)) {
+      try {
+        const downloadUrl = api.documents.downloadUrl(doc.id)
+        const res = await fetch(downloadUrl)
+        const text = await res.text()
+        setTabs(prev => prev.map(t => t.id === doc.id ? { ...t, content: text } : t))
+      } catch (e) {
+        setTabs(prev => prev.map(t => t.id === doc.id ? { ...t, content: 'Failed to load file content.' } : t))
+      }
+    }
+  }, [tabs])
 
   useEffect(() => {
     fetchConversations()
@@ -464,8 +533,9 @@ function ChatContent() {
     } finally {
       setSending(false)
       fetchConversations()
+      fetchDocuments()
     }
-  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, fetchConversations])
+  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, fetchConversations, fetchDocuments])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -545,199 +615,415 @@ function ChatContent() {
     }
   }
 
-  return (
-    <div className="flex h-[calc(100vh-112px)] gap-6 animate-fade-in">
-      <div className="flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Chat</h1>
-            <p className="text-muted-foreground mt-1">
-              Upload documents, images, and chat with your AI agents
-            </p>
+  const handleCloseTab = (tabId: string) => {
+    setTabs(prev => {
+      const filtered = prev.filter(t => t.id !== tabId)
+      if (activeTabId === tabId) {
+        setActiveTabId(filtered.length > 0 ? filtered[filtered.length - 1]!.id : null)
+      }
+      return filtered
+    })
+  }
+
+  const renderCodeContent = (content: string) => {
+    const lines = content.split('\n')
+    return (
+      <div className="flex-1 overflow-auto bg-[#18181b] text-zinc-350 font-mono text-xs sm:text-sm p-4 select-text scrollbar-thin">
+        <div className="flex min-w-full">
+          <div className="text-zinc-650 select-none text-right pr-4 border-r border-[#27272a] mr-4 min-w-[2.5rem]">
+            {lines.map((_, i) => (
+              <div key={i} className="h-5">{i + 1}</div>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2" onClick={shareConversation} disabled={!conversationId}>
-              <Share2 className="h-4 w-4" /> <span className="hidden sm:inline">Share</span>
-            </Button>
-            <Button
-              variant={voiceMode ? 'default' : 'outline'}
-              size="sm"
-              className={`gap-2 ${voiceMode ? 'bg-violet-600 text-white shadow-[0_0_24px_rgba(124,58,237,.28)] hover:bg-violet-600/90' : ''}`}
-              onClick={toggleVoiceMode}
-              aria-pressed={voiceMode}
-            >
-              <Volume2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Voice mode</span>
-            </Button>
-            <Button
-              variant={teamMode ? 'default' : 'outline'}
-              size="sm"
-              className={`gap-2 ${teamMode ? 'shadow-[0_0_24px_hsl(var(--primary)/.22)]' : ''}`}
-              onClick={() => setTeamMode((current) => !current)}
-              aria-pressed={teamMode}
-            >
-              <Users className="h-4 w-4" />
-              Teamwork
-              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">BETA</span>
-            </Button>
-            {!teamMode && <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select agent" /></SelectTrigger>
-              <SelectContent>
-                {agents.concat(customAgents).map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>)}
-              </SelectContent>
-            </Select>}
+          <div className="flex-1 whitespace-pre">
+            {lines.map((line, i) => (
+              <div key={i} className="h-5">{line || ' '}</div>
+            ))}
           </div>
         </div>
-        {shareUrl && <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-xs"><Share2 className="h-3.5 w-3.5 text-emerald-600" /><span className="font-medium">Share link copied</span><Input readOnly value={shareUrl} className="ml-auto h-7 max-w-md text-[11px]" /></div>}
+      </div>
+    )
+  }
 
+  const activeTab = tabs.find(t => t.id === activeTabId)
+
+  return (
+    <div className="flex h-[calc(100vh-84px)] gap-0 -m-6 overflow-hidden bg-[#121214] animate-fade-in relative">
+      {/* 1. LEFT PANEL: Explorer & Past Conversations */}
+      <aside className="hidden md:flex w-[240px] flex-col bg-[#0c0c0e] border-r border-[#27272a] h-full shrink-0 select-none">
+        {/* Upper Section: Documents Explorer */}
+        <div className="flex-1 flex flex-col min-h-0 border-b border-[#27272a]">
+          <div className="p-3 border-b border-[#27272a] flex items-center justify-between bg-[#070708]">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Documents Explorer</span>
+            <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
+          </div>
+          <ScrollArea className="flex-1 p-2">
+            {loadingDocuments ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="text-center py-6 text-[10px] text-zinc-500 font-sans px-2">
+                No documents found. Drag & drop files in chat or use paperclip.
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {documents.map((doc) => {
+                  const fileType = doc.fileType.toLowerCase()
+                  const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(fileType)
+                  const Icon = isImg ? ImageIcon : FileText
+                  const isTabActive = activeTabId === doc.id
+                  return (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleDocumentClick(doc)}
+                      className={`w-full flex items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs transition-all hover:bg-zinc-900/60 ${
+                        isTabActive ? 'bg-[#18181b] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <Icon className={`h-3.5 w-3.5 shrink-0 ${isTabActive ? 'text-violet-400' : 'text-zinc-500'}`} />
+                      <span className="truncate flex-1 font-sans text-[11px]">{doc.fileName}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+
+        {/* Lower Section: Past Conversations list */}
+        <div className="flex-1 flex flex-col min-h-0 bg-[#08080a]">
+          <div className="p-3 border-b border-[#27272a] flex items-center justify-between bg-[#070708]">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Conversations</span>
+            <button
+              onClick={startNewConversation}
+              className="text-[10px] font-medium text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors"
+            >
+              <Sparkles className="h-3 w-3" />
+              New
+            </button>
+          </div>
+          <ScrollArea className="flex-1 p-2">
+            {loadingConversations ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="text-center py-6 text-[10px] text-zinc-500 font-sans">
+                No past conversations.
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {conversations.map((conv) => {
+                  const isCurrent = conv.id === conversationId
+                  return (
+                    <div
+                      key={conv.id}
+                      className={`group flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer transition-all hover:bg-zinc-900/60 ${
+                        isCurrent ? 'bg-[#18181b] text-violet-400 font-medium shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                      onClick={() => loadConversation(conv.id)}
+                    >
+                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-violet-400' : 'text-zinc-500'}`} />
+                      <span className="truncate flex-1 font-sans text-[11px]">{conv.title}</span>
+                      <button
+                        type="button"
+                        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (window.confirm('Delete this conversation?')) {
+                            api.chat.deleteConversation(conv.id).then(() => {
+                              fetchConversations()
+                              if (conversationId === conv.id) {
+                                startNewConversation()
+                              }
+                            })
+                          }
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+      </aside>
+
+      {/* 2. CENTRAL PANEL: ChatGPT Conversation Feed */}
+      <div
+        className="flex-1 flex flex-col h-full bg-[#121214] relative min-w-0"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        ref={dropZoneRef}
+      >
+        {/* Drag & Drop overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="text-center p-6 border-2 border-dashed border-violet-500/50 rounded-2xl max-w-sm mx-4 bg-zinc-900 shadow-2xl">
+              <Upload className="h-10 w-10 mx-auto mb-3 text-violet-400 animate-bounce" />
+              <p className="text-sm font-semibold text-zinc-200">Drop files here to upload</p>
+              <p className="text-[11px] text-zinc-500 mt-1">
+                We support PDF, DOCX, PPTX, TXT, MD, PNG, JPG, WEBP
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Top Header / Toolbar */}
+        <div className="flex items-center justify-between border-b border-[#27272a] px-6 py-3 min-h-[56px] shrink-0 bg-[#0c0c0e]/90 backdrop-blur-md select-none z-10">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold truncate text-zinc-100 flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-violet-400 shrink-0" />
+              <span>{chatTitle || 'New Conversation'}</span>
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-zinc-900 rounded-lg" onClick={shareConversation} disabled={!conversationId} title="Share Link">
+              <Share2 className="h-3.5 w-3.5 text-zinc-400" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 gap-1.5 hover:bg-zinc-900 rounded-lg px-2.5 ${
+                voiceMode ? 'bg-violet-950/40 text-violet-400 border border-violet-800/40 shadow-[0_0_12px_rgba(124,58,237,.1)]' : 'text-zinc-400'
+              }`}
+              onClick={toggleVoiceMode}
+            >
+              <Volume2 className="h-3.5 w-3.5" />
+              <span className="text-xs hidden sm:inline">Voice Mode</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 gap-1.5 hover:bg-zinc-900 rounded-lg px-2.5 ${
+                teamMode ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' : 'text-zinc-400'
+              }`}
+              onClick={() => setTeamMode((current) => !current)}
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span className="text-xs hidden sm:inline">Teamwork</span>
+              <span className="rounded bg-emerald-500/10 px-1 py-0.5 text-[9px] font-bold text-emerald-400">BETA</span>
+            </Button>
+
+            {!teamMode && (
+              <select
+                value={selectedAgent}
+                onChange={(e) => setSelectedAgent(e.target.value)}
+                className="h-8 rounded-lg bg-[#1e1e24] border border-[#27272a] px-2 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-700 w-[160px] font-sans"
+              >
+                {agents.concat(customAgents).map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {shareUrl && (
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[.04] px-3 py-2 text-xs">
+            <Share2 className="h-3.5 w-3.5 text-emerald-500" />
+            <span className="font-medium text-emerald-400">Conversation link copied:</span>
+            <Input readOnly value={shareUrl} className="ml-auto h-7 max-w-sm text-[10px] bg-[#1e1e24] border-[#27272a] text-zinc-300" />
+          </div>
+        )}
+
+        {/* Voice Mode Banner */}
         {voiceMode && (
-          <Card className="mb-4 border-violet-500/25 bg-gradient-to-r from-violet-500/[.08] via-background to-fuchsia-500/[.05]">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300">
-                <Volume2 className="h-4 w-4" />
+          <div className="mx-6 mt-4 border border-violet-500/20 bg-gradient-to-r from-violet-950/20 via-background to-fuchsia-950/10 rounded-xl p-3 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-950 text-violet-400 border border-violet-800/40">
+                <Volume2 className="h-3.5 w-3.5" />
                 <span className="absolute inset-0 rounded-full border border-violet-500/30 animate-ping [animation-duration:2.5s]" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">Voice mode is on</p>
-                <p className="truncate text-xs text-muted-foreground">Tap the microphone to speak. Agent responses will be read aloud automatically.</p>
+                <p className="text-xs font-semibold text-zinc-200">Voice mode active</p>
+                <p className="text-[10px] text-zinc-500 truncate">Speak by pressing the mic button. Agent answers will be spoken back.</p>
               </div>
-              <Badge variant="outline" className="hidden shrink-0 border-violet-500/30 text-violet-600 dark:text-violet-300 sm:flex">Browser audio</Badge>
             </div>
-          </Card>
+          </div>
         )}
 
-        <div className="mb-4 flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs">
-          <FolderOpen className="h-3.5 w-3.5 text-primary" />
-          <span className="font-medium">Knowledge scope</span>
-          <select value={selectedWorkspace} onChange={(e) => setSelectedWorkspace(e.target.value)} className="ml-auto h-8 rounded-md border bg-background px-2 text-xs">
+        {/* Workspace Scope Banner */}
+        <div className="flex items-center gap-2 border-b border-[#27272a] bg-[#0c0c0e]/30 px-6 py-2 text-[10px] text-zinc-400 shrink-0 select-none">
+          <FolderOpen className="h-3 w-3 text-violet-400" />
+          <span>Scope:</span>
+          <select
+            value={selectedWorkspace}
+            onChange={(e) => setSelectedWorkspace(e.target.value)}
+            className="h-5 rounded bg-[#1e1e24] border border-[#27272a] px-1 text-[10px] text-zinc-300 focus:outline-none"
+          >
             <option value="all">All documents</option>
             <option value="unfiled">Unfiled documents</option>
-            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </option>
+            ))}
           </select>
         </div>
 
+        {/* Team Collaboration Banner */}
         {teamMode && (
-          <Card className="mb-4 overflow-hidden border-primary/20 bg-gradient-to-r from-primary/[.06] via-background to-emerald-500/[.05]">
-            <div className="flex items-start gap-3 p-4">
-              <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><Sparkles className="h-4 w-4" /></div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <div><p className="text-sm font-semibold">Build a specialist team</p><p className="text-xs text-muted-foreground">Agents will collaborate on your request in sequence.</p></div>
-                  <Badge variant="outline" className="hidden shrink-0 gap-1 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Ready</Badge>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+          <div className="border-b border-[#27272a] bg-[#1a1a24]/30 p-3 shrink-0">
+            <div className="max-w-3xl mx-auto flex items-start gap-2 text-xs">
+              <Sparkles className="h-3.5 w-3.5 text-violet-400 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-zinc-300 text-[11px] uppercase tracking-wider">Agent Specialist Squad</p>
+                <p className="text-[10px] text-zinc-500">Pick which agents participate collaboratively in order.</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {teamworkAgents.map((agent) => {
                     const active = teamAgents.includes(agent.id)
-                    return <button key={agent.id} type="button" onClick={() => setTeamAgents((current) => active ? current.filter((id) => id !== agent.id) : [...current, agent.id])} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-secondary'}`} aria-pressed={active}>
-                      {active ? <CheckCircle2 className="h-3 w-3" /> : <span className="h-3 w-3 rounded-full border" />}{agent.name.replace(' Agent', '')}
-                    </button>
+                    return (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        onClick={() => setTeamAgents((current) => active ? current.filter((id) => id !== agent.id) : [...current, agent.id])}
+                        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition-all ${
+                          active ? 'border-violet-800 bg-violet-950/40 text-violet-300' : 'border-[#27272a] text-zinc-500 hover:bg-zinc-800'
+                        }`}
+                      >
+                        {active ? <CheckCircle2 className="h-3 w-3 text-violet-400" /> : <span className="h-2 w-2 rounded-full border border-zinc-650" />}
+                        {agent.name.replace(' Agent', '')}
+                      </button>
+                    )
                   })}
                 </div>
               </div>
             </div>
-          </Card>
+          </div>
         )}
 
-        <div
-          className="flex-1 flex flex-col relative bg-background"
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          ref={dropZoneRef}
-        >
-          {/* Drag & Drop overlay */}
-          {isDragging && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80 backdrop-blur-sm">
-              <div className="text-center">
-                <Upload className="h-12 w-12 mx-auto mb-3 text-primary animate-bounce" />
-                <p className="text-lg font-semibold">Drop files here</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  PDF, DOCX, TXT, MD, PNG, JPG, GIF, WEBP
-                </p>
-              </div>
-            </div>
-          )}
-
+        {/* Message Feeds Scroll Area */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-muted-foreground">
-                <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="text-lg font-medium">Start a conversation</p>
-                <p className="text-sm">Upload documents or images and ask questions</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none">
+              <Sparkles className="h-10 w-10 text-violet-500/50 mb-3 animate-pulse" />
+              <p className="text-sm font-semibold text-zinc-300">How can I help you today?</p>
+              <p className="text-xs text-zinc-555 max-w-xs mt-1">
+                Upload files using the paperclip, select agents, or choose a suggestion below.
+              </p>
+
+              {/* Central quick suggestion buttons */}
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full px-4">
+                {[
+                  'Summarize this document',
+                  'What are the key findings?',
+                  'Extract all important dates',
+                  'Generate a quiz from the content',
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="p-3 rounded-xl border border-[#27272a] bg-[#1e1e24]/40 hover:bg-[#1e1e24] text-left text-xs text-zinc-400 hover:text-white transition-all duration-200 hover:border-zinc-700 hover:shadow-md"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
-            <ScrollArea ref={scrollRef} className="flex-1 p-6">
-              <div className="space-y-6 max-w-4xl mx-auto w-full">
+            <ScrollArea ref={scrollRef} className="h-full px-6 py-6">
+              <div className="space-y-6 max-w-3xl mx-auto">
                 {messages.map((msg) => (
-                  <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                  <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800">
-                          <Bot className="h-4 w-4" />
+                      <Avatar className="h-7 w-7 border border-[#27272a] shrink-0 mt-0.5">
+                        <AvatarFallback className="bg-zinc-950 text-zinc-400 text-xs">
+                          <Bot className="h-3.5 w-3.5 text-violet-400" />
                         </AvatarFallback>
                       </Avatar>
                     )}
-                    <div className={`max-w-[75%] ${msg.role === 'user' ? 'order-1' : ''}`}>
+                    <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
-                        <Badge variant="outline" className="mb-1.5 text-[10px] uppercase tracking-wider font-mono bg-secondary/30">
-                          {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name}
+                        <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-zinc-950 border-[#27272a] text-zinc-400">
+                          {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name || msg.agentId}
                         </Badge>
                       )}
+                      
+                      {/* Message attachments */}
                       {msg.attachments && msg.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          {msg.attachments.map((att, i) => (
-                            isImageExt(att.name) && att.documentId ? (
-                              <div key={i} className="relative group">
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {msg.attachments.map((att, i) => {
+                            const isImg = isImageExt(att.name)
+                            return isImg && att.documentId ? (
+                              <div key={i} className="relative group rounded-lg overflow-hidden border border-[#27272a] bg-[#0c0c0e]">
                                 <img
                                   src={api.documents.downloadUrl(att.documentId)}
                                   alt={att.name}
-                                  className="max-w-[240px] max-h-[180px] rounded-lg border object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                  className="max-w-[200px] max-h-[140px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => handleDocumentClick({ id: att.documentId!, fileName: att.name, fileType: 'png' } as any)}
                                 />
-                                <Badge variant="secondary" className="absolute bottom-1 left-1 text-[10px] opacity-0 group-hover:opacity-80 transition-opacity gap-1">
-                                  <ImageIcon className="h-3 w-3" />
-                                  {att.name} ({formatBytes(att.size)})
-                                </Badge>
                               </div>
-                            ) : isImageExt(att.name) ? (
-                              <Badge key={i} variant="secondary" className="gap-1 text-xs">
-                                <ImageIcon className="h-3 w-3" />
-                                {att.name} ({formatBytes(att.size)})
-                              </Badge>
                             ) : (
-                              <Badge key={i} variant="secondary" className="gap-1 text-xs">
-                                <FileText className="h-3 w-3" />
-                                {att.name} ({formatBytes(att.size)})
-                              </Badge>
+                              <button
+                                key={i}
+                                onClick={() => att.documentId && handleDocumentClick({ id: att.documentId, fileName: att.name, fileType: att.name.split('.').pop() || 'txt' } as any)}
+                                className="flex items-center gap-1.5 rounded-lg border border-[#27272a] bg-[#0c0c0e] hover:bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400 hover:text-white transition-colors"
+                              >
+                                {isImg ? <ImageIcon className="h-3 w-3 text-emerald-500" /> : <FileText className="h-3 w-3 text-blue-500" />}
+                                <span className="max-w-[120px] truncate">{att.name}</span>
+                              </button>
                             )
-                          ))}
+                          })}
                         </div>
                       )}
+
                       <div className="group relative">
                         <div
-                          className={`rounded-2xl px-4 py-3 text-sm ${
+                          className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                             msg.role === 'user'
-                              ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200/50 dark:border-zinc-700/30 shadow-sm'
-                              : 'text-foreground leading-relaxed'
+                              ? 'bg-[#1e1e24] text-zinc-100 border border-[#27272a] shadow-sm'
+                              : 'text-zinc-350 bg-transparent'
                           }`}
                         >
-                          <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                          <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm">{msg.content}</pre>
                         </div>
                         {msg.role === 'assistant' && msg.content && (
-                          <div className="absolute -bottom-7 left-0 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                            <button type="button" onClick={() => speakMessage(msg.id, msg.content)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground" aria-label={speakingId === msg.id ? 'Stop speaking' : 'Read response aloud'}>
-                              {speakingId === msg.id ? <><Square className="h-3 w-3 fill-current" /> Stop</> : <><Volume2 className="h-3 w-3" /> Listen</>}
+                          <div className="flex items-center gap-3 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                            <button
+                              type="button"
+                              onClick={() => speakMessage(msg.id, msg.content)}
+                              className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                            >
+                              {speakingId === msg.id ? <Square className="h-2.5 w-2.5 fill-current text-red-500" /> : <Volume2 className="h-3 w-3" />}
+                              <span>{speakingId === msg.id ? 'Stop' : 'Listen'}</span>
                             </button>
-                            <CodePreviewButton content={msg.content} onPreview={setCodePreview} />
+                            <CodePreviewButton
+                              content={msg.content}
+                              onPreview={(sandboxProps) => {
+                                const tabId = `code-preview-${msg.id}`
+                                const existingTab = tabs.find(t => t.id === tabId)
+                                if (existingTab) {
+                                  setActiveTabId(tabId)
+                                  return
+                                }
+                                const newTab: PanelTab = {
+                                  id: tabId,
+                                  title: 'Live Sandbox',
+                                  type: 'code',
+                                  fileType: 'html',
+                                  sandboxProps,
+                                  content: (sandboxProps.html || '') + '\n' + (sandboxProps.css || '') + '\n' + (sandboxProps.js || '')
+                                }
+                                setTabs(prev => [...prev, newTab])
+                                setActiveTabId(tabId)
+                              }}
+                            />
                           </div>
                         )}
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="bg-zinc-100 dark:bg-zinc-800 border">
-                          <User className="h-4 w-4" />
+                      <Avatar className="h-7 w-7 border border-[#27272a] shrink-0 mt-0.5">
+                        <AvatarFallback className="bg-zinc-950 text-zinc-400 text-xs">
+                          <User className="h-3.5 w-3.5 text-zinc-400" />
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -746,43 +1032,33 @@ function ChatContent() {
               </div>
             </ScrollArea>
           )}
+        </div>
 
-          <div className="px-4 py-4 max-w-4xl mx-auto w-full space-y-2">
+        {/* Anchored bottom input block */}
+        <div className="px-6 py-4 border-t border-[#27272a] bg-[#0c0c0e]/30 shrink-0">
+          <div className="max-w-3xl mx-auto space-y-2">
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 pb-2">
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className={`flex items-center gap-2 rounded-md border px-2 py-1 text-xs ${
-                      att.status === 'error' ? 'border-destructive' : ''
-                    }`}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#27272a] bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-400"
                   >
-                    {att.previewUrl ? (
-                      <img
-                        src={att.previewUrl}
-                        alt={att.file.name}
-                        className="h-8 w-8 rounded object-cover"
-                      />
-                    ) : (
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                    )}
+                    <FileText className="h-3.5 w-3.5 text-zinc-500" />
                     <span className="max-w-[120px] truncate">{att.file.name}</span>
-                    {att.status === 'uploading' && (
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
-                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                        {att.progress !== undefined ? `${att.progress}%` : '0%'}
-                      </span>
-                    )}
-                    {att.status === 'pending' && (
-                      <button onClick={() => removeAttachment(att.id)} className="shrink-0">
-                        <X className="h-3 w-3 hover:text-destructive" />
+                    {att.status === 'uploading' ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-violet-400 shrink-0" />
+                    ) : (
+                      <button onClick={() => removeAttachment(att.id)} className="shrink-0 text-zinc-500 hover:text-zinc-300">
+                        <X className="h-3 w-3" />
                       </button>
                     )}
                   </div>
                 ))}
               </div>
             )}
-            <div className="relative flex items-center bg-secondary/40 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 rounded-2xl p-1.5 focus-within:ring-1 focus-within:ring-zinc-400 dark:focus-within:ring-zinc-700 transition-all duration-150 shadow-sm w-full gap-2">
+
+            <div className="relative flex items-center bg-[#1e1e24] border border-[#27272a] rounded-2xl p-2 focus-within:ring-1 focus-within:ring-violet-500/50 shadow-lg">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -796,38 +1072,37 @@ function ChatContent() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="rounded-xl h-8 w-8 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 shrink-0"
+                className="rounded-xl h-8 w-8 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 shrink-0"
               >
-                <Paperclip className="h-4 w-4" />
+                <Paperclip className="h-4.5 w-4.5" />
               </Button>
               <textarea
                 ref={textareaRef}
-                placeholder={teamMode ? 'Give your team a multi-step mission...' : 'Ask about your documents or images...'}
+                placeholder={teamMode ? 'Assign your specialists a multi-step task...' : 'Ask your RAG agent...'}
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value)
                   e.target.style.height = 'auto'
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-2 py-2 text-sm placeholder:text-zinc-500 min-h-[36px] max-h-[160px] scrollbar-thin"
+                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-2.5 py-1.5 text-sm text-zinc-155 placeholder:text-zinc-500 min-h-[36px] max-h-[140px] scrollbar-thin"
                 disabled={sending}
               />
-              <Button 
-                variant={isListening ? 'default' : 'ghost'} 
-                size="icon" 
-                onClick={toggleVoiceInput} 
-                disabled={sending} 
-                aria-label={isListening ? 'Stop listening' : 'Start voice input'} 
-                className={`rounded-xl h-8 w-8 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 shrink-0 ${isListening ? 'animate-pulse' : 'hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'}`}
+              <Button
+                variant={isListening ? 'default' : 'ghost'}
+                size="icon"
+                onClick={toggleVoiceInput}
+                disabled={sending}
+                className={`rounded-xl h-8 w-8 text-zinc-400 hover:text-zinc-200 shrink-0 ${isListening ? 'bg-red-950/40 text-red-400 animate-pulse' : 'hover:bg-zinc-800'}`}
               >
-                {isListening ? <Square className="h-3.5 w-3.5 fill-current text-destructive" /> : <Mic className="h-4 w-4" />}
+                {isListening ? <Square className="h-3.5 w-3.5 fill-current" /> : <Mic className="h-4 w-4" />}
               </Button>
-              <Button 
-                onClick={handleSend} 
-                disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)} 
-                className="rounded-xl h-8 px-3 text-xs gap-1.5 bg-zinc-900 hover:bg-zinc-850 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-zinc-100 shrink-0"
+              <Button
+                onClick={handleSend}
+                disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
+                className="rounded-xl h-8 px-4 text-xs gap-1.5 bg-violet-600 hover:bg-violet-500 text-white shadow-md font-medium shrink-0 ml-1"
               >
                 {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 Send
@@ -837,118 +1112,152 @@ function ChatContent() {
         </div>
       </div>
 
-      {codePreview && (
-        <div className="fixed inset-0 z-30 bg-black/30" onClick={() => setCodePreview(null)} />
-      )}
-      <CodePreviewPanel preview={codePreview} onClose={() => setCodePreview(null)} />
-      <div className="hidden lg:block w-80 space-y-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Conversations
-            </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={startNewConversation}
-            >
-              <MessageSquare className="h-3 w-3" />
-              New
-            </Button>
+      {/* 3. RIGHT PANEL: Cursor-Style Editor Canvas */}
+      {tabs.length > 0 && (
+        <aside className="flex flex-col flex-1 h-full bg-[#18181b] border-l border-[#27272a] overflow-hidden">
+          {/* Tab Header bar */}
+          <div className="flex bg-[#0c0c0e] border-b border-[#27272a] h-9 shrink-0 overflow-x-auto scrollbar-thin select-none">
+            {tabs.map((tab) => {
+              const isActive = activeTabId === tab.id
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  className={`group flex items-center gap-2 px-3.5 border-r border-[#27272a] h-full text-xs cursor-pointer select-none transition-all ${
+                    isActive ? 'bg-[#18181b] text-white font-medium shadow-inner' : 'bg-[#0c0c0e]/60 text-zinc-400 hover:bg-zinc-900'
+                  }`}
+                >
+                  {tab.type === 'code' ? (
+                    <FileCode className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-violet-400' : 'text-zinc-500'}`} />
+                  ) : (
+                    <FileText className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-zinc-500'}`} />
+                  )}
+                  <span className="max-w-[120px] truncate text-[11px] font-sans">{tab.title}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleCloseTab(tab.id)
+                    }}
+                    className="text-zinc-500 hover:text-zinc-200 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )
+            })}
           </div>
 
-          {loadingConversations ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
-              <p className="text-xs">No conversations yet</p>
-              <p className="text-xs mt-1">Start chatting to see them here</p>
+          {/* Tab content view */}
+          {activeTab ? (
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+              {/* Unified Control Header */}
+              <div className="flex items-center justify-between px-4 py-2 bg-[#121214] border-b border-[#27272a] text-xs shrink-0 select-none">
+                <span className="text-zinc-400 font-mono text-[10px]">
+                  {activeTab.title} {activeTab.fileType ? `(${activeTab.fileType.toUpperCase()})` : ''}
+                </span>
+                
+                <div className="flex items-center gap-1.5">
+                  {activeTab.type === 'code' && activeTab.sandboxProps && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCodeSource(!showCodeSource)}
+                      className="flex items-center gap-1 h-6 px-2.5 text-[10px] rounded border border-[#27272a] bg-[#1e1e24] text-zinc-300 hover:text-white transition-colors"
+                    >
+                      {showCodeSource ? (
+                        <>
+                          <Play className="h-3 w-3 text-violet-400" />
+                          <span>Show Sandbox</span>
+                        </>
+                      ) : (
+                        <>
+                          <CodeIcon className="h-3 w-3 text-violet-400" />
+                          <span>Show Code</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeTab.content) {
+                        navigator.clipboard?.writeText(activeTab.content)
+                        alert('Copied to clipboard!')
+                      }
+                    }}
+                    className="h-6 px-2.5 text-[10px] rounded border border-[#27272a] bg-[#1e1e24] text-zinc-300 hover:text-white transition-colors"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      alert('Saved to Drive successfully!')
+                    }}
+                    className="h-6 px-2.5 text-[10px] rounded border border-[#27272a] bg-[#1e1e24] text-zinc-300 hover:text-white transition-colors"
+                  >
+                    Save to Drive
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Tab Render Body */}
+              <div className="flex-1 flex flex-col overflow-hidden relative min-h-0 bg-[#18181b]">
+                {activeTab.type === 'code' && activeTab.sandboxProps ? (
+                  showCodeSource ? (
+                    renderCodeContent(activeTab.content || '')
+                  ) : (
+                    <CodeSandbox
+                      html={activeTab.sandboxProps.html}
+                      css={activeTab.sandboxProps.css}
+                      js={activeTab.sandboxProps.js}
+                      fullHtml={activeTab.sandboxProps.fullHtml}
+                      className="h-full border-none rounded-none w-full bg-white flex-1"
+                    />
+                  )
+                ) : activeTab.type === 'document' ? (
+                  ['txt', 'md'].includes((activeTab.fileType || '').toLowerCase()) ? (
+                    activeTab.content !== undefined ? (
+                      renderCodeContent(activeTab.content)
+                    ) : (
+                      <div className="flex items-center justify-center p-6 text-zinc-500 text-xs">
+                        <Loader2 className="h-4 w-4 animate-spin text-zinc-500 mr-2" />
+                        Loading document text...
+                      </div>
+                    )
+                  ) : ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes((activeTab.fileType || '').toLowerCase()) ? (
+                    <div className="flex-1 flex items-center justify-center bg-[#121214] p-6 overflow-auto">
+                      <img
+                        src={api.documents.downloadUrl(activeTab.docId!)}
+                        alt={activeTab.title}
+                        className="max-w-full max-h-full object-contain rounded-lg border border-[#27272a] shadow-2xl bg-zinc-950"
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      src={api.documents.downloadUrl(activeTab.docId!)}
+                      className="w-full h-full border-none bg-white flex-1"
+                      title={activeTab.title}
+                    />
+                  )
+                ) : null}
+              </div>
             </div>
           ) : (
-            <ScrollArea className="h-[calc(100vh-320px)] -mx-1">
-              <div className="space-y-1 px-1">
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`group flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition-colors ${
-                      conv.id === conversationId
-                        ? 'bg-primary/10 text-primary'
-                        : 'hover:bg-secondary'
-                    }`}
-                    onClick={() => loadConversation(conv.id)}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-xs font-medium">{conv.title}</p>
-                      {conv.lastMessage && (
-                        <p className="truncate text-[11px] text-muted-foreground">
-                          {conv.lastMessage}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0 opacity-40 hover:opacity-100 hover:text-destructive transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (window.confirm('Delete this conversation?')) {
-                          api.chat.deleteConversation(conv.id).then(() => {
-                            fetchConversations()
-                            if (conversationId === conv.id) {
-                              startNewConversation()
-                            }
-                          })
-                        }
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+            <div className="flex-1 flex flex-col items-center justify-center text-zinc-550 text-center select-none bg-[#18181b]">
+              <FileText className="h-8 w-8 text-zinc-600 mb-2" />
+              <p className="text-xs">No active tab content</p>
+            </div>
           )}
-        </Card>
+        </aside>
+      )}
 
-        <Card className="p-4">
-          <h3 className="font-semibold mb-3 text-xs uppercase tracking-wider text-muted-foreground">
-            Suggestions
-          </h3>
-          <div className="space-y-1">
-            {[
-              'Summarize this document',
-              'What are the key findings?',
-              'Extract all important dates',
-              'Create flashcards from this',
-              'Generate a quiz from the content',
-            ].map((suggestion) => (
-              <Button
-                key={suggestion}
-                variant="ghost"
-                className="w-full justify-start text-xs h-auto py-1.5 font-normal text-left text-zinc-650 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/40"
-                onClick={() => handleSuggestionClick(suggestion)}
-              >
-                {suggestion}
-              </Button>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="font-semibold mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-            Supported Formats
-          </h3>
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            PDF · DOCX · PPTX · TXT · MD · PNG · JPG · WEBP
-          </p>
-        </Card>
-      </div>
+      {codePreview && (
+        <div className="fixed inset-0 z-30 bg-black/30 animate-fade-in" onClick={() => setCodePreview(null)}>
+          <CodePreviewPanel preview={codePreview} onClose={() => setCodePreview(null)} />
+        </div>
+      )}
     </div>
   )
 }

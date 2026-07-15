@@ -19,7 +19,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 flex flex-col">
         <Button
           variant="outline"
           className="w-full h-12 text-base gap-3"
@@ -27,6 +27,15 @@ export default function LoginPage() {
         >
           <Chrome className="h-5 w-5" />
           Continue with Google
+        </Button>
+
+        <Button
+          variant="secondary"
+          className="w-full h-12 text-base gap-3 border border-dashed border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-300 hover:text-white"
+          onClick={() => signIn('credentials', { callbackUrl: '/dashboard' })}
+        >
+          <Sparkles className="h-5 w-5 text-violet-400" />
+          Developer Quick Login
         </Button>
       </div>
 
