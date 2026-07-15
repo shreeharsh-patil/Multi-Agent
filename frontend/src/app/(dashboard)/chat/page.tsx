@@ -24,6 +24,15 @@ import { CodePreviewButton, CodeSandbox, type CodeSandboxProps, extractCodeFromC
 import { CodePreviewPanel } from '@/components/code-preview-panel'
 import { FileCode, FileImage, Globe, Play, Code as CodeIcon } from 'lucide-react'
 
+function LogoSpike({ className = "h-4.5 w-4.5" }: { className?: string }) {
+  return (
+    <svg className={`text-[#cc785c] fill-current shrink-0 ${className}`} viewBox="0 0 24 24">
+      <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
+    </svg>
+  )
+}
+
+
 const agents = [
   { id: 'auto', name: 'Auto (Orchestrator)' },
   { id: 'knowledge', name: 'Knowledge Agent' },
@@ -903,18 +912,18 @@ function ChatContent() {
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none bg-[#212121]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none bg-[#faf9f5]">
               <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-12">
                 <div className="space-y-4">
                   <div className="flex justify-center">
-                    <div className="h-14 w-14 rounded-[12px] border border-[#2F2F2F] bg-[#2F2F2F] flex items-center justify-center transition-transform hover:scale-105 duration-300">
-                      <Sparkles className="h-6 w-6 text-white stroke-[1.25]" />
+                    <div className="h-14 w-14 rounded-[8px] border border-[#e6dfd8] bg-[#efe9de] flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-sm">
+                      <LogoSpike className="h-6 w-6" />
                     </div>
                   </div>
-                  <h1 className="text-4xl font-semibold tracking-tight text-[#F9F9F9]">
+                  <h1 className="text-4xl font-serif font-normal tracking-tight text-[#141413]">
                     How can I help you today?
                   </h1>
-                  <p className="text-sm text-[#B4B4B4] max-w-md mx-auto leading-relaxed">
+                  <p className="text-sm text-[#6c6a64] max-w-md mx-auto leading-relaxed font-sans">
                     Ask anything, analyze documents, or delegate tasks to specialized AI agents in this collaborative workspace.
                   </p>
                 </div>
@@ -931,11 +940,11 @@ function ChatContent() {
                     <button
                       key={card.text}
                       onClick={() => handleSuggestionClick(card.text)}
-                      className="group flex flex-col items-start p-5 rounded-[16px] border border-[#2F2F2F] bg-[#2F2F2F] text-left transition-all duration-200 hover:bg-[#3F3F3F]/40 active:scale-[0.99]"
+                      className="group flex flex-col items-start p-5 rounded-[12px] border border-[#e6dfd8] bg-[#efe9de] text-left transition-all duration-200 hover:bg-[#e8e0d2]/75 active:scale-[0.99] shadow-xs"
                     >
-                      <card.icon className="h-5 w-5 text-[#B4B4B4] group-hover:text-white transition-colors stroke-[1.5] mb-3" />
-                      <span className="text-[15px] font-semibold text-[#F9F9F9] mb-1">{card.text}</span>
-                      <span className="text-xs text-[#B4B4B4]/70 leading-normal">{card.desc}</span>
+                      <card.icon className="h-5 w-5 text-[#6c6a64] group-hover:text-[#cc785c] transition-colors stroke-[1.5] mb-3" />
+                      <span className="text-[15px] font-semibold text-[#141413] mb-1 font-sans">{card.text}</span>
+                      <span className="text-xs text-[#6c6a64] leading-normal font-sans">{card.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -947,15 +956,15 @@ function ChatContent() {
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <Avatar className="h-7 w-7 border border-[#27272a] shrink-0 mt-0.5">
-                        <AvatarFallback className="bg-zinc-950 text-zinc-400 text-xs">
-                          <Bot className="h-3.5 w-3.5 text-violet-400" />
+                      <Avatar className="h-7 w-7 border border-[#e6dfd8] shrink-0 mt-0.5 shadow-sm">
+                        <AvatarFallback className="bg-[#efe9de] text-[#6c6a64] text-xs">
+                          <Bot className="h-3.5 w-3.5 text-[#cc785c]" />
                         </AvatarFallback>
                       </Avatar>
                     )}
                     <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
-                        <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-zinc-950 border-[#27272a] text-zinc-400">
+                        <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-[#faf9f5] border-[#e6dfd8] text-[#6c6a64]">
                           {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name || msg.agentId}
                         </Badge>
                       )}
@@ -966,7 +975,7 @@ function ChatContent() {
                           {msg.attachments.map((att, i) => {
                             const isImg = isImageExt(att.name)
                             return isImg && att.documentId ? (
-                              <div key={i} className="relative group rounded-lg overflow-hidden border border-[#27272a] bg-[#0c0c0e]">
+                              <div key={i} className="relative group rounded-lg overflow-hidden border border-[#e6dfd8] bg-[#faf9f5] shadow-sm">
                                 <img
                                   src={api.documents.downloadUrl(att.documentId)}
                                   alt={att.name}
@@ -978,9 +987,9 @@ function ChatContent() {
                               <button
                                 key={i}
                                 onClick={() => att.documentId && handleDocumentClick({ id: att.documentId, fileName: att.name, fileType: att.name.split('.').pop() || 'txt' } as any)}
-                                className="flex items-center gap-1.5 rounded-lg border border-[#27272a] bg-[#0c0c0e] hover:bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400 hover:text-white transition-colors"
+                                className="flex items-center gap-1.5 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#f5f0e8] px-2.5 py-1 text-xs text-[#6c6a64] hover:text-[#141413] transition-colors shadow-xs"
                               >
-                                {isImg ? <ImageIcon className="h-3 w-3 text-emerald-500" /> : <FileText className="h-3 w-3 text-blue-500" />}
+                                {isImg ? <ImageIcon className="h-3 w-3 text-[#5db872]" /> : <FileText className="h-3 w-3 text-[#cc785c]" />}
                                 <span className="max-w-[120px] truncate">{att.name}</span>
                               </button>
                             )
@@ -990,10 +999,10 @@ function ChatContent() {
 
                       <div className="group relative">
                         <div
-                          className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                          className={`rounded-[12px] px-4 py-2.5 text-sm leading-relaxed ${
                             msg.role === 'user'
-                              ? 'bg-[#1e1e24] text-zinc-100 border border-[#27272a] shadow-sm'
-                              : 'text-zinc-350 bg-transparent'
+                              ? 'bg-[#efe9de] text-[#141413] border border-[#e6dfd8] shadow-xs font-sans'
+                              : 'text-[#141413] bg-transparent font-sans'
                           }`}
                         >
                           <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm">{msg.content}</pre>
@@ -1003,9 +1012,9 @@ function ChatContent() {
                             <button
                               type="button"
                               onClick={() => speakMessage(msg.id, msg.content)}
-                              className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                              className="flex items-center gap-1 text-[10px] text-[#6c6a64] hover:text-[#141413] transition-colors"
                             >
-                              {speakingId === msg.id ? <Square className="h-2.5 w-2.5 fill-current text-red-500" /> : <Volume2 className="h-3 w-3" />}
+                              {speakingId === msg.id ? <Square className="h-2.5 w-2.5 fill-current text-red-600" /> : <Volume2 className="h-3 w-3" />}
                               <span>{speakingId === msg.id ? 'Stop' : 'Listen'}</span>
                             </button>
                             <CodePreviewButton
@@ -1034,9 +1043,9 @@ function ChatContent() {
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <Avatar className="h-7 w-7 border border-[#27272a] shrink-0 mt-0.5">
-                        <AvatarFallback className="bg-zinc-950 text-zinc-400 text-xs">
-                          <User className="h-3.5 w-3.5 text-zinc-400" />
+                      <Avatar className="h-7 w-7 border border-[#e6dfd8] shrink-0 mt-0.5 shadow-sm">
+                        <AvatarFallback className="bg-[#efe9de] text-[#6c6a64] text-xs">
+                          <User className="h-3.5 w-3.5" />
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -1071,7 +1080,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-[#2F2F2F] border border-[#2F2F2F] rounded-[24px] min-h-20 p-3.5 focus-within:border-[#71717A] shadow-xl w-full max-w-3xl mx-auto transition-all duration-200">
+            <div className="relative flex items-center bg-[#efe9de] border border-[#e6dfd8] rounded-[12px] min-h-20 p-3.5 focus-within:border-[#cc785c]/60 shadow-md w-full max-w-3xl mx-auto transition-all duration-200">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1085,7 +1094,7 @@ function ChatContent() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="rounded-[20px] h-10 w-10 hover:bg-[#3F3F3F]/60 text-[#B4B4B4] hover:text-[#F9F9F9] shrink-0"
+                className="rounded-[8px] h-10 w-10 hover:bg-[#e8e0d2] text-[#6c6a64] hover:text-[#141413] shrink-0"
               >
                 <Paperclip className="h-5 w-5 stroke-[1.5]" />
               </Button>
@@ -1100,7 +1109,7 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-4 py-2 text-[15px] text-[#F9F9F9] placeholder:text-[#B4B4B4]/70 min-h-[40px] max-h-[140px] scrollbar-thin"
+                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-4 py-2 text-[15px] text-[#141413] placeholder:text-[#6c6a64] min-h-[40px] max-h-[140px] scrollbar-thin"
                 disabled={sending}
               />
               <Button
@@ -1108,14 +1117,14 @@ function ChatContent() {
                 size="icon"
                 onClick={toggleVoiceInput}
                 disabled={sending}
-                className={`rounded-[20px] h-10 w-10 text-[#B4B4B4] hover:text-[#F9F9F9] shrink-0 ${isListening ? 'bg-red-950/40 text-red-400 animate-pulse' : 'hover:bg-[#3F3F3F]/60'}`}
+                className={`rounded-[8px] h-10 w-10 text-[#6c6a64] hover:text-[#141413] shrink-0 ${isListening ? 'bg-[#cc785c]/10 text-[#cc785c] animate-pulse' : 'hover:bg-[#efe9de]'}`}
               >
                 {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5 stroke-[1.5]" />}
               </Button>
               <Button
                 onClick={handleSend}
                 disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
-                className="rounded-full h-10 w-10 hover:scale-[1.03] transition-all bg-white hover:bg-zinc-200 text-black shadow-md font-medium shrink-0 ml-2"
+                className="rounded-[8px] h-10 w-10 hover:scale-[1.03] transition-all bg-[#cc785c] hover:bg-[#a9583e] text-white shadow-sm font-medium shrink-0 ml-2"
                 size="icon"
                 title="Send"
               >

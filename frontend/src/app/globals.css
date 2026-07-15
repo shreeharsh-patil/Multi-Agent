@@ -4,61 +4,61 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --background: 45 17% 97%; /* #faf9f5 - Tinted Cream Canvas */
+    --foreground: 60 4% 7%; /* #141413 - Warm Ink */
+    --card: 38 25% 90%; /* #efe9de - Light Cream Card */
+    --card-foreground: 60 4% 7%;
+    --popover: 38 25% 90%; /* #efe9de */
+    --popover-foreground: 60 4% 7%;
+    --primary: 15 53% 58%; /* #cc785c - Warm Coral CTA */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 45 17% 97%; /* #faf9f5 */
+    --secondary-foreground: 60 4% 7%;
+    --muted: 45 4% 41%; /* #6c6a64 - Muted Soft Ink */
+    --muted-foreground: 45 4% 41%;
+    --accent: 38 25% 90%;
+    --accent-foreground: 60 4% 7%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.75rem; /* Smoother, more modern rounded corners */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 32 21% 88%; /* #e6dfd8 - Hairline Border */
+    --input: 32 21% 88%;
+    --ring: 15 53% 58%;
+    --radius: 0.5rem; /* 8px rounded corners */
+    --sidebar-background: 38 25% 90%; /* #efe9de */
+    --sidebar-foreground: 60 4% 7%;
+    --sidebar-border: 32 21% 88%;
+    --sidebar-accent: 45 17% 97%; /* #faf9f5 */
+    --sidebar-accent-foreground: 60 4% 7%;
+    --sidebar-ring: 15 53% 58%;
   }
 
   .dark {
-    /* ChatGPT Dark Mode theme */
-    --background: 0 0% 13%; /* #212121 */
-    --foreground: 0 0% 98%; /* #F9F9F9 */
-    --card: 0 0% 18%; /* #2F2F2F */
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 18%; /* #2F2F2F */
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 100%;
-    --primary-foreground: 0 0% 13%;
-    --secondary: 0 0% 9%; /* #171717 */
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 18%; /* #2F2F2F */
-    --muted-foreground: 0 0% 70%; /* #B4B4B4 */
-    --accent: 0 0% 25%; /* #3F3F3F */
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
+    /* Set dark mode variables to same warm-cream theme for consistency */
+    --background: 45 17% 97%;
+    --foreground: 60 4% 7%;
+    --card: 38 25% 90%;
+    --card-foreground: 60 4% 7%;
+    --popover: 38 25% 90%;
+    --popover-foreground: 60 4% 7%;
+    --primary: 15 53% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 45 17% 97%;
+    --secondary-foreground: 60 4% 7%;
+    --muted: 45 4% 41%;
+    --muted-foreground: 45 4% 41%;
+    --accent: 38 25% 90%;
+    --accent-foreground: 60 4% 7%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 18%; /* #2F2F2F */
-    --input: 0 0% 18%;
-    --ring: 0 0% 100%;
-    --sidebar-background: 0 0% 9%; /* #171717 */
-    --sidebar-foreground: 0 0% 70%; /* #B4B4B4 */
-    --sidebar-border: 0 0% 18%; /* #2F2F2F */
-    --sidebar-accent: 0 0% 18%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-ring: 0 0% 100%;
+    --border: 32 21% 88%;
+    --input: 32 21% 88%;
+    --ring: 15 53% 58%;
+    --sidebar-background: 38 25% 90%;
+    --sidebar-foreground: 60 4% 7%;
+    --sidebar-border: 32 21% 88%;
+    --sidebar-accent: 45 17% 97%;
+    --sidebar-accent-foreground: 60 4% 7%;
+    --sidebar-ring: 15 53% 58%;
   }
 }
 
@@ -67,31 +67,28 @@
     @apply border-border transition-colors duration-150;
   }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-zinc-800 selection:text-white;
+    @apply bg-background text-foreground antialiased selection:bg-[#cc785c] selection:text-white font-sans;
   }
-  h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight font-medium text-foreground;
+  h1, h2, h3 {
+    @apply font-serif font-normal tracking-[-0.02em] text-[#141413];
+  }
+  h4, h5, h6 {
+    @apply font-sans font-medium text-[#141413];
   }
 }
 
 @layer utilities {
-  .glass-card {
-    @apply bg-card/65 backdrop-blur-md border border-white/5 dark:border-white/[0.03];
-  }
-  .glass-card-hover {
-    @apply transition-all duration-300 hover:border-zinc-700/30 hover:bg-zinc-900/35 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)];
-  }
   .scrollbar-thin {
     scrollbar-width: thin;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/15 rounded-full hover:bg-muted-foreground/30 transition-colors;
+    @apply bg-[#e6dfd8] rounded-full hover:bg-[#cc785c]/30 transition-colors;
   }
 }
