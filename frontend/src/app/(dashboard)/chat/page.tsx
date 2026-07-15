@@ -24,6 +24,16 @@ import { CodePreviewButton, CodeSandbox, type CodeSandboxProps, extractCodeFromC
 import { CodePreviewPanel } from '@/components/code-preview-panel'
 import { FileCode, FileImage, Globe, Play, Code as CodeIcon } from 'lucide-react'
 
+const typingKeyframes = `
+@keyframes typing-dot {
+  0%, 40%, 100% { opacity: 0.3; transform: translateY(0); }
+  20% { opacity: 1; transform: translateY(-3px); }
+}
+.typing-dot {
+  animation: typing-dot 1.4s ease-in-out infinite;
+}
+`
+
 
 
 
@@ -801,6 +811,8 @@ function ChatContent() {
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   return (
+    <>
+    <style>{typingKeyframes}</style>
     <div
       ref={containerRef}
       className={`flex h-screen gap-0 -m-6 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
@@ -1037,7 +1049,15 @@ function ChatContent() {
                               : 'text-[#26251e] bg-transparent font-sans'
                           }`}
                         >
-                          <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm">{msg.content}</pre>
+                          {msg.role === 'assistant' && !msg.content && sending ? (
+                            <span className="inline-flex items-center gap-1 h-5" role="status" aria-label="Typing">
+                              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '0ms' }} />
+                              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '200ms' }} />
+                              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '400ms' }} />
+                            </span>
+                          ) : (
+                            <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm">{msg.content}</pre>
+                          )}
                         </div>
                         {msg.role === 'assistant' && msg.content && (
                           <div className="flex items-center gap-3 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
@@ -1332,6 +1352,7 @@ function ChatContent() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

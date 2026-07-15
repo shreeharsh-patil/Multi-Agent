@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-004"
 
     openrouter_api_key: str = ""
-    openrouter_model: str = "google/gemini-2.0-flash-exp"
+    openrouter_model: str = "google/gemini-3.1-flash-lite"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     nararouter_api_key: str = ""
@@ -40,10 +40,10 @@ class Settings(BaseSettings):
     mistral_base_url: str = "https://api.mistral.ai/v1"
 
     groq_api_key: str = ""
-    groq_model: str = "mixtral-8x7b-32768"
+    groq_model: str = "llama-3.3-70b-versatile"
 
     aiand_api_key: str = ""
-    aiand_model: str = "qwen/qwen3.5-9b"
+    aiand_model: str = "qwen/qwen3.6-27b"
     aiand_base_url: str = "https://api.aiand.com/v1"
 
     firecrawl_api_key: str = ""

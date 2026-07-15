@@ -43,7 +43,7 @@ class FirecrawlRotator:
             
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
-                    url = f"https://api.firecrawl.dev/v2{endpoint}"
+                    url = f"https://api.firecrawl.dev/v1{endpoint}"
                     if method.upper() == "POST":
                         response = await client.post(url, headers=headers, **req_kwargs)
                     else:

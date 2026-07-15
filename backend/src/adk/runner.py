@@ -119,55 +119,62 @@ async def process_message(
 ) -> dict:
     """Process a user message through the ADK multi-agent system.
 
-    Falls back to direct LLM if the provider is not Gemini.
+    Uses ADK when Gemini is available. If ADK/Gemini fails (e.g. quota
+    exhausted), falls back to direct LLM via the RotatingProvider which
+    auto-rotates through AIand, Groq, OpenRouter, etc.
     """
     if not use_adk():
         return await _fallback_process_message(message, user_id, conversation_id)
 
-    runner = await create_runner(user_id, conversation_id)
-    content = _to_content(message)
+    # Try ADK first, fall back to RotatingProvider on failure
+    try:
+        runner = await create_runner(user_id, conversation_id)
+        content = _to_content(message)
 
-    events = []
-    async for event in runner.run_async(
-        session_id=conversation_id,
-        user_id=user_id,
-        new_message=content,
-    ):
-        events.append(event)
+        events = []
+        async for event in runner.run_async(
+            session_id=conversation_id,
+            user_id=user_id,
+            new_message=content,
+        ):
+            events.append(event)
 
-    final_event = None
-    for event in reversed(events):
-        if event.is_final_response():
-            final_event = event
-            break
+        final_event = None
+        for event in reversed(events):
+            if event.is_final_response():
+                final_event = event
+                break
 
-    output = ""
-    if final_event:
-        output = _get_content_piece(final_event)
+        output = ""
+        if final_event:
+            output = _get_content_piece(final_event)
 
-    agent_traces = []
-    for event in events:
-        agent_traces.append({
-            "agent_id": event.node_name if hasattr(event, "node_name") else "unknown",
-            "event_type": str(type(event).__name__),
-            "has_content": bool(_get_content_piece(event)),
-        })
+        agent_traces = []
+        for event in events:
+            agent_traces.append({
+                "agent_id": event.node_name if hasattr(event, "node_name") else "unknown",
+                "event_type": str(type(event).__name__),
+                "has_content": bool(_get_content_piece(event)),
+            })
 
-    logger.info(
-        f"ADK processed message",
-        extra={
-            "conversation_id": conversation_id,
+        logger.info(
+            f"ADK processed message",
+            extra={
+                "conversation_id": conversation_id,
+                "events_count": len(events),
+                "final_output_length": len(output),
+            },
+        )
+
+        return {
+            "output": output,
+            "citations": [],
+            "agent_traces": agent_traces,
             "events_count": len(events),
-            "final_output_length": len(output),
-        },
-    )
-
-    return {
-        "output": output,
-        "citations": [],
-        "agent_traces": agent_traces,
-        "events_count": len(events),
-    }
+        }
+    except Exception as e:
+        logger.warning(f"ADK failed ({e}), falling back to RotatingProvider")
+        return await _fallback_process_message(message, user_id, conversation_id)
 
 
 async def _fallback_process_message(
@@ -209,67 +216,74 @@ async def process_message_stream(
 ):
     """Process a user message and yield SSE events.
 
-    Uses ADK for Gemini provider, falls back to direct LLM for others.
+    Uses ADK for Gemini provider. If ADK/Gemini fails (e.g. quota
+    exhausted), falls back to direct LLM via the RotatingProvider.
     """
     if not use_adk():
         async for event in _fallback_process_message_stream(message, user_id, conversation_id):
             yield event
         return
 
-    runner = await create_runner(user_id, conversation_id)
-    content = _to_content(message)
+    # Try ADK first, fall back to RotatingProvider on failure
+    try:
+        runner = await create_runner(user_id, conversation_id)
+        content = _to_content(message)
 
-    accumulated_content = ""
-    current_agent = "orchestrator"
+        accumulated_content = ""
+        current_agent = "orchestrator"
 
-    yield {"event": "start", "data": {"conversation_id": conversation_id}}
+        yield {"event": "start", "data": {"conversation_id": conversation_id}}
 
-    async for event in runner.run_async(
-        session_id=conversation_id,
-        user_id=user_id,
-        new_message=content,
-    ):
-        event_type = type(event).__name__
-        agent_id = event.node_name if hasattr(event, "node_name") else "unknown"
+        async for event in runner.run_async(
+            session_id=conversation_id,
+            user_id=user_id,
+            new_message=content,
+        ):
+            event_type = type(event).__name__
+            agent_id = event.node_name if hasattr(event, "node_name") else "unknown"
 
-        content_piece = _get_content_piece(event)
+            content_piece = _get_content_piece(event)
 
-        if content_piece:
-            accumulated_content += content_piece
+            if content_piece:
+                accumulated_content += content_piece
 
-        if agent_id != current_agent:
-            current_agent = agent_id
-            yield {"event": "agent", "data": {"agent_id": agent_id}}
+            if agent_id != current_agent:
+                current_agent = agent_id
+                yield {"event": "agent", "data": {"agent_id": agent_id}}
 
-        if content_piece:
-            yield {"event": "chunk", "data": {"text": content_piece}}
+            if content_piece:
+                yield {"event": "chunk", "data": {"text": content_piece}}
 
-        yield {
-            "event": "trace",
-            "data": {
-                "agent_id": agent_id,
-                "event_type": event_type,
-                "has_content": bool(content_piece),
-            },
-        }
-
-        if hasattr(event, "is_final_response") and event.is_final_response():
             yield {
-                "event": "complete",
+                "event": "trace",
                 "data": {
-                    "output": accumulated_content,
-                    "conversation_id": conversation_id,
+                    "agent_id": agent_id,
+                    "event_type": event_type,
+                    "has_content": bool(content_piece),
                 },
             }
-            return
 
-    yield {
-        "event": "complete",
-        "data": {
-            "output": accumulated_content,
-            "conversation_id": conversation_id,
-        },
-    }
+            if hasattr(event, "is_final_response") and event.is_final_response():
+                yield {
+                    "event": "complete",
+                    "data": {
+                        "output": accumulated_content,
+                        "conversation_id": conversation_id,
+                    },
+                }
+                return
+
+        yield {
+            "event": "complete",
+            "data": {
+                "output": accumulated_content,
+                "conversation_id": conversation_id,
+            },
+        }
+    except Exception as e:
+        logger.warning(f"ADK stream failed ({e}), falling back to RotatingProvider")
+        async for event in _fallback_process_message_stream(message, user_id, conversation_id):
+            yield event
 
 
 async def _fallback_process_message_stream(
