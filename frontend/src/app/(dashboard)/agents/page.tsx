@@ -35,15 +35,15 @@ const iconMap: Record<string, import('lucide-react').LucideIcon> = {
 }
 
 const colorMap: Record<string, string> = {
-  knowledge: 'text-[#cc785c]',
-  drive: 'text-[#cc785c]',
-  notes: 'text-[#cc785c]',
-  quiz: 'text-[#cc785c]',
-  planner: 'text-[#cc785c]',
-  research: 'text-[#cc785c]',
-  coding: 'text-[#cc785c]',
-  memory: 'text-[#cc785c]',
-  tool: 'text-[#cc785c]',
+  knowledge: 'text-primary',
+  drive: 'text-primary',
+  notes: 'text-primary',
+  quiz: 'text-primary',
+  planner: 'text-primary',
+  research: 'text-primary',
+  coding: 'text-primary',
+  memory: 'text-primary',
+  tool: 'text-primary',
 }
 
 const tagMap: Record<string, string[]> = {
@@ -124,10 +124,10 @@ export default function AgentsPage() {
       const color = colorMap[agent.id] || 'text-[#6c6a64]'
       const tags = agent.custom ? (agent.tools || []).map((tool) => availableTools.find((item) => item.id === tool)?.label || tool) : tagMap[agent.id] || []
       return (
-        <Card key={agent.id} className="group border-[#e6dfd8] bg-[#efe9de] hover:bg-[#e8e0d2]/75 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between shadow-xs">
+        <Card key={agent.id} className="group hover:bg-secondary/40 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between shadow-xs">
           <CardHeader className="p-5">
             <div className="flex items-start justify-between">
-              <div className={`p-2.5 rounded-[8px] bg-[#faf9f5] border border-[#e6dfd8] shadow-xs ${color}`}>
+              <div className={`p-2.5 rounded-[8px] bg-secondary border border-border shadow-xs ${color}`}>
                 <Icon className="h-5 w-5 stroke-[1.5]" />
               </div>
               <Link 
@@ -137,13 +137,13 @@ export default function AgentsPage() {
                 Chat
               </Link>
             </div>
-            <CardTitle className="mt-4 text-base font-semibold text-[#141413]">{agent.name}</CardTitle>
-            <CardDescription className="text-xs text-[#6c6a64] leading-normal mt-1 min-h-[32px] line-clamp-2">{agent.description}</CardDescription>
+            <CardTitle className="mt-4 text-base font-semibold text-foreground">{agent.name}</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground leading-normal mt-1 min-h-[32px] line-clamp-2">{agent.description}</CardDescription>
           </CardHeader>
           <CardContent className="p-5 pt-0">
             <div className="flex flex-wrap gap-1.5 mb-4">
               {tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="bg-[#faf9f5] text-[#6c6a64] font-normal text-[10px] px-2.5 py-0.5 border border-[#e6dfd8]">{tag}</Badge>
+                <Badge key={tag} variant="secondary" className="bg-secondary text-muted-foreground font-normal text-[10px] px-2.5 py-0.5 border border-border shadow-none">{tag}</Badge>
               ))}
             </div>
             {agent.custom && (
@@ -165,16 +165,16 @@ export default function AgentsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
+      <div className="space-y-6 animate-fade-in bg-background">
         <div>
-          <h1 className="text-3xl font-serif font-normal text-[#141413]">Agents</h1>
-          <p className="text-sm text-[#6c6a64] mt-1">
+          <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-foreground">Agents</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Manage your specialized AI agents
           </p>
         </div>
-        <Card className="border-[#e6dfd8] bg-[#efe9de]">
-          <CardContent className="py-16 text-center text-[#6c6a64]">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
             <p>Loading agents...</p>
           </CardContent>
         </Card>
@@ -183,12 +183,12 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
+    <div className="space-y-6 animate-fade-in bg-background">
       <div>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-serif font-normal text-[#141413]">Agent Hub</h1>
-            <p className="text-sm text-[#6c6a64] mt-1">{agents.length} agents available · build your own specialist</p>
+            <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Agent Hub</h1>
+            <p className="text-sm text-muted-foreground mt-1">{agents.length} agents available · build your own specialist</p>
           </div>
           <Button onClick={() => setBuilderOpen((open) => !open)} className="gap-2 shadow-sm">
             <Plus className="h-4 w-4" /> Create agent
@@ -206,10 +206,10 @@ export default function AgentsPage() {
       )}
 
       {builderOpen && (
-        <Card className="border-[#cc785c]/25 bg-[#efe9de]/75 shadow-xs">
+        <Card className="border-primary/20 hover:bg-card shadow-xs">
           <CardHeader>
-            <CardTitle className="font-serif font-normal text-lg">Build a custom agent</CardTitle>
-            <CardDescription className="text-[#6c6a64]">Give it a clear job, personality, and only the tools it needs.</CardDescription>
+            <CardTitle className="font-sans font-normal tracking-[-0.02em] text-lg">Build a custom agent</CardTitle>
+            <CardDescription className="text-muted-foreground">Give it a clear job, personality, and only the tools it needs.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-3">
@@ -217,17 +217,17 @@ export default function AgentsPage() {
               <Input placeholder="Short description" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
               <Textarea placeholder="System instructions — what should this agent do?" value={draft.system_instruction} onChange={(e) => setDraft({ ...draft, system_instruction: e.target.value })} className="min-h-32" />
             </div>
-            <div className="rounded-[12px] border border-[#e6dfd8] bg-[#faf9f5] p-4 flex flex-col justify-between">
+            <div className="rounded-[12px] border border-border bg-secondary p-4 flex flex-col justify-between">
               <div>
-                <p className="mb-3 text-sm font-semibold text-[#141413]">Tool permissions</p>
+                <p className="mb-3 text-sm font-semibold text-foreground">Tool permissions</p>
                 <div className="space-y-3">
                   {availableTools.map((tool) => (
-                    <label key={tool.id} className="flex cursor-pointer items-center gap-3 text-sm text-[#6c6a64] hover:text-[#141413] transition-colors">
+                    <label key={tool.id} className="flex cursor-pointer items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
                       <input 
                         type="checkbox" 
                         checked={draft.tools.includes(tool.id)} 
                         onChange={(e) => setDraft({ ...draft, tools: e.target.checked ? [...draft.tools, tool.id] : draft.tools.filter((id) => id !== tool.id) })} 
-                        className="h-4 w-4 rounded border-[#e6dfd8] text-[#cc785c] focus:ring-[#cc785c]" 
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer" 
                       />
                       {tool.label}
                     </label>

@@ -107,9 +107,9 @@ export default function ResearchPage() {
 
   return (
     <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
-      <div>
-        <h1 className="text-3xl font-serif font-normal text-[#141413]">Research</h1>
-        <p className="text-sm text-[#6c6a64] mt-1">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Research</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           Internet research, source comparison, and report generation
         </p>
       </div>
@@ -123,11 +123,11 @@ export default function ResearchPage() {
         </div>
       )}
 
-      <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+      <Card className="shadow-xs">
         <CardContent className="p-4">
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6c6a64]" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Research a topic..."
                 className="pl-10 shadow-sm"
@@ -150,13 +150,13 @@ export default function ResearchPage() {
       </Card>
 
       {researching && (
-        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+        <Card className="shadow-xs">
           <CardContent className="space-y-4 py-6">
             <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-[#cc785c]" />
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <div>
-                <p className="font-semibold text-sm text-[#141413]">Deep Research is running</p>
-                <p className="text-xs text-[#6c6a64] mt-0.5">A bounded multi-step investigation is in progress.</p>
+                <p className="font-semibold text-sm text-foreground">Deep Research is running</p>
+                <p className="text-xs text-muted-foreground mt-0.5">A bounded multi-step investigation is in progress.</p>
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,23 +165,23 @@ export default function ResearchPage() {
                   key={stage.label} 
                   className={`rounded-[8px] border p-3 transition-colors ${
                     index === activeStage 
-                      ? 'border-[#cc785c]/40 bg-[#cc785c]/5' 
+                      ? 'border-primary/40 bg-primary/5' 
                       : index < activeStage 
-                        ? 'border-[#5db872]/30 bg-[#5db872]/5' 
-                        : 'opacity-50 border-[#e6dfd8] bg-[#faf9f5]'
+                        ? 'border-[#1f8a65]/30 bg-[#1f8a65]/5' 
+                        : 'opacity-50 border-border bg-secondary'
                   }`}
                 >
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[#141413]">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                     {index < activeStage ? (
-                      <CheckCircle2 className="h-4 w-4 text-[#5db872]" />
+                      <CheckCircle2 className="h-4 w-4 text-[#1f8a65]" />
                     ) : index === activeStage ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     ) : (
-                      <span className="h-4 w-4 rounded-full border border-[#e6dfd8] bg-[#faf9f5]" />
+                      <span className="h-4 w-4 rounded-full border border-border bg-secondary" />
                     )}
                     {stage.label}
                   </div>
-                  <p className="mt-1 text-[10px] text-[#6c6a64] leading-normal">{stage.detail}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground leading-normal">{stage.detail}</p>
                 </div>
               ))}
             </div>
@@ -190,16 +190,16 @@ export default function ResearchPage() {
       )}
 
       {currentReport && !researching && (
-        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+        <Card className="shadow-xs">
           <CardHeader className="p-5 pb-3">
-            <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
-              <Sparkles className="h-4.5 w-4.5 text-[#cc785c]" />
+            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
+              <Sparkles className="h-4.5 w-4.5 text-primary" />
               Research Report: {currentReport.query}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-5 pt-0">
             <ScrollArea ref={resultsRef} className="max-h-[600px]">
-              <div className="max-w-none whitespace-pre-wrap text-sm text-[#141413] leading-relaxed font-sans pr-2">
+              <div className="max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans pr-2">
                 {currentReport.content}
               </div>
             </ScrollArea>
@@ -210,17 +210,17 @@ export default function ResearchPage() {
       {!currentReport && !researching && (
         <>
           {loading ? (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
-              <CardContent className="py-8 text-center text-[#6c6a64]">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
                 <p>Loading reports...</p>
               </CardContent>
             </Card>
           ) : reports.length > 0 ? (
-            <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+            <Card className="shadow-xs">
               <CardHeader className="p-5">
-                <CardTitle className="flex items-center gap-2 text-base font-serif font-normal text-[#141413]">
-                  <FileText className="h-4.5 w-4.5 text-[#cc785c]" />
+                <CardTitle className="flex items-center gap-2 text-base font-sans font-normal tracking-[-0.02em] text-foreground">
+                  <FileText className="h-4.5 w-4.5 text-primary" />
                   Previous Reports
                 </CardTitle>
               </CardHeader>
@@ -229,17 +229,17 @@ export default function ResearchPage() {
                   {reports.map((report) => (
                     <div
                       key={report.id}
-                      className="group flex items-center justify-between p-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#efe9de]/50 transition-colors cursor-pointer shadow-xs"
+                      className="group flex items-center justify-between p-3 rounded-[8px] border border-border bg-secondary hover:bg-secondary/70 transition-colors cursor-pointer shadow-xs"
                       onClick={() => setCurrentReport(report)}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-[#141413] truncate">{report.query}</p>
-                        <p className="text-[10px] text-[#6c6a64] mt-0.5">
+                        <p className="font-medium text-sm text-foreground truncate">{report.query}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
                           {formatDate(report.createdAt)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary" className="bg-[#efe9de] text-[#6c6a64] border border-[#e6dfd8] text-[10px] px-2 py-0.5">Report</Badge>
+                        <Badge variant="secondary" className="bg-card text-muted-foreground border border-border text-[10px] px-2 py-0.5 shadow-none">Report</Badge>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -255,10 +255,10 @@ export default function ResearchPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
-              <CardContent className="py-12 text-center text-[#6c6a64]">
-                <FileText className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
-                <p className="font-serif font-normal text-lg text-[#141413]">No research reports yet</p>
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-3 opacity-40 text-primary" />
+                <p className="font-sans font-normal tracking-[-0.02em] text-lg text-foreground">No research reports yet</p>
                 <p className="text-sm mt-1">Enter a topic above and click Research to generate a report</p>
               </CardContent>
             </Card>

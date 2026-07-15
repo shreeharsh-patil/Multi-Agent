@@ -26,7 +26,7 @@ import { FileCode, FileImage, Globe, Play, Code as CodeIcon } from 'lucide-react
 
 function LogoSpike({ className = "h-4.5 w-4.5" }: { className?: string }) {
   return (
-    <svg className={`text-[#cc785c] fill-current shrink-0 ${className}`} viewBox="0 0 24 24">
+    <svg className={`text-primary fill-current shrink-0 ${className}`} viewBox="0 0 24 24">
       <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
     </svg>
   )
@@ -637,9 +637,9 @@ function ChatContent() {
   const renderCodeContent = (content: string) => {
     const lines = content.split('\n')
     return (
-      <div className="flex-1 overflow-auto bg-[#18181b] text-zinc-350 font-mono text-xs sm:text-sm p-4 select-text scrollbar-thin">
+      <div className="flex-1 overflow-auto bg-card text-[#26251e] font-mono text-xs sm:text-sm p-4 select-text border-t border-border scrollbar-thin">
         <div className="flex min-w-full">
-          <div className="text-zinc-650 select-none text-right pr-4 border-r border-[#27272a] mr-4 min-w-[2.5rem]">
+          <div className="text-muted-foreground/60 select-none text-right pr-4 border-r border-border mr-4 min-w-[2.5rem]">
             {lines.map((_, i) => (
               <div key={i} className="h-5">{i + 1}</div>
             ))}
@@ -657,22 +657,22 @@ function ChatContent() {
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   return (
-    <div className="flex h-[calc(100vh-84px)] gap-0 -m-6 overflow-hidden bg-[#212121] animate-fade-in relative">
+    <div className="flex h-[calc(100vh-84px)] gap-0 -m-6 overflow-hidden bg-background animate-fade-in relative">
       {/* 1. LEFT PANEL: Explorer & Past Conversations */}
-      <aside className="hidden md:flex w-[260px] flex-col bg-[#171717] border-r border-[#2F2F2F] h-full shrink-0 select-none">
+      <aside className="hidden md:flex w-[260px] flex-col bg-secondary border-r border-border h-full shrink-0 select-none">
         {/* Upper Section: Documents Explorer */}
-        <div className="flex-1 flex flex-col min-h-0 border-b border-[#2F2F2F]">
-          <div className="p-4 border-b border-[#2F2F2F] flex items-center justify-between bg-[#171717]">
-            <span className="text-[11px] font-semibold text-[#B4B4B4] uppercase tracking-wider">Documents Explorer</span>
-            <FolderOpen className="h-4 w-4 text-[#B4B4B4]" />
+        <div className="flex-1 flex flex-col min-h-0 border-b border-border">
+          <div className="p-4 border-b border-border flex items-center justify-between bg-secondary">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Documents Explorer</span>
+            <FolderOpen className="h-4 w-4 text-muted-foreground" />
           </div>
           <ScrollArea className="flex-1 p-2">
             {loadingDocuments ? (
               <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : documents.length === 0 ? (
-              <div className="text-center py-6 text-[11px] text-[#B4B4B4] font-sans px-2">
+              <div className="text-center py-6 text-[11px] text-muted-foreground font-sans px-2">
                 No documents found. Drag & drop files in chat or use paperclip.
               </div>
             ) : (
@@ -683,61 +683,61 @@ function ChatContent() {
                   const Icon = isImg ? ImageIcon : FileText
                   const isTabActive = activeTabId === doc.id
                   return (
-                    <button
-                      key={doc.id}
-                      onClick={() => handleDocumentClick(doc)}
-                      className={`w-full flex items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-xs transition-all hover:bg-[#2F2F2F] ${
-                        isTabActive ? 'bg-[#2F2F2F] text-white font-medium border border-[#2F2F2F]' : 'text-[#B4B4B4] hover:text-[#F9F9F9]'
-                      }`}
-                    >
-                      <Icon className={`h-4 w-4 shrink-0 ${isTabActive ? 'text-white' : 'text-[#B4B4B4]'}`} />
-                      <span className="truncate flex-1 font-sans text-xs">{doc.fileName}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-
-        {/* Lower Section: Past Conversations list */}
-        <div className="flex-1 flex flex-col min-h-0 bg-[#171717]">
-          <div className="p-4 border-b border-[#2F2F2F] flex items-center justify-between bg-[#171717]">
-            <span className="text-[11px] font-semibold text-[#B4B4B4] uppercase tracking-wider">Conversations</span>
-            <button
-              onClick={startNewConversation}
-              className="text-xs font-medium text-white hover:text-[#F9F9F9] flex items-center gap-1 transition-colors"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              New
-            </button>
+                <button
+                  key={doc.id}
+                  onClick={() => handleDocumentClick(doc)}
+                  className={`w-full flex items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-xs transition-all hover:bg-background ${
+                    isTabActive ? 'bg-card text-primary font-medium border border-border shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${isTabActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className="truncate flex-1 font-sans text-xs">{doc.fileName}</span>
+                </button>
+              )
+            })}
           </div>
-          <ScrollArea className="flex-1 p-2">
-            {loadingConversations ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="text-center py-6 text-[11px] text-[#B4B4B4] font-sans">
-                No past conversations.
-              </div>
-            ) : (
+        )}
+      </ScrollArea>
+    </div>
+
+    {/* Lower Section: Past Conversations list */}
+    <div className="flex-1 flex flex-col min-h-0 bg-secondary">
+      <div className="p-4 border-b border-border flex items-center justify-between bg-secondary">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Conversations</span>
+        <button
+          onClick={startNewConversation}
+          className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          New
+        </button>
+      </div>
+      <ScrollArea className="flex-1 p-2">
+        {loadingConversations ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="text-center py-6 text-[11px] text-muted-foreground font-sans">
+            No past conversations.
+          </div>
+        ) : (
               <div className="space-y-0.5">
                 {conversations.map((conv) => {
                   const isCurrent = conv.id === conversationId
                   return (
                     <div
                       key={conv.id}
-                      className={`group flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer transition-all hover:bg-zinc-900/60 ${
-                        isCurrent ? 'bg-[#18181b] text-violet-400 font-medium shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                      className={`group flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-xs cursor-pointer transition-all hover:bg-background ${
+                        isCurrent ? 'bg-card text-primary font-semibold border border-border shadow-xs' : 'text-muted-foreground hover:text-foreground'
                       }`}
                       onClick={() => loadConversation(conv.id)}
                     >
-                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-violet-400' : 'text-zinc-500'}`} />
+                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-primary' : 'text-muted-foreground'}`} />
                       <span className="truncate flex-1 font-sans text-[11px]">{conv.title}</span>
                       <button
                         type="button"
-                        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-650 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation()
                           if (window.confirm('Delete this conversation?')) {
@@ -761,9 +761,9 @@ function ChatContent() {
         </div>
       </aside>
 
-      {/* 2. CENTRAL PANEL: ChatGPT Conversation Feed */}
+      {/* 2. CENTRAL PANEL: Agents Conversation Feed */}
       <div
-        className="flex-1 flex flex-col h-full bg-[#121214] relative min-w-0"
+        className="flex-1 flex flex-col h-full bg-background relative min-w-0"
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -772,11 +772,11 @@ function ChatContent() {
       >
         {/* Drag & Drop overlay */}
         {isDragging && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="text-center p-6 border-2 border-dashed border-violet-500/50 rounded-2xl max-w-sm mx-4 bg-zinc-900 shadow-2xl">
-              <Upload className="h-10 w-10 mx-auto mb-3 text-violet-400 animate-bounce" />
-              <p className="text-sm font-semibold text-zinc-200">Drop files here to upload</p>
-              <p className="text-[11px] text-zinc-500 mt-1">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#26251e]/30 backdrop-blur-xs">
+            <div className="text-center p-8 border border-dashed border-primary rounded-[12px] max-w-sm mx-4 bg-card shadow-xs">
+              <Upload className="h-10 w-10 mx-auto mb-3 text-primary animate-bounce" />
+              <p className="text-sm font-semibold text-[#26251e]">Drop files here to upload</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
                 We support PDF, DOCX, PPTX, TXT, MD, PNG, JPG, WEBP
               </p>
             </div>
@@ -784,22 +784,22 @@ function ChatContent() {
         )}
 
         {/* Top Header / Toolbar */}
-        <div className="flex items-center justify-between border-b border-[#27272a] px-6 py-3 min-h-[56px] shrink-0 bg-[#0c0c0e]/90 backdrop-blur-md select-none z-10">
+        <div className="flex items-center justify-between border-b border-border px-6 py-3 min-h-[56px] shrink-0 bg-card select-none z-10 shadow-xs">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold truncate text-zinc-100 flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-violet-400 shrink-0" />
+            <h2 className="text-sm font-semibold truncate text-[#26251e] flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary shrink-0" />
               <span>{chatTitle || 'New Conversation'}</span>
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-zinc-900 rounded-lg" onClick={shareConversation} disabled={!conversationId} title="Share Link">
-              <Share2 className="h-3.5 w-3.5 text-zinc-400" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-secondary rounded-lg" onClick={shareConversation} disabled={!conversationId} title="Share Link">
+              <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 gap-1.5 hover:bg-zinc-900 rounded-lg px-2.5 ${
-                voiceMode ? 'bg-violet-950/40 text-violet-400 border border-violet-800/40 shadow-[0_0_12px_rgba(124,58,237,.1)]' : 'text-zinc-400'
+              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-2.5 ${
+                voiceMode ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs' : 'text-muted-foreground'
               }`}
               onClick={toggleVoiceMode}
             >
@@ -809,21 +809,21 @@ function ChatContent() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 gap-1.5 hover:bg-zinc-900 rounded-lg px-2.5 ${
-                teamMode ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' : 'text-zinc-400'
+              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-2.5 ${
+                teamMode ? 'bg-[#1f8a65]/10 text-[#1f8a65] border border-[#1f8a65]/20' : 'text-muted-foreground'
               }`}
               onClick={() => setTeamMode((current) => !current)}
             >
               <Users className="h-3.5 w-3.5" />
               <span className="text-xs hidden sm:inline">Teamwork</span>
-              <span className="rounded bg-emerald-500/10 px-1 py-0.5 text-[9px] font-bold text-emerald-400">BETA</span>
+              <span className="rounded bg-[#1f8a65]/10 px-1 py-0.5 text-[9px] font-bold text-[#1f8a65]">BETA</span>
             </Button>
 
             {!teamMode && (
               <select
                 value={selectedAgent}
                 onChange={(e) => setSelectedAgent(e.target.value)}
-                className="h-8 rounded-lg bg-[#1e1e24] border border-[#27272a] px-2 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-700 w-[160px] font-sans"
+                className="h-8 rounded-lg bg-card border border-border px-2 text-xs text-[#26251e] focus:outline-none focus:border-primary w-[160px] font-sans"
               >
                 {agents.concat(customAgents).map((agent) => (
                   <option key={agent.id} value={agent.id}>
@@ -836,37 +836,37 @@ function ChatContent() {
         </div>
 
         {shareUrl && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[.04] px-3 py-2 text-xs">
-            <Share2 className="h-3.5 w-3.5 text-emerald-500" />
-            <span className="font-medium text-emerald-400">Conversation link copied:</span>
-            <Input readOnly value={shareUrl} className="ml-auto h-7 max-w-sm text-[10px] bg-[#1e1e24] border-[#27272a] text-zinc-300" />
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-[8px] border border-[#1f8a65]/20 bg-[#1f8a65]/5 px-3 py-2 text-xs">
+            <Share2 className="h-3.5 w-3.5 text-[#1f8a65]" />
+            <span className="font-medium text-[#1f8a65]">Conversation link copied:</span>
+            <Input readOnly value={shareUrl} className="ml-auto h-7 max-w-sm text-[10px] bg-card border-border text-[#26251e]" />
           </div>
         )}
 
         {/* Voice Mode Banner */}
         {voiceMode && (
-          <div className="mx-6 mt-4 border border-violet-500/20 bg-gradient-to-r from-violet-950/20 via-background to-fuchsia-950/10 rounded-xl p-3 shrink-0">
+          <div className="mx-6 mt-4 border border-primary/20 bg-[#f7f7f4] rounded-[12px] p-3 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-950 text-violet-400 border border-violet-800/40">
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
                 <Volume2 className="h-3.5 w-3.5" />
-                <span className="absolute inset-0 rounded-full border border-violet-500/30 animate-ping [animation-duration:2.5s]" />
+                <span className="absolute inset-0 rounded-full border border-primary/30 animate-ping [animation-duration:2.5s]" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-zinc-200">Voice mode active</p>
-                <p className="text-[10px] text-zinc-500 truncate">Speak by pressing the mic button. Agent answers will be spoken back.</p>
+                <p className="text-xs font-semibold text-[#26251e]">Voice mode active</p>
+                <p className="text-[10px] text-muted-foreground truncate">Speak by pressing the mic button. Agent answers will be spoken back.</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Workspace Scope Banner */}
-        <div className="flex items-center gap-2 border-b border-[#27272a] bg-[#0c0c0e]/30 px-6 py-2 text-[10px] text-zinc-400 shrink-0 select-none">
-          <FolderOpen className="h-3 w-3 text-violet-400" />
+        <div className="flex items-center gap-2 border-b border-border bg-secondary/35 px-6 py-2 text-[10px] text-muted-foreground shrink-0 select-none">
+          <FolderOpen className="h-3 w-3 text-primary" />
           <span>Scope:</span>
           <select
             value={selectedWorkspace}
             onChange={(e) => setSelectedWorkspace(e.target.value)}
-            className="h-5 rounded bg-[#1e1e24] border border-[#27272a] px-1 text-[10px] text-zinc-300 focus:outline-none"
+            className="h-5 rounded bg-card border border-border px-1 text-[10px] text-[#26251e] focus:outline-none"
           >
             <option value="all">All documents</option>
             <option value="unfiled">Unfiled documents</option>
@@ -880,12 +880,12 @@ function ChatContent() {
 
         {/* Team Collaboration Banner */}
         {teamMode && (
-          <div className="border-b border-[#27272a] bg-[#1a1a24]/30 p-3 shrink-0">
+          <div className="border-b border-border bg-secondary p-3 shrink-0">
             <div className="max-w-3xl mx-auto flex items-start gap-2 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-violet-400 mt-0.5" />
+              <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-zinc-300 text-[11px] uppercase tracking-wider">Agent Specialist Squad</p>
-                <p className="text-[10px] text-zinc-500">Pick which agents participate collaboratively in order.</p>
+                <p className="font-semibold text-[#26251e] text-[11px] uppercase tracking-wider">Agent Specialist Squad</p>
+                <p className="text-[10px] text-muted-foreground">Pick which agents participate collaboratively in order.</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {teamworkAgents.map((agent) => {
                     const active = teamAgents.includes(agent.id)
@@ -895,10 +895,10 @@ function ChatContent() {
                         type="button"
                         onClick={() => setTeamAgents((current) => active ? current.filter((id) => id !== agent.id) : [...current, agent.id])}
                         className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition-all ${
-                          active ? 'border-violet-800 bg-violet-950/40 text-violet-300' : 'border-[#27272a] text-zinc-500 hover:bg-zinc-800'
+                          active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-card'
                         }`}
                       >
-                        {active ? <CheckCircle2 className="h-3 w-3 text-violet-400" /> : <span className="h-2 w-2 rounded-full border border-zinc-650" />}
+                        {active ? <CheckCircle2 className="h-3 w-3 text-primary" /> : <span className="h-2 w-2 rounded-full border border-[#cfcdc4]" />}
                         {agent.name.replace(' Agent', '')}
                       </button>
                     )
@@ -912,18 +912,18 @@ function ChatContent() {
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none bg-[#faf9f5]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none bg-background">
               <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-12">
                 <div className="space-y-4">
                   <div className="flex justify-center">
-                    <div className="h-14 w-14 rounded-[8px] border border-[#e6dfd8] bg-[#efe9de] flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-sm">
+                    <div className="h-14 w-14 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
                       <LogoSpike className="h-6 w-6" />
                     </div>
                   </div>
-                  <h1 className="text-4xl font-serif font-normal tracking-tight text-[#141413]">
+                  <h1 className="text-4xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">
                     How can I help you today?
                   </h1>
-                  <p className="text-sm text-[#6c6a64] max-w-md mx-auto leading-relaxed font-sans">
+                  <p className="text-sm text-[#5a5852] max-w-md mx-auto leading-relaxed font-sans">
                     Ask anything, analyze documents, or delegate tasks to specialized AI agents in this collaborative workspace.
                   </p>
                 </div>
@@ -940,11 +940,11 @@ function ChatContent() {
                     <button
                       key={card.text}
                       onClick={() => handleSuggestionClick(card.text)}
-                      className="group flex flex-col items-start p-5 rounded-[12px] border border-[#e6dfd8] bg-[#efe9de] text-left transition-all duration-200 hover:bg-[#e8e0d2]/75 active:scale-[0.99] shadow-xs"
+                      className="group flex flex-col items-start p-5 rounded-[12px] border border-border bg-card text-left transition-all duration-200 hover:bg-secondary/40 active:scale-[0.99] shadow-xs"
                     >
-                      <card.icon className="h-5 w-5 text-[#6c6a64] group-hover:text-[#cc785c] transition-colors stroke-[1.5] mb-3" />
-                      <span className="text-[15px] font-semibold text-[#141413] mb-1 font-sans">{card.text}</span>
-                      <span className="text-xs text-[#6c6a64] leading-normal font-sans">{card.desc}</span>
+                      <card.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors stroke-[1.5] mb-3" />
+                      <span className="text-[15px] font-semibold text-[#26251e] mb-1 font-sans">{card.text}</span>
+                      <span className="text-xs text-muted-foreground leading-normal font-sans">{card.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -956,15 +956,15 @@ function ChatContent() {
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <Avatar className="h-7 w-7 border border-[#e6dfd8] shrink-0 mt-0.5 shadow-sm">
-                        <AvatarFallback className="bg-[#efe9de] text-[#6c6a64] text-xs">
-                          <Bot className="h-3.5 w-3.5 text-[#cc785c]" />
+                      <Avatar className="h-7 w-7 border border-border shrink-0 mt-0.5 shadow-xs">
+                        <AvatarFallback className="bg-secondary text-[#5a5852] text-xs">
+                          <Bot className="h-3.5 w-3.5 text-primary" />
                         </AvatarFallback>
                       </Avatar>
                     )}
                     <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
-                        <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-[#faf9f5] border-[#e6dfd8] text-[#6c6a64]">
+                        <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-secondary border-border text-muted-foreground">
                           {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name || msg.agentId}
                         </Badge>
                       )}
@@ -975,7 +975,7 @@ function ChatContent() {
                           {msg.attachments.map((att, i) => {
                             const isImg = isImageExt(att.name)
                             return isImg && att.documentId ? (
-                              <div key={i} className="relative group rounded-lg overflow-hidden border border-[#e6dfd8] bg-[#faf9f5] shadow-sm">
+                              <div key={i} className="relative group rounded-lg overflow-hidden border border-border bg-secondary shadow-xs">
                                 <img
                                   src={api.documents.downloadUrl(att.documentId)}
                                   alt={att.name}
@@ -987,9 +987,9 @@ function ChatContent() {
                               <button
                                 key={i}
                                 onClick={() => att.documentId && handleDocumentClick({ id: att.documentId, fileName: att.name, fileType: att.name.split('.').pop() || 'txt' } as any)}
-                                className="flex items-center gap-1.5 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#f5f0e8] px-2.5 py-1 text-xs text-[#6c6a64] hover:text-[#141413] transition-colors shadow-xs"
+                                className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary hover:bg-secondary/70 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors shadow-xs"
                               >
-                                {isImg ? <ImageIcon className="h-3 w-3 text-[#5db872]" /> : <FileText className="h-3 w-3 text-[#cc785c]" />}
+                                {isImg ? <ImageIcon className="h-3 w-3 text-[#1f8a65]" /> : <FileText className="h-3 w-3 text-primary" />}
                                 <span className="max-w-[120px] truncate">{att.name}</span>
                               </button>
                             )
@@ -1001,8 +1001,8 @@ function ChatContent() {
                         <div
                           className={`rounded-[12px] px-4 py-2.5 text-sm leading-relaxed ${
                             msg.role === 'user'
-                              ? 'bg-[#efe9de] text-[#141413] border border-[#e6dfd8] shadow-xs font-sans'
-                              : 'text-[#141413] bg-transparent font-sans'
+                              ? 'bg-card text-[#26251e] border border-border shadow-xs font-sans'
+                              : 'text-[#26251e] bg-transparent font-sans'
                           }`}
                         >
                           <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm">{msg.content}</pre>
@@ -1012,7 +1012,7 @@ function ChatContent() {
                             <button
                               type="button"
                               onClick={() => speakMessage(msg.id, msg.content)}
-                              className="flex items-center gap-1 text-[10px] text-[#6c6a64] hover:text-[#141413] transition-colors"
+                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                             >
                               {speakingId === msg.id ? <Square className="h-2.5 w-2.5 fill-current text-red-600" /> : <Volume2 className="h-3 w-3" />}
                               <span>{speakingId === msg.id ? 'Stop' : 'Listen'}</span>
@@ -1043,8 +1043,8 @@ function ChatContent() {
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <Avatar className="h-7 w-7 border border-[#e6dfd8] shrink-0 mt-0.5 shadow-sm">
-                        <AvatarFallback className="bg-[#efe9de] text-[#6c6a64] text-xs">
+                      <Avatar className="h-7 w-7 border border-border shrink-0 mt-0.5 shadow-xs">
+                        <AvatarFallback className="bg-secondary text-muted-foreground text-xs">
                           <User className="h-3.5 w-3.5" />
                         </AvatarFallback>
                       </Avatar>
@@ -1057,21 +1057,21 @@ function ChatContent() {
         </div>
 
         {/* Anchored bottom input block */}
-        <div className="px-6 py-4 border-t border-[#27272a] bg-[#0c0c0e]/30 shrink-0">
+        <div className="px-6 py-4 border-t border-border bg-background shrink-0">
           <div className="max-w-3xl mx-auto space-y-2">
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pb-2">
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#27272a] bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-400"
+                    className="flex items-center gap-1.5 rounded-[8px] border border-border bg-card px-2.5 py-1 text-[11px] text-[#26251e] shadow-xs"
                   >
-                    <FileText className="h-3.5 w-3.5 text-zinc-500" />
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="max-w-[120px] truncate">{att.file.name}</span>
                     {att.status === 'uploading' ? (
-                      <Loader2 className="h-3 w-3 animate-spin text-violet-400 shrink-0" />
+                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                     ) : (
-                      <button onClick={() => removeAttachment(att.id)} className="shrink-0 text-zinc-500 hover:text-zinc-300">
+                      <button onClick={() => removeAttachment(att.id)} className="shrink-0 text-muted-foreground hover:text-foreground">
                         <X className="h-3 w-3" />
                       </button>
                     )}
@@ -1080,7 +1080,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-[#efe9de] border border-[#e6dfd8] rounded-[12px] min-h-20 p-3.5 focus-within:border-[#cc785c]/60 shadow-md w-full max-w-3xl mx-auto transition-all duration-200">
+            <div className="relative flex items-center bg-secondary border border-border rounded-[12px] min-h-20 p-3.5 focus-within:border-primary/60 shadow-xs w-full max-w-3xl mx-auto transition-all duration-200">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1094,7 +1094,7 @@ function ChatContent() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="rounded-[8px] h-10 w-10 hover:bg-[#e8e0d2] text-[#6c6a64] hover:text-[#141413] shrink-0"
+                className="rounded-[8px] h-10 w-10 hover:bg-card text-muted-foreground hover:text-foreground shrink-0"
               >
                 <Paperclip className="h-5 w-5 stroke-[1.5]" />
               </Button>
@@ -1109,7 +1109,7 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-4 py-2 text-[15px] text-[#141413] placeholder:text-[#6c6a64] min-h-[40px] max-h-[140px] scrollbar-thin"
+                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-4 py-2 text-[15px] text-[#26251e] placeholder:text-[#5a5852] min-h-[40px] max-h-[140px] scrollbar-thin"
                 disabled={sending}
               />
               <Button
@@ -1117,14 +1117,14 @@ function ChatContent() {
                 size="icon"
                 onClick={toggleVoiceInput}
                 disabled={sending}
-                className={`rounded-[8px] h-10 w-10 text-[#6c6a64] hover:text-[#141413] shrink-0 ${isListening ? 'bg-[#cc785c]/10 text-[#cc785c] animate-pulse' : 'hover:bg-[#efe9de]'}`}
+                className={`rounded-[8px] h-10 w-10 text-muted-foreground hover:text-foreground shrink-0 ${isListening ? 'bg-primary/10 text-primary animate-pulse' : 'hover:bg-card/40'}`}
               >
                 {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5 stroke-[1.5]" />}
               </Button>
               <Button
                 onClick={handleSend}
                 disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
-                className="rounded-[8px] h-10 w-10 hover:scale-[1.03] transition-all bg-[#cc785c] hover:bg-[#a9583e] text-white shadow-sm font-medium shrink-0 ml-2"
+                className="rounded-[8px] h-10 w-10 hover:scale-[1.03] transition-all bg-primary hover:bg-[#d04200] text-primary-foreground shadow-xs font-medium shrink-0 ml-2"
                 size="icon"
                 title="Send"
               >
@@ -1137,23 +1137,23 @@ function ChatContent() {
 
       {/* 3. RIGHT PANEL: Cursor-Style Editor Canvas */}
       {tabs.length > 0 && (
-        <aside className="flex flex-col flex-1 h-full bg-[#18181b] border-l border-[#27272a] overflow-hidden min-w-0">
+        <aside className="flex flex-col flex-1 h-full bg-secondary border-l border-border overflow-hidden min-w-0">
           {/* Tab Header bar */}
-          <div className="flex bg-[#0c0c0e] border-b border-[#27272a] h-9 shrink-0 overflow-x-auto scrollbar-thin select-none">
+          <div className="flex bg-[#efe9de]/65 border-b border-border h-9 shrink-0 overflow-x-auto scrollbar-thin select-none">
             {tabs.map((tab) => {
               const isActive = activeTabId === tab.id
               return (
                 <div
                   key={tab.id}
                   onClick={() => setActiveTabId(tab.id)}
-                  className={`group flex items-center gap-2 px-3.5 border-r border-[#27272a] h-full text-xs cursor-pointer select-none transition-all ${
-                    isActive ? 'bg-[#18181b] text-white font-medium shadow-inner' : 'bg-[#0c0c0e]/60 text-zinc-400 hover:bg-zinc-900'
+                  className={`group flex items-center gap-2 px-3.5 border-r border-border h-full text-xs cursor-pointer select-none transition-all ${
+                    isActive ? 'bg-[#fafaf7] text-[#26251e] font-semibold shadow-xs border-b border-[#fafaf7]' : 'text-muted-foreground hover:bg-[#fafaf7]/50'
                   }`}
                 >
                   {tab.type === 'code' ? (
-                    <FileCode className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-violet-400' : 'text-zinc-500'}`} />
+                    <FileCode className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                   ) : (
-                    <FileText className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-zinc-500'}`} />
+                    <FileText className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                   )}
                   <span className="max-w-[120px] truncate text-[11px] font-sans">{tab.title}</span>
                   <button
@@ -1162,7 +1162,7 @@ function ChatContent() {
                       e.stopPropagation()
                       handleCloseTab(tab.id)
                     }}
-                    className="text-zinc-500 hover:text-zinc-200 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-muted-foreground hover:text-foreground shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1175,8 +1175,8 @@ function ChatContent() {
           {activeTab ? (
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               {/* Unified Control Header */}
-              <div className="flex items-center justify-between px-4 py-2 bg-[#121214] border-b border-[#27272a] text-xs shrink-0 select-none">
-                <span className="text-zinc-400 font-mono text-[10px]">
+              <div className="flex items-center justify-between px-4 py-2 bg-secondary border-b border-border text-xs shrink-0 select-none">
+                <span className="text-muted-foreground font-mono text-[10px]">
                   {activeTab.title} {activeTab.fileType ? `(${activeTab.fileType.toUpperCase()})` : ''}
                 </span>
                 
@@ -1185,16 +1185,16 @@ function ChatContent() {
                     <button
                       type="button"
                       onClick={() => setShowCodeSource(!showCodeSource)}
-                      className="flex items-center gap-1 h-6 px-2.5 text-[10px] rounded border border-[#27272a] bg-[#1e1e24] text-zinc-300 hover:text-white transition-colors"
+                      className="flex items-center gap-1 h-6 px-2.5 text-[10px] rounded-[6px] border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
                     >
                       {showCodeSource ? (
                         <>
-                          <Play className="h-3 w-3 text-violet-400" />
+                          <Play className="h-3 w-3 text-primary" />
                           <span>Show Sandbox</span>
                         </>
                       ) : (
                         <>
-                          <CodeIcon className="h-3 w-3 text-violet-400" />
+                          <CodeIcon className="h-3 w-3 text-primary" />
                           <span>Show Code</span>
                         </>
                       )}
@@ -1209,7 +1209,7 @@ function ChatContent() {
                         alert('Copied to clipboard!')
                       }
                     }}
-                    className="h-6 px-2.5 text-[10px] rounded border border-[#27272a] bg-[#1e1e24] text-zinc-300 hover:text-white transition-colors"
+                    className="h-6 px-2.5 text-[10px] rounded-[6px] border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
                   >
                     Copy
                   </button>
@@ -1218,7 +1218,7 @@ function ChatContent() {
                     onClick={() => {
                       alert('Saved to Drive successfully!')
                     }}
-                    className="h-6 px-2.5 text-[10px] rounded border border-[#27272a] bg-[#1e1e24] text-zinc-300 hover:text-white transition-colors"
+                    className="h-6 px-2.5 text-[10px] rounded-[6px] border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
                   >
                     Save to Drive
                   </button>
@@ -1226,7 +1226,7 @@ function ChatContent() {
               </div>
 
               {/* Main Tab Render Body */}
-              <div className="flex-1 flex flex-col overflow-hidden relative min-h-0 bg-[#18181b]">
+              <div className="flex-1 flex flex-col overflow-hidden relative min-h-0 bg-card">
                 {activeTab.type === 'code' && activeTab.sandboxProps ? (
                   showCodeSource ? (
                     renderCodeContent(activeTab.content || '')
@@ -1244,17 +1244,17 @@ function ChatContent() {
                     activeTab.content !== undefined ? (
                       renderCodeContent(activeTab.content)
                     ) : (
-                      <div className="flex items-center justify-center p-6 text-zinc-500 text-xs">
-                        <Loader2 className="h-4 w-4 animate-spin text-zinc-500 mr-2" />
+                      <div className="flex items-center justify-center p-6 text-muted-foreground text-xs bg-card">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
                         Loading document text...
                       </div>
                     )
                   ) : ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes((activeTab.fileType || '').toLowerCase()) ? (
-                    <div className="flex-1 flex items-center justify-center bg-[#121214] p-6 overflow-auto">
+                    <div className="flex-1 flex items-center justify-center bg-background p-6 overflow-auto">
                       <img
                         src={api.documents.downloadUrl(activeTab.docId!)}
                         alt={activeTab.title}
-                        className="max-w-full max-h-full object-contain rounded-lg border border-[#27272a] shadow-2xl bg-zinc-950"
+                        className="max-w-full max-h-full object-contain rounded-[12px] border border-border shadow-xs bg-card"
                       />
                     </div>
                   ) : (
@@ -1268,8 +1268,8 @@ function ChatContent() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-zinc-550 text-center select-none bg-[#18181b]">
-              <FileText className="h-8 w-8 text-zinc-600 mb-2" />
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center select-none bg-background">
+              <FileText className="h-8 w-8 text-muted-foreground/60 mb-2" />
               <p className="text-xs">No active tab content</p>
             </div>
           )}

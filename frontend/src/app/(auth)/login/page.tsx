@@ -2,11 +2,10 @@
 
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 function LogoSpike({ className = "h-5 w-5" }: { className?: string }) {
   return (
-    <svg className={cn("text-[#cc785c] fill-current shrink-0", className)} viewBox="0 0 24 24">
+    <svg className={`text-primary fill-current shrink-0 ${className}`} viewBox="0 0 24 24">
       <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
     </svg>
   )
@@ -14,21 +13,21 @@ function LogoSpike({ className = "h-5 w-5" }: { className?: string }) {
 
 export default function LoginPage() {
   return (
-    <div className="w-full max-w-md p-8 rounded-[12px] border border-[#e6dfd8] bg-[#efe9de] shadow-md relative overflow-hidden animate-fade-in">
+    <div className="w-full max-w-md p-8 rounded-[12px] border border-border bg-card shadow-xs relative overflow-hidden animate-fade-in">
       {/* Subtle top divider line */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#cc785c]" />
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary" />
       
       <div className="text-center space-y-6 mb-8">
         <div className="flex justify-center">
-          <div className="h-12 w-12 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-sm">
+          <div className="h-12 w-12 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
             <LogoSpike className="h-5 w-5" />
           </div>
         </div>
         <div className="space-y-2">
-          <h1 className="text-3xl font-serif font-normal tracking-tight text-[#141413]">
+          <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-foreground">
             Agents
           </h1>
-          <p className="text-sm text-[#6c6a64]">
+          <p className="text-sm text-muted-foreground">
             An elegant, editorial workspace for collaborative AI agents.
           </p>
         </div>
@@ -37,7 +36,7 @@ export default function LoginPage() {
       <div className="space-y-4">
         <Button
           variant="outline"
-          className="w-full h-12 text-[14px] font-medium gap-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#f5f0e8] text-[#141413] transition-all duration-200 active:scale-[0.98] shadow-sm"
+          className="w-full h-12 text-[14px] font-medium gap-3 rounded-[8px] shadow-xs cursor-pointer"
           onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
         >
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -50,7 +49,7 @@ export default function LoginPage() {
         </Button>
       </div>
 
-      <p className="text-center text-xs text-[#6c6a64] mt-8 leading-relaxed">
+      <p className="text-center text-xs text-muted-foreground mt-8 leading-relaxed">
         By signing in, you agree to our Terms of Service<br />and Privacy Policy
       </p>
     </div>

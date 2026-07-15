@@ -16,8 +16,8 @@ import {
   Calendar,
   HardDrive,
   Settings,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeft,
   Plus,
   ChevronDown,
   Trash2
@@ -45,7 +45,7 @@ interface SidebarConversation {
 // 4-point radial spike logo icon representing "Agents"
 function LogoSpike({ className = "h-4.5 w-4.5" }: { className?: string }) {
   return (
-    <svg className={cn("text-[#cc785c] fill-current shrink-0", className)} viewBox="0 0 24 24">
+    <svg className={cn("text-primary fill-current shrink-0", className)} viewBox="0 0 24 24">
       <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
     </svg>
   )
@@ -144,7 +144,7 @@ export function Sidebar() {
     if (list.length === 0) return null
     return (
       <div className="space-y-1 mb-4">
-        <h4 className="px-3 text-[10px] font-semibold text-[#6c6a64] uppercase tracking-wider select-none">
+        <h4 className="px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider select-none">
           {title}
         </h4>
         <div className="space-y-0.5">
@@ -157,8 +157,8 @@ export function Sidebar() {
                 className={cn(
                   "group relative flex items-center justify-between px-3 py-2 rounded-[8px] text-sm cursor-pointer transition-all duration-150",
                   isActive 
-                    ? "bg-[#faf9f5] text-[#141413] border border-[#e6dfd8]" 
-                    : "text-[#6c6a64] hover:text-[#141413] hover:bg-[#faf9f5]/50"
+                    ? "bg-background text-foreground border border-border font-semibold shadow-xs" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                 )}
               >
                 <span className="truncate w-full pr-6 text-xs">
@@ -169,7 +169,7 @@ export function Sidebar() {
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
                   <button 
                     onClick={(e) => handleDeleteConversation(conv.id, e)}
-                    className="p-1 hover:bg-[#e8e0d2] rounded text-[#6c6a64] hover:text-[#141413] transition-colors"
+                    className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3 stroke-[1.5]" />
                   </button>
@@ -185,56 +185,63 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "flex flex-col border-r h-full bg-[#efe9de] border-[#e6dfd8] transition-all duration-300 ease-in-out relative shrink-0",
+        "flex flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out relative shrink-0 overflow-hidden",
         isCollapsed ? "w-[68px]" : "w-[280px]"
       )}
     >
-      {/* Collapse Toggle Button */}
-      <button
-        onClick={toggle}
-        className="absolute top-7 -right-3 h-6 w-6 rounded-full border border-[#e6dfd8] bg-[#faf9f5] flex items-center justify-center text-[#6c6a64] hover:text-[#141413] transition-colors z-50 shadow-sm"
-        title={isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
-      >
-        {isCollapsed ? (
-          <ChevronRight className="h-3.5 w-3.5 stroke-[1.5]" />
-        ) : (
-          <ChevronLeft className="h-3.5 w-3.5 stroke-[1.5]" />
-        )}
-      </button>
-
       {/* Top Header Section */}
-      <div className="p-4 flex flex-col gap-4 border-b border-[#e6dfd8]">
-        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
-          <Link href="/dashboard" className="flex items-center gap-2.5 group">
-            <div className="h-9 w-9 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-sm">
-              <LogoSpike className="h-4.5 w-4.5" />
-            </div>
-            {!isCollapsed && (
-              <span className="font-serif font-normal text-lg tracking-tight text-[#141413]">
-                Agents
-              </span>
-            )}
-          </Link>
+      <div className="p-4 flex flex-col gap-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-between h-9">
+          {isCollapsed ? (
+            <button
+              onClick={toggle}
+              className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all hover:bg-secondary/40 duration-200 shadow-xs shrink-0 mx-auto cursor-pointer"
+              title="Expand sidebar (Ctrl+B)"
+            >
+              <PanelLeft className="h-4.5 w-4.5 text-muted-foreground" />
+            </button>
+          ) : (
+            <>
+              <Link href="/dashboard" className="flex items-center gap-2.5 group">
+                <div className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-xs shrink-0">
+                  <LogoSpike className="h-4.5 w-4.5" />
+                </div>
+                <span className="font-sans font-normal text-lg tracking-[-0.03em] text-[#26251e]">
+                  Agents
+                </span>
+              </Link>
+              <button
+                onClick={toggle}
+                className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                title="Collapse sidebar (Ctrl+B)"
+              >
+                <PanelLeftClose className="h-4.5 w-4.5 stroke-[1.5]" />
+              </button>
+            </>
+          )}
         </div>
 
         {/* Workspace Selector */}
-        {!isCollapsed && (
+        <div className={cn(
+          "transition-all duration-300 ease-in-out overflow-hidden",
+          isCollapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-9"
+        )}>
           <div className="relative">
             <button
               onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-[8px] bg-[#faf9f5] border border-[#e6dfd8] text-xs font-medium text-[#141413] hover:bg-[#f5f0e8] transition-colors shadow-sm"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-[8px] bg-card border border-border text-xs font-semibold text-foreground hover:bg-secondary/40 transition-colors shadow-xs cursor-pointer"
             >
               <div className="flex items-center gap-2 truncate">
-                <div className="h-2 w-2 rounded-full bg-[#5db872]" />
+                <div className="h-2 w-2 rounded-full bg-[#1f8a65]" />
                 <span className="truncate">{selectedWorkspace}</span>
               </div>
-              <ChevronDown className="h-3.5 w-3.5 text-[#6c6a64] stroke-[1.5]" />
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground stroke-[1.5]" />
             </button>
             
             {showWorkspaceMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowWorkspaceMenu(false)} />
-                <div className="absolute top-full left-0 right-0 mt-1.5 p-1 rounded-[8px] bg-[#faf9f5] border border-[#e6dfd8] shadow-md z-20 space-y-0.5 animate-slide-in">
+                <div className="absolute top-full left-0 right-0 mt-1.5 p-1 rounded-[8px] bg-card border border-border shadow-xs z-20 space-y-0.5">
                   {['Personal Space', 'Project Alpha', 'Engineering Team'].map((space) => (
                     <button
                       key={space}
@@ -243,10 +250,10 @@ export function Sidebar() {
                         setShowWorkspaceMenu(false)
                       }}
                       className={cn(
-                        "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors",
+                        "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
                         selectedWorkspace === space
-                          ? "bg-[#efe9de] text-[#141413] font-medium"
-                          : "text-[#6c6a64] hover:text-[#141413] hover:bg-[#efe9de]/60"
+                          ? "bg-secondary text-[#26251e] font-semibold"
+                          : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
                       )}
                     >
                       {space}
@@ -256,21 +263,26 @@ export function Sidebar() {
               </>
             )}
           </div>
-        )}
+        </div>
 
         {/* New Chat Button */}
         <button
           onClick={handleNewChat}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-[8px] border border-[#e6dfd8] text-[13px] font-medium text-[#141413] transition-all active:scale-[0.98] shadow-sm bg-[#faf9f5]",
+            "flex items-center justify-center gap-2 rounded-[8px] border border-border text-[13px] font-semibold text-foreground transition-all active:scale-[0.98] shadow-xs bg-card cursor-pointer",
             isCollapsed 
-              ? "h-9 w-9 hover:bg-[#f5f0e8]" 
-              : "w-full py-2 hover:bg-[#f5f0e8]"
+              ? "h-9 w-9 hover:bg-secondary/40 mx-auto" 
+              : "w-full py-2 hover:bg-secondary/40"
           )}
           title="New Chat"
         >
           <Plus className="h-4 w-4 stroke-[1.5]" />
-          {!isCollapsed && <span>New Chat</span>}
+          <span className={cn(
+            "transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden",
+            isCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+          )}>
+            New Chat
+          </span>
         </button>
       </div>
 
@@ -284,20 +296,25 @@ export function Sidebar() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-[8px] font-medium text-sm transition-all duration-150 relative",
-                    isCollapsed ? "justify-center px-0 h-10 w-10 mx-auto" : "w-full h-10",
+                    "flex items-center gap-3 px-3 py-2 rounded-[8px] font-semibold text-sm transition-all duration-200 relative w-full h-10",
+                    isCollapsed ? "justify-center px-0 h-10 w-10 mx-auto" : "w-full",
                     isActive 
-                      ? "bg-[#faf9f5] text-[#141413] border border-[#e6dfd8] shadow-sm" 
-                      : "text-[#6c6a64] hover:text-[#141413] hover:bg-[#faf9f5]/50"
+                      ? "bg-card text-foreground border border-border shadow-xs" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-card/50"
                   )}
                 >
-                  <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-[#cc785c]" : "text-[#6c6a64] group-hover/tooltip:text-[#141413]")} />
-                  {!isCollapsed && <span className="truncate">{item.name}</span>}
+                  <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                  <span className={cn(
+                    "transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden truncate",
+                    isCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+                  )}>
+                    {item.name}
+                  </span>
                 </Link>
 
                 {/* Collapsed Tooltip */}
                 {isCollapsed && (
-                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 rounded-[6px] bg-[#faf9f5] border border-[#e6dfd8] text-xs font-medium text-[#141413] whitespace-nowrap opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50 shadow-md">
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 rounded-[6px] bg-card border border-border text-xs font-semibold text-foreground whitespace-nowrap opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50 shadow-xs">
                     {item.name}
                   </div>
                 )}
@@ -307,64 +324,70 @@ export function Sidebar() {
         </div>
 
         {/* History / Conversations Section (Hidden when collapsed) */}
-        {!isCollapsed && conversations.length > 0 && (
-          <div className="pt-4 border-t border-[#e6dfd8]">
-            {renderHistorySection("Today", today)}
-            {renderHistorySection("Yesterday", yesterday)}
-            {renderHistorySection("Previous 7 Days", previous7Days)}
-            {renderHistorySection("Older", older)}
-          </div>
-        )}
+        <div className={cn(
+          "transition-all duration-300 ease-in-out overflow-hidden",
+          isCollapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-auto pt-4 border-t border-border"
+        )}>
+          {conversations.length > 0 && (
+            <>
+              {renderHistorySection("Today", today)}
+              {renderHistorySection("Yesterday", yesterday)}
+              {renderHistorySection("Previous 7 Days", previous7Days)}
+              {renderHistorySection("Older", older)}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Footer Profile Section */}
-      <div className="p-4 border-t border-[#e6dfd8] bg-[#efe9de]">
+      <div className="p-4 border-t border-border bg-secondary/85 shrink-0">
         <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
           <div className="relative group/tooltip">
-            <Avatar className="h-9 w-9 border border-[#e6dfd8] cursor-pointer" onClick={() => router.push('/settings')}>
+            <Avatar className="h-9 w-9 border border-border cursor-pointer shrink-0" onClick={() => router.push('/settings')}>
               <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
-              <AvatarFallback className="bg-[#faf9f5] text-xs text-[#6c6a64] font-semibold uppercase">
+              <AvatarFallback className="bg-card text-xs text-muted-foreground font-semibold uppercase">
                 {session?.user?.name?.charAt(0) ?? 'U'}
               </AvatarFallback>
             </Avatar>
 
             {/* Collapsed profile tooltip */}
             {isCollapsed && (
-              <div className="absolute left-full bottom-0 ml-3 p-3 rounded-[8px] bg-[#faf9f5] border border-[#e6dfd8] shadow-md z-50 flex flex-col gap-1.5 pointer-events-none opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
-                <span className="text-xs font-semibold text-[#141413] whitespace-nowrap">{session?.user?.name}</span>
-                <span className="text-[10px] text-[#6c6a64] whitespace-nowrap">{session?.user?.email}</span>
-                <span className="text-[9px] bg-[#cc785c] text-white px-1.5 py-0.5 rounded-[4px] font-bold w-fit uppercase tracking-wider">
+              <div className="absolute left-full bottom-0 ml-3 p-3 rounded-[8px] bg-card border border-border shadow-xs z-50 flex flex-col gap-1.5 pointer-events-none opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+                <span className="text-xs font-semibold text-[#26251e] whitespace-nowrap">{session?.user?.name}</span>
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">{session?.user?.email}</span>
+                <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-[4px] font-bold w-fit uppercase tracking-wider">
                   Pro
                 </span>
               </div>
             )}
           </div>
 
-          {!isCollapsed && (
-            <div className="flex-1 min-w-0 flex items-center justify-between">
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[13px] font-semibold text-[#141413] truncate leading-tight">
-                    {session?.user?.name}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#cc785c] text-white text-[9px] font-bold tracking-wider uppercase select-none">
-                    Pro
-                  </span>
-                </div>
-                <span className="text-[11px] text-[#6c6a64] truncate">
-                  {session?.user?.email}
+          <div className={cn(
+            "flex-1 flex items-center justify-between transition-all duration-300 ease-in-out min-w-0",
+            isCollapsed ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
+          )}>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] font-semibold text-[#26251e] truncate leading-tight">
+                  {session?.user?.name}
+                </span>
+                <span className="px-1.5 py-0.5 rounded-[4px] bg-primary text-primary-foreground text-[9px] font-bold tracking-wider uppercase select-none shrink-0">
+                  Pro
                 </span>
               </div>
-              
-              <Link 
-                href="/settings"
-                className="p-1.5 hover:bg-[#faf9f5] rounded-[8px] text-[#6c6a64] hover:text-[#141413] transition-colors"
-                title="Settings"
-              >
-                <Settings className="h-4 w-4 stroke-[1.5]" />
-              </Link>
+              <span className="text-[11px] text-muted-foreground truncate">
+                {session?.user?.email}
+              </span>
             </div>
-          )}
+            
+            <Link 
+              href="/settings"
+              className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-2"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4 stroke-[1.5]" />
+            </Link>
+          </div>
         </div>
       </div>
     </aside>

@@ -185,11 +185,11 @@ export default function NotesPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
+    <div className="space-y-6 animate-fade-in bg-background">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-normal text-[#141413]">Notes</h1>
-          <p className="text-sm text-[#6c6a64] mt-1">
+          <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Notes</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             {notes.length} note{notes.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -224,18 +224,18 @@ export default function NotesPage() {
           </div>
 
           {loading ? (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
-              <CardContent className="py-12 text-center text-[#6c6a64]">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
                 <p>Loading notes...</p>
               </CardContent>
             </Card>
           ) : filteredNotes.length === 0 ? (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
+            <Card>
               <CardContent className="py-12">
-                <div className="text-center text-[#6c6a64]">
-                  <StickyNote className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
-                  <p className="text-lg font-serif font-normal text-[#141413]">
+                <div className="text-center text-muted-foreground">
+                  <StickyNote className="h-12 w-12 mx-auto mb-3 opacity-40 text-primary" />
+                  <p className="text-lg font-sans font-normal tracking-[-0.02em] text-foreground">
                     {notes.length === 0 ? 'No notes yet' : 'No matching notes'}
                   </p>
                   <p className="text-sm mt-1">
@@ -251,16 +251,16 @@ export default function NotesPage() {
               {filteredNotes.map((note) => (
                 <Card
                   key={note.id}
-                  className={`group cursor-pointer transition-all duration-200 border-[#e6dfd8] shadow-xs flex flex-col justify-between ${
+                  className={`group cursor-pointer transition-all duration-200 border-border shadow-xs flex flex-col justify-between ${
                     selectedNote?.id === note.id 
-                      ? 'ring-1 ring-[#cc785c] bg-[#e8e0d2]' 
-                      : 'bg-[#efe9de] hover:bg-[#e8e0d2]/75'
+                      ? 'ring-1 ring-primary bg-secondary/80' 
+                      : 'bg-card hover:bg-secondary/40'
                   }`}
                   onClick={() => handleSelect(note)}
                 >
                   <CardHeader className="pb-3 p-5">
                     <div className="flex items-start justify-between">
-                      <CardTitle className="text-base font-medium text-[#141413]">{note.title}</CardTitle>
+                      <CardTitle className="text-base font-medium text-foreground">{note.title}</CardTitle>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -274,7 +274,7 @@ export default function NotesPage() {
                       </Button>
                     </div>
                     {note.preview && (
-                      <p className="text-xs text-[#6c6a64] leading-normal line-clamp-2 mt-1">
+                      <p className="text-xs text-muted-foreground leading-normal line-clamp-2 mt-1">
                         {note.preview}
                       </p>
                     )}
@@ -282,11 +282,11 @@ export default function NotesPage() {
                   <CardContent className="pt-0 p-5">
                     <div className="flex items-center gap-2">
                       {note.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag} variant="secondary" className="bg-[#faf9f5] border border-[#e6dfd8] text-[#6c6a64] text-[10px] px-2 py-0.5">
+                        <Badge key={tag} variant="secondary" className="bg-secondary border border-border text-muted-foreground text-[10px] px-2 py-0.5 shadow-none">
                           {tag}
                         </Badge>
                       ))}
-                      <span className="text-[10px] text-[#6c6a64] ml-auto font-sans">
+                      <span className="text-[10px] text-muted-foreground ml-auto font-sans">
                         {formatDate(note.updatedAt)}
                       </span>
                     </div>
@@ -303,11 +303,11 @@ export default function NotesPage() {
             <>
               {/* Export buttons - only when viewing */}
               {!isEditing && !isCreating && selectedNote && (
-                <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+                <Card className="shadow-xs">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3 text-[#6c6a64]">
+                    <div className="flex items-center justify-between mb-3 text-muted-foreground">
                       <h3 className="font-semibold text-xs flex items-center gap-2 uppercase tracking-wider">
-                        <Download className="h-4 w-4 text-[#cc785c]" />
+                        <Download className="h-4 w-4 text-primary" />
                         Export Note
                       </h3>
                     </div>
@@ -320,9 +320,9 @@ export default function NotesPage() {
                         disabled={exportingFormat === 'pdf'}
                       >
                         {exportingFormat === 'pdf' ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         ) : (
-                          <FileText className="h-4 w-4 text-[#cc785c]" />
+                          <FileText className="h-4 w-4 text-primary" />
                         )}
                         PDF
                       </Button>
@@ -334,9 +334,9 @@ export default function NotesPage() {
                         disabled={exportingFormat === 'docx'}
                       >
                         {exportingFormat === 'docx' ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         ) : (
-                          <File className="h-4 w-4 text-[#cc785c]" />
+                          <File className="h-4 w-4 text-primary" />
                         )}
                         DOCX
                       </Button>
@@ -348,9 +348,9 @@ export default function NotesPage() {
                         disabled={exportingFormat === 'markdown'}
                       >
                         {exportingFormat === 'markdown' ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-[#cc785c]" />
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         ) : (
-                          <FileDown className="h-4 w-4 text-[#cc785c]" />
+                          <FileDown className="h-4 w-4 text-primary" />
                         )}
                         MD
                       </Button>
@@ -360,10 +360,10 @@ export default function NotesPage() {
               )}
 
               {/* Note Editor / Viewer */}
-              <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+              <Card className="shadow-xs">
                 <CardHeader className="pb-3 p-5">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-serif font-normal text-[#141413]">
+                    <CardTitle className="text-base font-sans font-normal tracking-[-0.02em] text-foreground">
                       {isCreating ? 'New Note' : isEditing ? 'Edit Note' : selectedNote?.title}
                     </CardTitle>
                     <div className="flex gap-2">
@@ -386,7 +386,7 @@ export default function NotesPage() {
                         </Button>
                       )}
                       {(isCreating || isEditing) && (
-                        <Button variant="ghost" size="icon" onClick={closePanel} className="h-8 w-8 rounded-[8px] hover:bg-[#faf9f5]">
+                        <Button variant="ghost" size="icon" onClick={closePanel} className="h-8 w-8 rounded-[8px] hover:bg-secondary">
                           <X className="h-4 w-4" />
                         </Button>
                       )}
@@ -403,7 +403,7 @@ export default function NotesPage() {
                       />
                       <Textarea
                         placeholder="Write your note content here. You can use Markdown formatting..."
-                        className="min-h-[300px] font-mono text-xs text-[#141413]"
+                        className="min-h-[300px] font-mono text-xs text-foreground"
                         value={formContent}
                         onChange={(e) => setFormContent(e.target.value)}
                       />
@@ -427,7 +427,7 @@ export default function NotesPage() {
                           onClick={handleGenerateWithAI}
                           disabled={saving}
                         >
-                          <Sparkles className="h-4 w-4 text-[#cc785c]" />
+                          <Sparkles className="h-4 w-4 text-primary" />
                           Generate with AI
                         </Button>
                       </div>
@@ -436,17 +436,17 @@ export default function NotesPage() {
                     <div>
                       <div className="flex flex-wrap gap-1 mb-4">
                         {selectedNote.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="bg-[#faf9f5] border border-[#e6dfd8] text-[#6c6a64] text-[10px] px-2 py-0.5">
+                          <Badge key={tag} variant="secondary" className="bg-secondary border border-border text-muted-foreground text-[10px] px-2 py-0.5 shadow-none">
                             {tag}
                           </Badge>
                         ))}
                       </div>
                       <ScrollArea className="h-[400px]">
-                        <div className="max-w-none whitespace-pre-wrap text-sm text-[#141413] leading-relaxed font-sans pr-2">
+                        <div className="max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans pr-2">
                           {selectedNote.content || selectedNote.preview || 'No content'}
                         </div>
                       </ScrollArea>
-                      <div className="flex items-center gap-2 mt-6 pt-4 border-t border-[#e6dfd8] text-[10px] text-[#6c6a64] font-sans">
+                      <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border text-[10px] text-muted-foreground font-sans">
                         <span>Created: {formatDate(selectedNote.createdAt)}</span>
                         <span>·</span>
                         <span>Updated: {formatDate(selectedNote.updatedAt)}</span>
@@ -459,10 +459,10 @@ export default function NotesPage() {
           )}
 
           {!selectedNote && !isCreating && (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
-              <CardContent className="py-16 text-center text-[#6c6a64]">
-                <StickyNote className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
-                <p className="text-lg font-serif font-normal text-[#141413]">Select a note</p>
+            <Card>
+              <CardContent className="py-16 text-center text-muted-foreground">
+                <StickyNote className="h-12 w-12 mx-auto mb-3 opacity-40 text-primary" />
+                <p className="text-lg font-sans font-normal tracking-[-0.02em] text-foreground">Select a note</p>
                 <p className="text-sm mt-1">
                   Choose a note from the list or create a new one
                 </p>

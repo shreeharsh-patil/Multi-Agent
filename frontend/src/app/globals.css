@@ -4,61 +4,61 @@
 
 @layer base {
   :root {
-    --background: 45 17% 97%; /* #faf9f5 - Tinted Cream Canvas */
-    --foreground: 60 4% 7%; /* #141413 - Warm Ink */
-    --card: 38 25% 90%; /* #efe9de - Light Cream Card */
-    --card-foreground: 60 4% 7%;
-    --popover: 38 25% 90%; /* #efe9de */
-    --popover-foreground: 60 4% 7%;
-    --primary: 15 53% 58%; /* #cc785c - Warm Coral CTA */
+    --background: 45 14% 96%; /* #f7f7f4 - Warm Cream Canvas */
+    --foreground: 53 12% 13%; /* #26251e - Warm Ink */
+    --card: 0 0% 100%; /* #ffffff - Pure White Card Surface */
+    --card-foreground: 53 12% 13%;
+    --popover: 0 0% 100%; /* #ffffff */
+    --popover-foreground: 53 12% 13%;
+    --primary: 19 100% 48%; /* #f54e00 - Cursor Orange */
     --primary-foreground: 0 0% 100%;
-    --secondary: 45 17% 97%; /* #faf9f5 */
-    --secondary-foreground: 60 4% 7%;
-    --muted: 45 4% 41%; /* #6c6a64 - Muted Soft Ink */
-    --muted-foreground: 45 4% 41%;
-    --accent: 38 25% 90%;
-    --accent-foreground: 60 4% 7%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 45 17% 97%; /* #fafaf7 - Canvas Soft */
+    --secondary-foreground: 53 12% 13%;
+    --muted: 45 5% 34%; /* #5a5852 - Body Gray */
+    --muted-foreground: 45 5% 34%;
+    --accent: 50 9% 89%; /* #e6e5e0 - Surface Strong / Badges */
+    --accent-foreground: 53 12% 13%;
+    --destructive: 346 64% 49%; /* #cf2d56 - Semantic Error */
     --destructive-foreground: 0 0% 98%;
-    --border: 32 21% 88%; /* #e6dfd8 - Hairline Border */
-    --input: 32 21% 88%;
-    --ring: 15 53% 58%;
+    --border: 50 9% 89%; /* #e6e5e0 - Hairline Divider */
+    --input: 50 9% 89%;
+    --ring: 19 100% 48%;
     --radius: 0.5rem; /* 8px rounded corners */
-    --sidebar-background: 38 25% 90%; /* #efe9de */
-    --sidebar-foreground: 60 4% 7%;
-    --sidebar-border: 32 21% 88%;
-    --sidebar-accent: 45 17% 97%; /* #faf9f5 */
-    --sidebar-accent-foreground: 60 4% 7%;
-    --sidebar-ring: 15 53% 58%;
+    --sidebar-background: 45 17% 97%; /* #fafaf7 - Canvas Soft */
+    --sidebar-foreground: 53 12% 13%;
+    --sidebar-border: 50 9% 89%;
+    --sidebar-accent: 0 0% 100%; /* #ffffff */
+    --sidebar-accent-foreground: 53 12% 13%;
+    --sidebar-ring: 19 100% 48%;
   }
 
   .dark {
-    /* Set dark mode variables to same warm-cream theme for consistency */
-    --background: 45 17% 97%;
-    --foreground: 60 4% 7%;
-    --card: 38 25% 90%;
-    --card-foreground: 60 4% 7%;
-    --popover: 38 25% 90%;
-    --popover-foreground: 60 4% 7%;
-    --primary: 15 53% 58%;
+    /* Keep the light cream mode theme consistent since we are forced light theme */
+    --background: 45 14% 96%;
+    --foreground: 53 12% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 53 12% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 53 12% 13%;
+    --primary: 19 100% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 45 17% 97%;
-    --secondary-foreground: 60 4% 7%;
-    --muted: 45 4% 41%;
-    --muted-foreground: 45 4% 41%;
-    --accent: 38 25% 90%;
-    --accent-foreground: 60 4% 7%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary-foreground: 53 12% 13%;
+    --muted: 45 5% 34%;
+    --muted-foreground: 45 5% 34%;
+    --accent: 50 9% 89%;
+    --accent-foreground: 53 12% 13%;
+    --destructive: 346 64% 49%;
     --destructive-foreground: 0 0% 98%;
-    --border: 32 21% 88%;
-    --input: 32 21% 88%;
-    --ring: 15 53% 58%;
-    --sidebar-background: 38 25% 90%;
-    --sidebar-foreground: 60 4% 7%;
-    --sidebar-border: 32 21% 88%;
-    --sidebar-accent: 45 17% 97%;
-    --sidebar-accent-foreground: 60 4% 7%;
-    --sidebar-ring: 15 53% 58%;
+    --border: 50 9% 89%;
+    --input: 50 9% 89%;
+    --ring: 19 100% 48%;
+    --sidebar-background: 45 17% 97%;
+    --sidebar-foreground: 53 12% 13%;
+    --sidebar-border: 50 9% 89%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 53 12% 13%;
+    --sidebar-ring: 19 100% 48%;
   }
 }
 
@@ -67,13 +67,13 @@
     @apply border-border transition-colors duration-150;
   }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-[#cc785c] selection:text-white font-sans;
+    @apply bg-background text-foreground antialiased selection:bg-[#f54e00] selection:text-white font-sans;
   }
   h1, h2, h3 {
-    @apply font-serif font-normal tracking-[-0.02em] text-[#141413];
+    @apply font-sans font-normal tracking-[-0.03em] text-[#26251e] leading-tight;
   }
   h4, h5, h6 {
-    @apply font-sans font-medium text-[#141413];
+    @apply font-sans font-medium text-[#26251e];
   }
 }
 
@@ -89,6 +89,6 @@
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-[#e6dfd8] rounded-full hover:bg-[#cc785c]/30 transition-colors;
+    @apply bg-[#e6e5e0] rounded-full hover:bg-[#f54e00]/30 transition-colors;
   }
 }

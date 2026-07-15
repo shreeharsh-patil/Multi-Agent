@@ -114,8 +114,8 @@ Format the response with clear sections and bullet points.`,
     <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-normal text-[#141413]">Planner</h1>
-          <p className="text-sm text-[#6c6a64] mt-1">
+          <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Planner</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Study planning, task management, and schedule tracking
           </p>
         </div>
@@ -126,7 +126,7 @@ Format the response with clear sections and bullet points.`,
             className="gap-2 h-9 rounded-[8px]"
             onClick={() => { setView('list'); setCurrentPlan(null) }}
           >
-            <ListTodo className="h-4 w-4 text-[#cc785c]" />
+            <ListTodo className="h-4 w-4 text-primary" />
             Plans
           </Button>
           <Button
@@ -136,7 +136,7 @@ Format the response with clear sections and bullet points.`,
             onClick={() => setView('plan')}
             disabled={!currentPlan}
           >
-            <Calendar className="h-4 w-4 text-[#cc785c]" />
+            <Calendar className="h-4 w-4 text-primary" />
             Plan
           </Button>
         </div>
@@ -152,7 +152,7 @@ Format the response with clear sections and bullet points.`,
       )}
 
       {/* Input */}
-      <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+      <Card className="shadow-xs">
         <CardContent className="p-4">
           <div className="flex gap-3">
             <Input
@@ -177,10 +177,10 @@ Format the response with clear sections and bullet points.`,
 
       {/* Loading */}
       {planning && (
-        <Card className="border-[#e6dfd8] bg-[#efe9de]">
-          <CardContent className="py-8 text-center text-[#6c6a64]">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
-            <p className="font-serif font-normal text-lg text-[#141413]">Creating your plan...</p>
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+            <p className="font-sans font-normal tracking-[-0.02em] text-lg text-foreground">Creating your plan...</p>
             <p className="text-xs mt-1">Breaking down tasks and organizing priorities</p>
           </CardContent>
         </Card>
@@ -188,16 +188,16 @@ Format the response with clear sections and bullet points.`,
 
       {/* Plan View */}
       {view === 'plan' && currentPlan && !planning && (
-        <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+        <Card className="shadow-xs">
           <CardHeader className="p-5 pb-3">
-            <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
-              <Sparkles className="h-4.5 w-4.5 text-[#cc785c]" />
+            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
+              <Sparkles className="h-4.5 w-4.5 text-primary" />
               {currentPlan.title}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-5 pt-0">
             <ScrollArea className="max-h-[500px]">
-              <div className="max-w-none whitespace-pre-wrap text-sm text-[#141413] leading-relaxed font-sans pr-2">
+              <div className="max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans pr-2">
                 {currentPlan.content}
               </div>
             </ScrollArea>
@@ -209,31 +209,31 @@ Format the response with clear sections and bullet points.`,
       {view === 'list' && (
         <>
           <div className="grid gap-6 md:grid-cols-1">
-            <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+            <Card className="shadow-xs">
               <CardHeader className="pb-2 p-5">
-                <CardTitle className="text-base font-serif font-normal text-[#141413] flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-[#cc785c]" />
+                <CardTitle className="text-base font-sans font-normal tracking-[-0.02em] text-foreground flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
                   Total Plans
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-5 pt-0">
-                <p className="text-4.5xl font-serif font-normal text-[#141413]">{plans.length}</p>
+                <p className="text-4.5xl font-sans font-normal text-foreground">{plans.length}</p>
               </CardContent>
             </Card>
           </div>
 
           {loading ? (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
-              <CardContent className="py-8 text-center text-[#6c6a64]">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#cc785c]" />
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
                 <p>Loading plans...</p>
               </CardContent>
             </Card>
           ) : plans.length > 0 ? (
-            <Card className="border-[#e6dfd8] bg-[#efe9de] shadow-xs">
+            <Card className="shadow-xs">
               <CardHeader className="p-5">
-                <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
-                  <Calendar className="h-4.5 w-4.5 text-[#cc785c]" />
+                <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
+                  <Calendar className="h-4.5 w-4.5 text-primary" />
                   My Plans
                 </CardTitle>
               </CardHeader>
@@ -242,17 +242,17 @@ Format the response with clear sections and bullet points.`,
                   {plans.map((plan) => (
                     <div
                       key={plan.id}
-                      className="group flex items-center justify-between p-3 rounded-[8px] border border-[#e6dfd8] bg-[#faf9f5] hover:bg-[#efe9de]/50 transition-colors cursor-pointer shadow-xs"
+                      className="group flex items-center justify-between p-3 rounded-[8px] border border-border bg-secondary hover:bg-secondary/70 transition-colors cursor-pointer shadow-xs"
                       onClick={() => { setCurrentPlan(plan); setView('plan') }}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-[#141413] truncate">{plan.title}</p>
-                        <p className="text-[10px] text-[#6c6a64] mt-0.5 font-sans">
+                        <p className="font-medium text-sm text-foreground truncate">{plan.title}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 font-sans">
                           {formatDate(plan.createdAt)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary" className="bg-[#efe9de] text-[#6c6a64] border border-[#e6dfd8] text-[10px] px-2 py-0.5">Plan</Badge>
+                        <Badge variant="secondary" className="bg-card text-muted-foreground border border-border text-[10px] px-2 py-0.5 shadow-none">Plan</Badge>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -268,17 +268,17 @@ Format the response with clear sections and bullet points.`,
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-[#e6dfd8] bg-[#efe9de]">
+            <Card>
               <CardHeader className="p-5">
-                <CardTitle className="flex items-center gap-2 font-serif font-normal text-lg text-[#141413]">
-                  <Calendar className="h-4.5 w-4.5 text-[#cc785c]" />
+                <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
+                  <Calendar className="h-4.5 w-4.5 text-primary" />
                   My Plans
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-5 pt-0">
-                <div className="text-center py-12 text-[#6c6a64]">
-                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#cc785c]" />
-                  <p className="font-serif font-normal text-lg text-[#141413]">No plans yet</p>
+                <div className="text-center py-12 text-muted-foreground">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-40 text-primary" />
+                  <p className="font-sans font-normal tracking-[-0.02em] text-lg text-foreground">No plans yet</p>
                   <p className="text-sm mt-1">
                     Describe a task or goal above to create an AI-generated plan
                   </p>
