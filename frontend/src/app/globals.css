@@ -33,32 +33,32 @@
   }
 
   .dark {
-    /* Sleek obsidian/carbon dark mode palette */
-    --background: 240 10% 3.9%; /* Rich dark charcoal (#09090b) */
-    --foreground: 0 0% 98%;
-    --card: 240 10% 5.5%; /* Elevated dark grey card (#0e0e11) */
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 5.5%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 12%; /* Sleek button dark background */
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 12%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 3.7% 15%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    /* Premium Minimalist dark mode palette */
+    --background: 240 8% 5%; /* #0B0B0D */
+    --foreground: 240 5% 96%; /* #F5F5F7 */
+    --card: 240 5% 11%; /* #1A1A1D */
+    --card-foreground: 240 5% 96%; /* #F5F5F7 */
+    --popover: 240 5% 11%; /* #1A1A1D */
+    --popover-foreground: 240 5% 96%; /* #F5F5F7 */
+    --primary: 0 0% 100%; /* Pure White */
+    --primary-foreground: 240 8% 5%; /* #0B0B0D */
+    --secondary: 0 0% 7%; /* #111111 */
+    --secondary-foreground: 240 5% 96%;
+    --muted: 240 5% 11%; /* #1A1A1D */
+    --muted-foreground: 240 5% 65%; /* #A1A1AA */
+    --accent: 240 4% 14%; /* #232326 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 12%; /* Thin sharp borders */
-    --input: 240 3.7% 12%;
-    --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 10% 3%; /* Ultra dark sidebar (#070708) */
-    --sidebar-foreground: 240 5% 80%;
-    --sidebar-border: 240 3.7% 10%;
-    --sidebar-accent: 240 3.7% 12%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 240 6% 17%; /* #2A2A2F */
+    --input: 240 6% 17%; /* #2A2A2F */
+    --ring: 0 0% 100%;
+    --sidebar-background: 0 0% 7%; /* #111111 */
+    --sidebar-foreground: 240 5% 65%; /* #A1A1AA */
+    --sidebar-border: 240 6% 17%; /* #2A2A2F */
+    --sidebar-accent: 240 5% 11%; /* #1A1A1D */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-ring: 0 0% 100%;
   }
 }
 

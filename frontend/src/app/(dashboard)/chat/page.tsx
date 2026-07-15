@@ -648,14 +648,14 @@ function ChatContent() {
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   return (
-    <div className="flex h-[calc(100vh-84px)] gap-0 -m-6 overflow-hidden bg-[#121214] animate-fade-in relative">
+    <div className="flex h-[calc(100vh-84px)] gap-0 -m-6 overflow-hidden bg-[#0B0B0D] animate-fade-in relative">
       {/* 1. LEFT PANEL: Explorer & Past Conversations */}
-      <aside className="hidden md:flex w-[240px] flex-col bg-[#0c0c0e] border-r border-[#27272a] h-full shrink-0 select-none">
+      <aside className="hidden md:flex w-[260px] flex-col bg-[#111111] border-r border-[#2A2A2F] h-full shrink-0 select-none">
         {/* Upper Section: Documents Explorer */}
-        <div className="flex-1 flex flex-col min-h-0 border-b border-[#27272a]">
-          <div className="p-3 border-b border-[#27272a] flex items-center justify-between bg-[#070708]">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Documents Explorer</span>
-            <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
+        <div className="flex-1 flex flex-col min-h-0 border-b border-[#2A2A2F]">
+          <div className="p-4 border-b border-[#2A2A2F] flex items-center justify-between bg-[#111111]">
+            <span className="text-[11px] font-semibold text-[#A1A1AA] uppercase tracking-wider">Documents Explorer</span>
+            <FolderOpen className="h-4 w-4 text-[#71717A]" />
           </div>
           <ScrollArea className="flex-1 p-2">
             {loadingDocuments ? (
@@ -663,7 +663,7 @@ function ChatContent() {
                 <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
               </div>
             ) : documents.length === 0 ? (
-              <div className="text-center py-6 text-[10px] text-zinc-500 font-sans px-2">
+              <div className="text-center py-6 text-[11px] text-[#71717A] font-sans px-2">
                 No documents found. Drag & drop files in chat or use paperclip.
               </div>
             ) : (
@@ -677,12 +677,12 @@ function ChatContent() {
                     <button
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc)}
-                      className={`w-full flex items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs transition-all hover:bg-zinc-900/60 ${
-                        isTabActive ? 'bg-[#18181b] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                      className={`w-full flex items-center gap-2.5 rounded-[12px] px-3 py-2 text-left text-xs transition-all hover:bg-[#1A1A1D] ${
+                        isTabActive ? 'bg-[#1A1A1D] text-white font-medium border border-[#2A2A2F]' : 'text-[#A1A1AA] hover:text-[#F5F5F7]'
                       }`}
                     >
-                      <Icon className={`h-3.5 w-3.5 shrink-0 ${isTabActive ? 'text-violet-400' : 'text-zinc-500'}`} />
-                      <span className="truncate flex-1 font-sans text-[11px]">{doc.fileName}</span>
+                      <Icon className={`h-4 w-4 shrink-0 ${isTabActive ? 'text-white' : 'text-[#71717A]'}`} />
+                      <span className="truncate flex-1 font-sans text-xs">{doc.fileName}</span>
                     </button>
                   )
                 })}
@@ -692,14 +692,14 @@ function ChatContent() {
         </div>
 
         {/* Lower Section: Past Conversations list */}
-        <div className="flex-1 flex flex-col min-h-0 bg-[#08080a]">
-          <div className="p-3 border-b border-[#27272a] flex items-center justify-between bg-[#070708]">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Conversations</span>
+        <div className="flex-1 flex flex-col min-h-0 bg-[#111111]">
+          <div className="p-4 border-b border-[#2A2A2F] flex items-center justify-between bg-[#111111]">
+            <span className="text-[11px] font-semibold text-[#A1A1AA] uppercase tracking-wider">Conversations</span>
             <button
               onClick={startNewConversation}
-              className="text-[10px] font-medium text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors"
+              className="text-xs font-medium text-white hover:text-[#F5F5F7] flex items-center gap-1 transition-colors"
             >
-              <Sparkles className="h-3 w-3" />
+              <Sparkles className="h-3.5 w-3.5" />
               New
             </button>
           </div>
@@ -709,7 +709,7 @@ function ChatContent() {
                 <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
               </div>
             ) : conversations.length === 0 ? (
-              <div className="text-center py-6 text-[10px] text-zinc-500 font-sans">
+              <div className="text-center py-6 text-[11px] text-[#71717A] font-sans">
                 No past conversations.
               </div>
             ) : (
@@ -903,29 +903,42 @@ function ChatContent() {
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none">
-              <Sparkles className="h-10 w-10 text-violet-500/50 mb-3 animate-pulse" />
-              <p className="text-sm font-semibold text-zinc-300">How can I help you today?</p>
-              <p className="text-xs text-zinc-555 max-w-xs mt-1">
-                Upload files using the paperclip, select agents, or choose a suggestion below.
-              </p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none bg-[#0B0B0D]">
+              <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-12">
+                <div className="space-y-4">
+                  <div className="flex justify-center">
+                    <div className="h-14 w-14 rounded-[20px] border border-[#2A2A2F] bg-[#1A1A1D] flex items-center justify-center transition-transform hover:scale-105 duration-300">
+                      <Sparkles className="h-6 w-6 text-white stroke-[1.25]" />
+                    </div>
+                  </div>
+                  <h1 className="text-4xl font-semibold tracking-tight text-[#F5F5F7]">
+                    How can I help you today?
+                  </h1>
+                  <p className="text-sm text-[#A1A1AA] max-w-md mx-auto leading-relaxed">
+                    Ask anything, analyze documents, or delegate tasks to specialized AI agents in this premium workspace.
+                  </p>
+                </div>
 
-              {/* Central quick suggestion buttons */}
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full px-4">
-                {[
-                  'Summarize this document',
-                  'What are the key findings?',
-                  'Extract all important dates',
-                  'Generate a quiz from the content',
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="p-3 rounded-xl border border-[#27272a] bg-[#1e1e24]/40 hover:bg-[#1e1e24] text-left text-xs text-zinc-400 hover:text-white transition-all duration-200 hover:border-zinc-700 hover:shadow-md"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
+                {/* Central quick suggestion buttons as premium cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full px-4">
+                  {[
+                    { text: 'Research a topic', desc: 'Perform deep search across the web', icon: Globe },
+                    { text: 'Analyze a file', desc: 'Upload documents or spreadsheets', icon: FileText },
+                    { text: 'Generate code', desc: 'Write, debug or refactor code', icon: CodeIcon },
+                    { text: 'Create an image', desc: 'Generate high-fidelity visual assets', icon: ImageIcon },
+                    { text: 'Write something', desc: 'Draft articles, copy, or summaries', icon: FileCode },
+                  ].map((card) => (
+                    <button
+                      key={card.text}
+                      onClick={() => handleSuggestionClick(card.text)}
+                      className="group flex flex-col items-start p-5 rounded-[20px] border border-[#2A2A2F] bg-[#1A1A1D] text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-500/20 active:scale-[0.99]"
+                    >
+                      <card.icon className="h-5 w-5 text-[#A1A1AA] group-hover:text-white transition-colors stroke-[1.5] mb-3" />
+                      <span className="text-[15px] font-semibold text-[#F5F5F7] mb-1">{card.text}</span>
+                      <span className="text-xs text-[#71717A] leading-normal">{card.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
@@ -1058,7 +1071,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-[#1e1e24] border border-[#27272a] rounded-2xl p-2 focus-within:ring-1 focus-within:ring-violet-500/50 shadow-lg">
+            <div className="relative flex items-center bg-[#1A1A1D] border border-[#2A2A2F] rounded-[30px] min-h-20 p-3.5 focus-within:border-[#71717A] shadow-xl w-full max-w-3xl mx-auto transition-all duration-200">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1072,13 +1085,13 @@ function ChatContent() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="rounded-xl h-8 w-8 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 shrink-0"
+                className="rounded-[16px] h-10 w-10 hover:bg-[#232326] text-[#A1A1AA] hover:text-[#F5F5F7] shrink-0"
               >
-                <Paperclip className="h-4.5 w-4.5" />
+                <Paperclip className="h-5 w-5 stroke-[1.5]" />
               </Button>
               <textarea
                 ref={textareaRef}
-                placeholder={teamMode ? 'Assign your specialists a multi-step task...' : 'Ask your RAG agent...'}
+                placeholder={teamMode ? 'Assign your specialists a multi-step task...' : 'Ask anything...'}
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value)
@@ -1087,7 +1100,7 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-2.5 py-1.5 text-sm text-zinc-155 placeholder:text-zinc-500 min-h-[36px] max-h-[140px] scrollbar-thin"
+                className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 resize-none px-4 py-2 text-[15px] text-[#F5F5F7] placeholder:text-[#71717A] min-h-[40px] max-h-[140px] scrollbar-thin"
                 disabled={sending}
               />
               <Button
@@ -1095,17 +1108,18 @@ function ChatContent() {
                 size="icon"
                 onClick={toggleVoiceInput}
                 disabled={sending}
-                className={`rounded-xl h-8 w-8 text-zinc-400 hover:text-zinc-200 shrink-0 ${isListening ? 'bg-red-950/40 text-red-400 animate-pulse' : 'hover:bg-zinc-800'}`}
+                className={`rounded-[16px] h-10 w-10 text-[#A1A1AA] hover:text-[#F5F5F7] shrink-0 ${isListening ? 'bg-red-950/40 text-red-400 animate-pulse' : 'hover:bg-[#232326]'}`}
               >
-                {isListening ? <Square className="h-3.5 w-3.5 fill-current" /> : <Mic className="h-4 w-4" />}
+                {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5 stroke-[1.5]" />}
               </Button>
               <Button
                 onClick={handleSend}
                 disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
-                className="rounded-xl h-8 px-4 text-xs gap-1.5 bg-violet-600 hover:bg-violet-500 text-white shadow-md font-medium shrink-0 ml-1"
+                className="rounded-[16px] h-10 w-10 hover:scale-[1.03] transition-all bg-white hover:bg-zinc-200 text-black shadow-md font-medium shrink-0 ml-2"
+                size="icon"
+                title="Send"
               >
-                {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                Send
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 stroke-[2]" />}
               </Button>
             </div>
           </div>

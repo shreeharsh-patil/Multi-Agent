@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/sidebar'
 import { TopBar } from '@/components/top-bar'
 import { requireAuth } from '@/lib/session'
+import { SidebarProvider } from '@/context/sidebar-context'
 
 export default async function DashboardLayout({
   children,
@@ -10,15 +11,17 @@ export default async function DashboardLayout({
   await requireAuth()
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <TopBar />
-        <main className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-          {children}
-        </main>
+    <SidebarProvider>
+      <div className="flex h-screen overflow-hidden bg-background text-foreground">
+        <Sidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <TopBar />
+          <main className="flex-1 overflow-y-auto p-6 scrollbar-thin bg-background">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }
 
