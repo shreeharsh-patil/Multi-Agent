@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     openrouter_model: str = "google/gemini-2.0-flash-exp"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    nararouter_api_key: str = ""
+    nararouter_model: str = "auto/bynara"
+    nararouter_base_url: str = "https://router.bynara.id/v1"
+
     groq_api_key: str = ""
     groq_model: str = "mixtral-8x7b-32768"
 
@@ -109,6 +113,11 @@ if settings.openrouter_api_key:
     first_key = next((k.strip() for k in settings.openrouter_api_key.split(",") if k.strip()), "")
     if first_key:
         os.environ["OPENROUTER_API_KEY"] = first_key
+
+if settings.nararouter_api_key:
+    first_key = next((k.strip() for k in settings.nararouter_api_key.split(",") if k.strip()), "")
+    if first_key:
+        os.environ["NARAROUTER_API_KEY"] = first_key
 
 if settings.groq_api_key:
     first_key = next((k.strip() for k in settings.groq_api_key.split(",") if k.strip()), "")

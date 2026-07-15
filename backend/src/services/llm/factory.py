@@ -37,8 +37,17 @@ def get_llm_provider() -> BaseLLMProvider:
             model=settings.groq_model,
             base_url="https://api.groq.com/openai/v1",
         )
+    elif provider_name == "nararouter":
+        if not settings.nararouter_api_key:
+            raise ValueError("NARAROUTER_API_KEY not configured")
+        _LLMProvider = OpenAICompatibleProvider(
+            name="NaraRouter",
+            api_key=settings.nararouter_api_key,
+            model=settings.nararouter_model,
+            base_url=settings.nararouter_base_url,
+        )
     else:
-        raise ValueError(f"Unknown LLM provider: {provider_name}. Supported: gemini, openrouter, groq")
+        raise ValueError(f"Unknown LLM provider: {provider_name}. Supported: gemini, openrouter, groq, nararouter")
 
     logger.info(f"LLM provider selected: {provider_name}")
     return _LLMProvider

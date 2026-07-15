@@ -68,10 +68,10 @@ async def synthesize(req: SynthesizeRequest):
             "Content-Type": "application/json",
         }
         
-        # Requests audio from Deepgram's aura-helios-en model (premium voice)
+        # Requests audio from Deepgram's aura-asteria-en model (premium voice)
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://api.deepgram.com/v1/speak?model=aura-helios-en",
+                "https://api.deepgram.com/v1/speak?model=aura-asteria-en",
                 json={"text": req.text},
                 headers=headers,
                 timeout=60.0

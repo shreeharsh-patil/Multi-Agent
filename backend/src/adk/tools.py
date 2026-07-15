@@ -43,7 +43,7 @@ class FirecrawlRotator:
             
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
-                    url = f"https://api.firecrawl.dev/v1{endpoint}"
+                    url = f"https://api.firecrawl.dev/v2{endpoint}"
                     if method.upper() == "POST":
                         response = await client.post(url, headers=headers, **req_kwargs)
                     else:
@@ -228,19 +228,24 @@ async def web_search(query: str) -> str:
         try:
             logger.info(f"Using Firecrawl search for query: {query}")
             response = await firecrawl_rotator.execute_request(
-                "POST", 
-                "/search", 
-                json={"query": query, "limit": 5, "lang": "en"}
+                "POST",
+                "/search",
+                json={"query": query, "limit": 5, "lang": "en", "scrapeOptions": {"formats": ["markdown"]}}
             )
-            data = response.get("data", [])
+            # v2 returns results at top-level key "data" (list of objects)
+            data = response.get("data", []) or response.get("results", [])
             if not data:
                 return f"No results found on Firecrawl for query: '{query}'"
-            
+
             results = []
             for item in data[:3]:
                 title = item.get("title", "No Title")
                 url = item.get("url", "No URL")
-                snippet = item.get("description", "") or item.get("markdown", "")[:300]
+                snippet = (
+                    item.get("description", "")
+                    or item.get("markdown", "")[:300]
+                    or item.get("content", "")[:300]
+                )
                 results.append(f"### {title}\nURL: {url}\n{snippet}\n")
             return "\n".join(results)
         except Exception as e:
@@ -311,7 +316,7 @@ async def scrape_page(url: str) -> str:
         response = await firecrawl_rotator.execute_request(
             "POST",
             "/scrape",
-            json={"url": url, "formats": ["markdown"]}
+            json={"url": url, "formats": ["markdown"], "onlyMainContent": True}
         )
         markdown = response.get("data", {}).get("markdown", "")
         if not markdown:
