@@ -186,18 +186,6 @@ export function Sidebar() {
         isCollapsed ? "w-[68px]" : "w-[300px]"
       )}
     >
-      {/* Collapse Toggle Button */}
-      <button
-        onClick={toggle}
-        className="absolute top-7 -right-3 h-6 w-6 rounded-full border border-[#2A2A2F] bg-[#1A1A1D] flex items-center justify-center text-[#A1A1AA] hover:text-white transition-colors z-50 shadow-md"
-        title={isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
-      >
-        {isCollapsed ? (
-          <ChevronRight className="h-3.5 w-3.5 stroke-[1.5]" />
-        ) : (
-          <ChevronLeft className="h-3.5 w-3.5 stroke-[1.5]" />
-        )}
-      </button>
 
       {/* Top Header Section */}
       <div className="p-4 flex flex-col gap-4 border-b border-[#2A2A2F]">

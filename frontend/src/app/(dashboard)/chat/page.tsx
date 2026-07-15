@@ -1128,7 +1128,7 @@ function ChatContent() {
 
       {/* 3. RIGHT PANEL: Cursor-Style Editor Canvas */}
       {tabs.length > 0 && (
-        <aside className="flex flex-col flex-1 h-full bg-[#18181b] border-l border-[#27272a] overflow-hidden">
+        <aside className="flex flex-col flex-1 h-full bg-[#18181b] border-l border-[#27272a] overflow-hidden min-w-0">
           {/* Tab Header bar */}
           <div className="flex bg-[#0c0c0e] border-b border-[#27272a] h-9 shrink-0 overflow-x-auto scrollbar-thin select-none">
             {tabs.map((tab) => {

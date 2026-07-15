@@ -16,7 +16,7 @@ export default async function DashboardLayout({
         <Sidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar />
-          <main className="flex-1 overflow-y-auto p-6 scrollbar-thin bg-background">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 scrollbar-thin bg-background">
             {children}
           </main>
         </div>
@@ -24,4 +24,3 @@ export default async function DashboardLayout({
     </SidebarProvider>
   )
 }
-
