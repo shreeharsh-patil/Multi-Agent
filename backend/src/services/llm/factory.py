@@ -46,8 +46,17 @@ def get_llm_provider() -> BaseLLMProvider:
             model=settings.nararouter_model,
             base_url=settings.nararouter_base_url,
         )
+    elif provider_name == "mistral":
+        if not settings.mistral_api_key:
+            raise ValueError("MISTRAL_API_KEY not configured")
+        _LLMProvider = OpenAICompatibleProvider(
+            name="Mistral",
+            api_key=settings.mistral_api_key,
+            model=settings.mistral_model,
+            base_url=settings.mistral_base_url,
+        )
     else:
-        raise ValueError(f"Unknown LLM provider: {provider_name}. Supported: gemini, openrouter, groq, nararouter")
+        raise ValueError(f"Unknown LLM provider: {provider_name}. Supported: gemini, openrouter, groq, nararouter, mistral")
 
     logger.info(f"LLM provider selected: {provider_name}")
     return _LLMProvider

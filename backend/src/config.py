@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     nararouter_model: str = "auto/bynara"
     nararouter_base_url: str = "https://router.bynara.id/v1"
 
+    mistral_api_key: str = ""
+    mistral_model: str = "mistral-large-latest"
+    mistral_base_url: str = "https://api.mistral.ai/v1"
+
     groq_api_key: str = ""
     groq_model: str = "mixtral-8x7b-32768"
 
