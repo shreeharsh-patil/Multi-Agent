@@ -185,8 +185,8 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "hidden md:flex flex-col border-r h-full bg-[#111111] border-[#2A2A2F] transition-all duration-250 ease-in-out relative shrink-0 overflow-x-hidden",
-        isCollapsed ? "w-[68px]" : "w-[300px]"
+        "flex flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out relative shrink-0 overflow-hidden overflow-x-hidden",
+        isCollapsed ? "w-[68px]" : "w-[280px]"
       )}
     >
       {/* Top Header Section */}
@@ -269,10 +269,10 @@ export function Sidebar() {
         <button
           onClick={handleNewChat}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-[8px] border border-border text-[13px] font-semibold text-foreground transition-all active:scale-[0.98] shadow-xs bg-card cursor-pointer",
+            "flex items-center justify-center rounded-[8px] border border-border text-[13px] font-semibold text-foreground transition-all active:scale-[0.98] shadow-xs bg-card cursor-pointer",
             isCollapsed 
-              ? "h-9 w-9 hover:bg-secondary/40 mx-auto" 
-              : "w-full py-2 hover:bg-secondary/40"
+              ? "h-9 w-9 hover:bg-secondary/40 mx-auto gap-0" 
+              : "w-full py-2 hover:bg-secondary/40 gap-2"
           )}
           title="New Chat"
         >
@@ -287,7 +287,10 @@ export function Sidebar() {
       </div>
 
       {/* Main Navigation Links */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-6 scrollbar-thin">
+      <div className={cn(
+        "flex-1 px-3 py-4 space-y-6",
+        isCollapsed ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden scrollbar-thin"
+      )}>
         <div className="space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -296,8 +299,10 @@ export function Sidebar() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-[8px] font-semibold text-sm transition-all duration-200 relative w-full h-10",
-                    isCollapsed ? "justify-center px-0 h-10 w-10 mx-auto" : "w-full",
+                    "flex items-center rounded-[8px] font-semibold text-sm transition-all duration-200 relative h-10",
+                    isCollapsed 
+                      ? "justify-center h-10 w-10 mx-auto gap-0 px-0" 
+                      : "w-full px-3 py-2 gap-3",
                     isActive 
                       ? "bg-card text-foreground border border-border shadow-xs" 
                       : "text-muted-foreground hover:text-foreground hover:bg-card/50"
@@ -362,32 +367,31 @@ export function Sidebar() {
             )}
           </div>
 
-          <div className={cn(
-            "flex-1 flex items-center justify-between transition-all duration-300 ease-in-out min-w-0",
-            isCollapsed ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
-          )}>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[13px] font-semibold text-[#26251e] truncate leading-tight">
-                  {session?.user?.name}
-                </span>
-                <span className="px-1.5 py-0.5 rounded-[4px] bg-primary text-primary-foreground text-[9px] font-bold tracking-wider uppercase select-none shrink-0">
-                  Pro
+          {!isCollapsed && (
+            <div className="flex-1 flex items-center justify-between transition-all duration-300 ease-in-out min-w-0">
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-semibold text-[#26251e] truncate leading-tight">
+                    {session?.user?.name}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-primary text-primary-foreground text-[9px] font-bold tracking-wider uppercase select-none shrink-0">
+                    Pro
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground truncate">
+                  {session?.user?.email}
                 </span>
               </div>
-              <span className="text-[11px] text-muted-foreground truncate">
-                {session?.user?.email}
-              </span>
+              
+              <Link 
+                href="/settings"
+                className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-2"
+                title="Settings"
+              >
+                <Settings className="h-4 w-4 stroke-[1.5]" />
+              </Link>
             </div>
-            
-            <Link 
-              href="/settings"
-              className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-2"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4 stroke-[1.5]" />
-            </Link>
-          </div>
+          )}
         </div>
       </div>
     </aside>
