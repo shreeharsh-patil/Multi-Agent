@@ -3,95 +3,197 @@ import { getAccessToken } from '@/lib/auth-store'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
+/** Retry configuration for network-level failures (cold starts, QUIC errors, etc.). */
+const RETRY_LIMIT = 3
+const RETRY_BASE_MS = 1000
+const RETRY_MAX_MS = 8000
+
+/** Compute the delay before the next retry using capped exponential backoff. */
+function retryDelay(attempt: number): number {
+  const delay = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS)
+  return delay + Math.random() * 500  // jitter to avoid thundering herd
+}
+
+/**
+ * True for network-level failures that are safe to retry (cold starts,
+ * QUIC protocol errors, DNS failures, intermittent disconnects).
+ * HTTP 4xx/5xx responses are NOT retried — those are application errors.
+ */
+function isRetryableNetworkError(error: unknown): boolean {
+  if (!(error instanceof TypeError)) return false
+  const msg = error.message.toLowerCase()
+  return (
+    msg.includes('networkerror') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('internet disconnected') ||
+    msg.includes('quic') ||
+    msg.includes('load failed') ||
+    msg.includes('abort') ||
+    msg.includes('timeout')
+  )
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = 60_000,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    return res
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<ApiResponse<T>> {
-  try {
-    const headers: Record<string, string> = {}
-    const isFormData = options?.body instanceof FormData
-    if (!isFormData) {
-      headers['Content-Type'] = 'application/json'
-    }
+  let lastError: unknown
 
-    // Attach JWT access token if available
-    const token = getAccessToken()
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
+  for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
+    try {
+      const headers: Record<string, string> = {}
+      const isFormData = options?.body instanceof FormData
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json'
+      }
 
-    const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-      ...options,
-      headers: { ...headers, ...options?.headers },
-    })
-    return await res.json()
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Network error',
+      // Attach JWT access token if available
+      const token = getAccessToken()
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const res = await fetchWithTimeout(`${BACKEND_URL}${endpoint}`, {
+        ...options,
+        headers: { ...headers, ...options?.headers },
+      })
+      return await res.json()
+    } catch (error) {
+      lastError = error
+
+      // Only retry network-level failures (cold starts, QUIC, etc.).
+      // HTTP errors (4xx, 5xx) are caught inside the try and don't throw.
+      if (!isRetryableNetworkError(error)) {
+        break
+      }
+
+      // Don't delay on the last attempt
+      if (attempt < RETRY_LIMIT - 1) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelay(attempt)))
+      }
     }
+  }
+
+  return {
+    success: false,
+    error:
+      lastError instanceof Error ? lastError.message : 'Network error',
   }
 }
 
-async function uploadApiWithProgress<T>(
-  endpoint: string,
+/**
+ * Perform an XHR upload with progress tracking and automatic retry
+ * on network-level failures (cold starts, QUIC errors, etc.).
+ */
+function xhrUploadWithRetry<T>(
+  url: string,
   formData: FormData,
   onProgress?: (progress: number) => void,
   headers: Record<string, string> = {},
 ): Promise<ApiResponse<T>> {
   return new Promise((resolve) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${BACKEND_URL}${endpoint}`)
+    let attempt = 0
 
-    // Attach JWT access token if available
-    const token = getAccessToken()
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-    }
+    const tryUpload = () => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', url)
 
-    // Attach other headers
-    Object.entries(headers).forEach(([key, value]) => {
-      xhr.setRequestHeader(key, value)
-    })
+      // Attach JWT access token if available
+      const token = getAccessToken()
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      }
 
-    if (onProgress && xhr.upload) {
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = Math.round((event.loaded / event.total) * 100)
-          onProgress(percentComplete)
-        }
+      // Attach other headers
+      Object.entries(headers).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value)
       })
-    }
 
-    xhr.onload = () => {
-      try {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const response = JSON.parse(xhr.responseText)
-          resolve(response)
+      // Timeout for cold starts (Render free tier can take 30-60s)
+      xhr.timeout = 120_000
+
+      if (onProgress && xhr.upload) {
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100)
+            onProgress(percentComplete)
+          }
+        })
+      }
+
+      xhr.onload = () => {
+        try {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const response = JSON.parse(xhr.responseText)
+            resolve(response)
+          } else {
+            // HTTP errors are not retried
+            resolve({
+              success: false,
+              error: `Upload failed with status ${xhr.status}`,
+            })
+          }
+        } catch (error) {
+          resolve({
+            success: false,
+            error: error instanceof Error ? error.message : 'Invalid JSON response',
+          })
+        }
+      }
+
+      xhr.onerror = () => {
+        // Network error — retry with backoff
+        if (attempt < RETRY_LIMIT - 1) {
+          attempt++
+          setTimeout(tryUpload, retryDelay(attempt))
         } else {
           resolve({
             success: false,
-            error: `Upload failed with status ${xhr.status}`,
+            error: 'Network error occurred during upload',
           })
         }
-      } catch (error) {
-        resolve({
-          success: false,
-          error: error instanceof Error ? error.message : 'Invalid JSON response',
-        })
       }
+
+      xhr.ontimeout = () => {
+        // Timeout — retry with backoff (Render cold starts can be slow)
+        if (attempt < RETRY_LIMIT - 1) {
+          attempt++
+          setTimeout(tryUpload, retryDelay(attempt))
+        } else {
+          resolve({
+            success: false,
+            error: 'Upload timed out after multiple retries',
+          })
+        }
+      }
+
+      xhr.send(formData)
     }
 
-    xhr.onerror = () => {
-      resolve({
-        success: false,
-        error: 'Network error occurred during upload',
-      })
-    }
-
-    xhr.send(formData)
+    tryUpload()
   })
 }
+
+
 
 export function mkheaders(accessToken: string, refreshToken?: string): Record<string, string> {
   const h: Record<string, string> = { 'X-Drive-Access-Token': accessToken }
@@ -177,8 +279,8 @@ export const api = {
       if (driveAccessToken) {
         headers['X-Drive-Access-Token'] = driveAccessToken
       }
-      return uploadApiWithProgress<DocumentInfo & { chunks?: number; imageUrl?: string; driveFileId?: string; driveWebViewLink?: string }>(
-        '/api/documents/upload',
+      return xhrUploadWithRetry<DocumentInfo & { chunks?: number; imageUrl?: string; driveFileId?: string; driveWebViewLink?: string }>(
+        `${BACKEND_URL}/api/documents/upload`,
         formData,
         onProgress,
         headers,
@@ -230,8 +332,8 @@ export const api = {
       const params = new URLSearchParams()
       if (folderId) params.append('folder_id', folderId)
       const query = params.toString()
-      return uploadApiWithProgress<{ id: string; name: string }>(
-        `/api/drive/upload${query ? `?${query}` : ''}`,
+      return xhrUploadWithRetry<{ id: string; name: string }>(
+        `${BACKEND_URL}/api/drive/upload${query ? `?${query}` : ''}`,
         formData,
         onProgress,
         mkheaders(accessToken, refreshToken),

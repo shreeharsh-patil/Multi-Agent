@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus, Share2 } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus, Share2, ExternalLink } from 'lucide-react'
 import { api, mkheaders } from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
 
@@ -20,6 +20,8 @@ interface Document {
   createdAt: string
   workspaceId?: string
   ocrPages?: number
+  driveWebViewLink?: string
+  driveFileId?: string
 }
 
 interface Workspace {
@@ -179,7 +181,7 @@ export default function DocumentsPage() {
           if (downloadRes.ok) {
             const blob = await downloadRes.blob()
             const file = new File([blob], doc.name, { type: doc.mimeType })
-            const uploadRes = await api.documents.upload(file, 'default', undefined, undefined, accessToken)
+            const uploadRes = await api.documents.upload(file, 'default', undefined, undefined, undefined)
             if (uploadRes.success) imported++
           }
         }
@@ -364,7 +366,7 @@ export default function DocumentsPage() {
                     <div className="p-2 rounded-[8px] bg-card text-primary border border-border">
                       <FileText className="h-5 w-5" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(api.documents.downloadUrl(doc.id), '_blank')}>
                       <p className="font-medium text-sm text-foreground truncate">{doc.fileName}</p>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                         <span className="font-mono">{doc.fileType.toUpperCase()}</span>
@@ -387,6 +389,18 @@ export default function DocumentsPage() {
                       {doc.status === 'processing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                       {doc.status}
                     </Badge>
+                    {doc.driveWebViewLink && (
+                      <a
+                        href={doc.driveWebViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open in Google Drive"
+                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-medium border border-[#1f8a65]/30 bg-[#1f8a65]/5 text-[#1f8a65] hover:bg-[#1f8a65]/10 hover:border-[#1f8a65]/50 transition-all shrink-0"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Drive
+                      </a>
+                    )}
                     <select 
                       value={doc.workspaceId || 'unfiled'} 
                       onChange={(e) => moveDocument(doc.id, e.target.value)} 
@@ -395,6 +409,15 @@ export default function DocumentsPage() {
                       <option value="unfiled">Unfiled</option>
                       {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
                     </select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => window.open(api.documents.downloadUrl(doc.id), '_blank')}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-secondary/70 h-8 w-8 rounded-[8px]"
+                      title="Preview"
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

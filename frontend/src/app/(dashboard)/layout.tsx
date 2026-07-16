@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/sidebar'
 import { requireAuth } from '@/lib/session'
 import { SidebarProvider } from '@/context/sidebar-context'
+import { HealthPing } from '@/components/health-ping'
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +12,7 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <HealthPing />
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
         <Sidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
