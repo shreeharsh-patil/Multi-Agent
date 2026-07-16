@@ -8,6 +8,7 @@ system since ADK is tightly coupled to Google's GenAI SDK.
 """
 
 from google.adk import Runner
+from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from src.adk.agents import create_orchestrator_agent
@@ -311,20 +312,24 @@ async def process_message_stream(
             session_id=conversation_id,
             user_id=user_id,
             new_message=content,
+            run_config=RunConfig(streaming_mode=StreamingMode.SSE),
         ):
             event_type = type(event).__name__
             agent_id = event.node_name if hasattr(event, "node_name") else "unknown"
 
             content_piece = _get_content_piece(event)
-
-            if content_piece:
-                accumulated_content += content_piece
+            is_partial = bool(getattr(event, "partial", False))
+            is_final = bool(getattr(event, "is_final_response", None) and event.is_final_response())
 
             if agent_id != current_agent:
                 current_agent = agent_id
                 yield {"event": "agent", "data": {"agent_id": agent_id}}
 
-            if content_piece:
+            # In SSE mode ADK emits incremental partial events followed by a
+            # final aggregated event that repeats the full text. Only stream
+            # (and accumulate) the partial chunks to avoid duplicating output.
+            if content_piece and is_partial:
+                accumulated_content += content_piece
                 yield {"event": "chunk", "data": {"text": content_piece}}
 
             yield {
@@ -336,11 +341,18 @@ async def process_message_stream(
                 },
             }
 
-            if hasattr(event, "is_final_response") and event.is_final_response():
+            if is_final:
+                # Prefer the aggregated final text; fall back to accumulated
+                # partials if the final event carried no content.
+                final_output = content_piece if content_piece else accumulated_content
+                # If nothing was streamed as partial, emit the full text now
+                # so the client still renders a response.
+                if not accumulated_content and final_output:
+                    yield {"event": "chunk", "data": {"text": final_output}}
                 yield {
                     "event": "complete",
                     "data": {
-                        "output": accumulated_content,
+                        "output": final_output,
                         "conversation_id": conversation_id,
                     },
                 }
