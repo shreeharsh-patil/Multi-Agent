@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
@@ -245,7 +246,7 @@ export function Sidebar() {
             <>
               <Link href="/dashboard" className="flex items-center gap-2.5 group">
                 <div className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-xs shrink-0">
-                  <img src="/logo.png" alt="Agents Logo" className="h-6 w-6 object-contain" />
+                  <Image src="/logo.png" alt="Agents Logo" width={24} height={24} className="h-6 w-6 object-contain" />
                 </div>
                 <span className="font-sans font-normal text-lg tracking-[-0.03em] text-[#26251e]">
                   Agents

@@ -2,7 +2,6 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form
 from typing import List
 import os
 import uuid
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi.responses import FileResponse
@@ -96,6 +95,7 @@ async def list_documents(http_request: Request, user_id: str = "default", worksp
             "imageUrl": f"/api/documents/{d.id}/download" if d.file_type in IMAGE_EXTENSIONS else None,
             "workspaceId": d.workspace_id,
             "ocrPages": d.ocr_pages,
+            "driveWebViewLink": d.drive_web_view_link,
         }
         for d in docs
     ]
@@ -179,26 +179,29 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
         }
     else:
         # Documents: parse, chunk, store in vector DB
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
+        # Store file persistently so it can be served for preview later
+        safe_name = f"{uuid.uuid4().hex}_{file.filename}"
+        dest_path = UPLOAD_DIR / safe_name
+        with open(dest_path, "wb") as f:
+            f.write(content)
+        file_path = str(dest_path)
 
         doc = Document(
             user_id=resolved_user_id,
             file_name=file.filename,
             file_type=ext,
             file_size=len(content),
-            file_path=tmp_path,
+            file_path=file_path,
             status="processing",
             workspace_id=workspace_id,
         )
         await doc.insert()
 
         try:
-            parse_result = document_parser.parse(tmp_path, ext)
+            parse_result = document_parser.parse(file_path, ext)
             ocr_pages = 0
             if ext == "pdf":
-                parse_result, ocr_pages = await enrich_pdf_with_ocr(tmp_path, parse_result)
+                parse_result, ocr_pages = await enrich_pdf_with_ocr(file_path, parse_result)
             chunks = text_chunker.chunk(parse_result)
 
             chunk_data = [
@@ -232,7 +235,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                     media_type_map = {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "txt": "text/plain", "md": "text/markdown"}
                     drive_result = await drive.upload_file(
                         access_token=drive_access_token,
-                        file_path=tmp_path,
+                        file_path=file_path,
                         file_name=file.filename,
                         mime_type=media_type_map.get(ext, "application/octet-stream"),
                         refresh_token=drive_refresh_token,
@@ -263,10 +266,10 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             doc.error_message = str(e)
             await doc.save()
             logger.error(f"Document processing failed: {e}")
+            # Clean up the saved file on error
+            if os.path.exists(file_path):
+                os.unlink(file_path)
             raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
 
 
 @router.get("/{document_id}")
@@ -295,13 +298,20 @@ async def get_document(document_id: str) -> dict:
 
 @router.get("/{document_id}/download")
 async def download_document(document_id: str):
-    """Download/serve an uploaded file (used for inline image display)."""
+    """Serve an uploaded file for inline preview.
+
+    If a Google Drive ``webViewLink`` is available the request is redirected
+    to Drive so the user gets Drive's built-in viewer (handles PDFs, images,
+    DOCX, etc. perfectly).  Falls back to the local file when no Drive link
+    exists (e.g. upload without a Google session).
+    """
     doc = await Document.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Redirect to Drive if the file is stored there and local file is missing
-    if doc.drive_web_view_link and not os.path.exists(doc.file_path):
+    # Prefer Drive's viewer when available — it survives server restarts
+    # and provides a better preview experience (especially for PDFs).
+    if doc.drive_web_view_link:
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=doc.drive_web_view_link)
 

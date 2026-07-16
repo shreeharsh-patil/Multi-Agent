@@ -9,7 +9,7 @@ import {
   Folder,
   File,
   FileText,
-  Image,
+  Image as ImageIcon,
   FileSpreadsheet,
   RefreshCw,
   Upload,
@@ -75,7 +75,7 @@ export default function DrivePage() {
     } finally {
       setLoading(false)
     }
-  }, [accessToken])
+  }, [accessToken, refreshToken])
 
   useEffect(() => {
     if (accessToken) {
@@ -265,7 +265,7 @@ export default function DrivePage() {
                     {file.isFolder ? (
                       <Folder className="h-5 w-5" />
                     ) : file.mimeType.startsWith('image/') ? (
-                      <Image className="h-5 w-5" />
+                      <ImageIcon className="h-5 w-5" />
                     ) : file.mimeType.includes('spreadsheet') || file.mimeType.includes('csv') ? (
                       <FileSpreadsheet className="h-5 w-5" />
                     ) : file.mimeType.includes('document') || file.mimeType.includes('pdf') ? (

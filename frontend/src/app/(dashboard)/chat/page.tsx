@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -1052,7 +1053,7 @@ function ChatContent() {
                 <div className="space-y-4">
                   <div className="flex justify-center">
                     <div className="h-14 w-14 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
-                      <img src="/logo.png" alt="Agents Logo" className="h-7 w-7 object-contain" />
+                      <Image src="/logo.png" alt="Agents Logo" width={28} height={28} className="h-7 w-7 object-contain" />
                     </div>
                   </div>
                   <h1 className="text-4xl font-serif font-normal tracking-[-0.01em] text-[#26251e] mb-1">
@@ -1111,11 +1112,14 @@ function ChatContent() {
                             const isImg = isImageExt(att.name)
                             return isImg && att.documentId ? (
                               <div key={i} className="relative group rounded-lg overflow-hidden border border-border bg-secondary shadow-xs">
-                                <img
+                                <Image
                                   src={api.documents.downloadUrl(att.documentId)}
                                   alt={att.name}
+                                  width={200}
+                                  height={140}
                                   className="max-w-[200px] max-h-[140px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
                                   onClick={() => handleDocumentClick({ id: att.documentId!, fileName: att.name, fileType: 'png' } as any)}
+                                  unoptimized
                                 />
                               </div>
                             ) : (
@@ -1464,10 +1468,13 @@ function ChatContent() {
                     )
                   ) : ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes((activeTab.fileType || '').toLowerCase()) ? (
                     <div className="flex-1 flex items-center justify-center bg-background p-6 overflow-auto">
-                      <img
+                      <Image
                         src={api.documents.downloadUrl(activeTab.docId!)}
                         alt={activeTab.title}
+                        width={800}
+                        height={600}
                         className="max-w-full max-h-full object-contain rounded-[12px] border border-border shadow-xs bg-card"
+                        unoptimized
                       />
                     </div>
                   ) : (
@@ -1525,10 +1532,13 @@ function ChatContent() {
                   )
                 ) : ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes((activeTab.fileType || '').toLowerCase()) ? (
                   <div className="flex-1 flex items-center justify-center bg-background p-6 overflow-auto">
-                    <img
+                    <Image
                       src={api.documents.downloadUrl(activeTab.docId!)}
                       alt={activeTab.title}
+                      width={800}
+                      height={600}
                       className="max-w-full max-h-full object-contain rounded-[12px] border border-border shadow-xs bg-card"
+                      unoptimized
                     />
                   </div>
                 ) : (

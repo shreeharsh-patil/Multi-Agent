@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -79,7 +80,7 @@ export function TopBar() {
             <div className="flex items-center justify-between mb-8">
               <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
                 <div className="h-8 w-8 rounded-lg bg-[#faf9f5] border border-[#e6dfd8] flex items-center justify-center shadow-sm">
-                  <img src="/logo.png" alt="Agents Logo" className="h-5 w-5 object-contain" />
+                  <Image src="/logo.png" alt="Agents Logo" width={20} height={20} className="h-5 w-5 object-contain" />
                 </div>
                 <span className="font-serif font-normal text-lg text-[#141413]">Agents</span>
               </Link>

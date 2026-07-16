@@ -115,7 +115,7 @@ export default function DocumentsPage() {
     setUploadProgress(0)
     setError(null)
     try {
-      const res = await api.documents.upload(file, 'default', setUploadProgress, selectedWorkspace === 'all' ? undefined : selectedWorkspace)
+      const res = await api.documents.upload(file, 'default', setUploadProgress, selectedWorkspace === 'all' ? undefined : selectedWorkspace, accessToken)
       if (res.success) {
         await fetchDocuments()
       } else {
@@ -179,7 +179,7 @@ export default function DocumentsPage() {
           if (downloadRes.ok) {
             const blob = await downloadRes.blob()
             const file = new File([blob], doc.name, { type: doc.mimeType })
-            const uploadRes = await api.documents.upload(file)
+            const uploadRes = await api.documents.upload(file, 'default', undefined, undefined, accessToken)
             if (uploadRes.success) imported++
           }
         }
