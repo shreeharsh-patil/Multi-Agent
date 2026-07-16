@@ -69,6 +69,7 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-[#f54e00] selection:text-white font-sans;
   }
+  /* Dashboard headings */
   h1, h2, h3 {
     @apply font-sans font-normal tracking-[-0.03em] text-[#26251e] leading-tight;
   }
@@ -91,4 +92,62 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     @apply bg-[#e6e5e0] rounded-full hover:bg-[#f54e00]/30 transition-colors;
   }
+}
+
+/* ── Landing Page Animations ────────────────────────────────────────────── */
+
+/* Glitch Animation */
+@keyframes glitch-shift {
+  0%, 100% { transform: translate(0); }
+  33% { transform: translate(-2px, 2px); }
+  66% { transform: translate(2px, -2px); }
+}
+@keyframes glitch-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+.glitch-layer {
+  animation: glitch-shift 5s infinite ease-in-out, glitch-opacity 3s infinite ease-in-out;
+}
+
+/* Word reveal animation */
+@keyframes word-reveal {
+  0% { opacity: 0; filter: blur(24px); transform: translateY(24px); }
+  60% { filter: blur(3px); opacity: 0.85; }
+  100% { opacity: 1; filter: blur(0px); transform: translateY(0px); }
+}
+.word-reveal {
+  opacity: 0;
+  animation: word-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+
+/* Fade up for sections */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Smooth scrolling on landing */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Marquee animations */
+@keyframes marqueeLeft {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-33.333%); }
+}
+@keyframes marqueeRight {
+  from { transform: translateX(-33.333%); }
+  to   { transform: translateX(0); }
+}
+
+/* Ping animation (softer than tailwind's built-in) */
+@keyframes ping-slow {
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Spinner for CI status */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
 }

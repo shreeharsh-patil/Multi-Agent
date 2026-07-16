@@ -787,7 +787,7 @@ function ChatContent() {
       // Refresh side-panel document list on send completion
       window.dispatchEvent(new Event('refresh-documents-list'))
     }
-  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken])
+  }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
