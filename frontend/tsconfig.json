@@ -21,7 +21,9 @@
     "baseUrl": ".",
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

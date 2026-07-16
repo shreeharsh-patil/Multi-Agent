@@ -22,6 +22,7 @@ PUBLIC_PATHS = {
 # requires an authenticated user so request.state.user is populated.
 PUBLIC_METHOD_PREFIXES = (
     ("GET", "/api/shares/chat/"),
+    ("POST", "/api/voice/"),
 )
 
 # Suffixes for GET routes the browser opens directly (<img src>, download/export

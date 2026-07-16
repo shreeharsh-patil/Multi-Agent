@@ -45,15 +45,6 @@ interface SidebarConversation {
   createdAt: string
 }
 
-// 4-point radial spike logo icon representing "Agents"
-function LogoSpike({ className = "h-4.5 w-4.5" }: { className?: string }) {
-  return (
-    <svg className={cn("text-primary fill-current shrink-0", className)} viewBox="0 0 24 24">
-      <path d="M12 2c.4 3.5 1.5 6.5 4 9 2.5 2.5 5.5 3.6 9 4-3.5.4-6.5 1.5-9 4-2.5 2.5-3.6 5.5-4 9-.4-3.5-1.5-6.5-4-9-2.5-2.5-5.5-3.6-9-4 3.5-.4 6.5-1.5 9-4 2.5-2.5 3.6-5.5 4-9z" />
-    </svg>
-  )
-}
-
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()

@@ -82,7 +82,7 @@ function extractCodeFromMessage(content: string): { blocks: { lang: string; code
 }
 
 export function extractCodeFromContent(content: string): CodeSandboxProps | null {
-  const { blocks, hasCode } = extractCodeFromMessage(content)
+  const { hasCode } = extractCodeFromMessage(content)
   if (!hasCode) return null
 
   const parsed = parseCodeBlocks(content)

@@ -41,7 +41,7 @@ export default function KnowledgeBasePage() {
   const [query, setQuery] = useState('')
   const [querying, setQuerying] = useState(false)
   const [answer, setAnswer] = useState('')
-  const [results, setResults] = useState<QueryResult[]>([])
+  const [, setResults] = useState<QueryResult[]>([])
   const [citations, setCitations] = useState<Array<{ file_name: string; page_number?: number }>>([])
   const [history, setHistory] = useState<Array<{ id: string; query: string; answer: string; createdAt: string }>>([])
   const resultsRef = useRef<HTMLDivElement>(null)

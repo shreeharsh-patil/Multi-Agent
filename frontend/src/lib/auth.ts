@@ -54,7 +54,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         username: { label: "Username", type: "text", placeholder: "developer" }
       },
-      async authorize(credentials) {
+      async authorize(_credentials) {
         // Return a mock developer session profile
         return {
           id: 'dev-user-123',

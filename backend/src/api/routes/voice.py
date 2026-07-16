@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 import httpx
 from src.config import settings
@@ -68,7 +68,7 @@ async def synthesize(req: SynthesizeRequest):
             "Content-Type": "application/json",
         }
         
-        # Requests audio from Deepgram's aura-asteria-en model (premium voice)
+        # Fetch audio from Deepgram TTS
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.deepgram.com/v1/speak?model=aura-asteria-en",
@@ -76,20 +76,19 @@ async def synthesize(req: SynthesizeRequest):
                 headers=headers,
                 timeout=60.0
             )
-            
+
             if response.status_code != 200:
                 logger.error(f"Deepgram Speak API responded with code {response.status_code}: {response.text}")
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Deepgram speech synthesis failed: {response.text}"
                 )
-            
-            # Streaming back the audio
-            async def audio_streamer():
-                async for chunk in response.aiter_bytes():
-                    yield chunk
-            
-            return StreamingResponse(audio_streamer(), media_type="audio/mpeg")
+
+            # Read all audio bytes then return — using Response instead of
+            # StreamingResponse avoids a closure bug where the httpx connection
+            # closes before FastAPI can consume a returned generator.
+            audio_data = response.content
+            return Response(content=audio_data, media_type="audio/mpeg")
             
     except httpx.RequestError as exc:
         logger.error(f"HTTP request to Deepgram speak failed: {exc}")

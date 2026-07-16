@@ -4,25 +4,19 @@ import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { api } from '@/lib/api'
-import { formatBytes } from '@/lib/utils'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, FolderOpen, Share2, ChevronDown } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, Share2, ChevronDown } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
-import { CodePreviewButton, CodeSandbox, type CodeSandboxProps, extractCodeFromContent } from '@/components/code-sandbox'
+import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
-import { FileCode, FileImage, Globe, Play, Code as CodeIcon } from 'lucide-react'
+import { FileCode, Globe, Play, Code as CodeIcon } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -98,8 +92,6 @@ function ChatContent() {
   const [teamAgents, setTeamAgents] = useState<string[]>(['research', 'coding', 'planner'])
 
   // Hybrid layout UI states
-  const [documents, setDocuments] = useState<DocumentInfo[]>([])
-  const [loadingDocuments, setLoadingDocuments] = useState(false)
   const [tabs, setTabs] = useState<PanelTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [showCodeSource, setShowCodeSource] = useState(false)
@@ -108,6 +100,7 @@ function ChatContent() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [leftWidthPercent, setLeftWidthPercent] = useState(50)
   const [isResizing, setIsResizing] = useState(false)
+
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -146,16 +139,8 @@ function ChatContent() {
       setSelectedAgent(agentParam)
     }
   }, [searchParams, customAgents])
-  useEffect(() => {
-    const idParam = searchParams?.get('id')
-    if (idParam) {
-      loadConversation(idParam)
-    } else {
-      startNewConversation()
-    }
-  }, [searchParams, loadConversation, startNewConversation])
-  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
-  const [selectedWorkspace, setSelectedWorkspace] = useState('all')
+  const [, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
+  const [selectedWorkspace] = useState('all')
   const [voiceMode, setVoiceMode] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [speakingId, setSpeakingId] = useState<string | null>(null)
@@ -175,6 +160,12 @@ function ChatContent() {
   // Tracks the in-flight upload promise for each attachment so Send can await
   // an upload already started on select instead of uploading a second time.
   const uploadPromises = useRef<Map<string, Promise<Attachment>>>(new Map())
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -369,7 +360,7 @@ function ChatContent() {
   }, [])
 
   const [conversationId, setConversationId] = useState<string>()
-  const [conversations, setConversations] = useState<Array<{
+  const [, setConversations] = useState<Array<{
     id: string
     title: string
     agentId?: string
@@ -377,7 +368,7 @@ function ChatContent() {
     lastMessage: string
     updatedAt: string
   }>>([])
-  const [loadingConversations, setLoadingConversations] = useState(true)
+  const [, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
 
   const shareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -503,10 +494,19 @@ function ChatContent() {
     })
   }, [fetchConversations])
 
+  // Ref to prevent stale resets when searchParams changes during navigation
+  const loadedIdRef = useRef<string | null>(null)
+  const isLoadingRef = useRef(false)
+
   // Load a conversation's messages
   const loadConversation = useCallback(async (id: string) => {
+    if (isLoadingRef.current) return
+    isLoadingRef.current = true
+    loadedIdRef.current = id
     try {
       const res = await api.chat.getConversation(id)
+      // Only apply if we're still on the same conversation (not superseded by newer navigation)
+      if (loadedIdRef.current !== id) return
       if (res.success && res.data) {
         setConversationId(res.data.id)
         setChatTitle(res.data.title)
@@ -521,16 +521,34 @@ function ChatContent() {
         console.error('Failed to load conversation:', res.error)
       }
     } catch (e) {
-      console.error('Failed to load conversation:', e)
+      if (loadedIdRef.current === id) {
+        console.error('Failed to load conversation:', e)
+      }
+    } finally {
+      if (loadedIdRef.current === id) {
+        isLoadingRef.current = false
+      }
     }
   }, [])
 
   // Start a new conversation
   const startNewConversation = useCallback(() => {
+    if (isLoadingRef.current) return
+    loadedIdRef.current = null
     setConversationId(undefined)
     setChatTitle('')
     setMessages([])
   }, [])
+
+  // Load conversation from search param
+  const idParam = searchParams?.get('id')
+  useEffect(() => {
+    if (idParam) {
+      loadConversation(idParam)
+    } else {
+      startNewConversation()
+    }
+  }, [idParam, loadConversation, startNewConversation])
 
   const handleSend = useCallback(async () => {
     if ((!input.trim() && attachments.length === 0) || sending || (teamMode && teamAgents.length === 0)) return
@@ -863,7 +881,7 @@ function ChatContent() {
     <style>{typingKeyframes}</style>
     <div
       ref={containerRef}
-      className={`flex h-screen gap-0 -m-6 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
+      className={`flex h-screen gap-0 -m-3 sm:-m-6 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
     >
       {/* Explorer panel is merged into the main application sidebar */}
 
@@ -891,7 +909,7 @@ function ChatContent() {
         )}
 
         {/* Top Header / Toolbar */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-3 min-h-[56px] shrink-0 bg-card select-none z-10 shadow-xs">
+        <div className="flex items-center justify-between border-b border-border px-3 sm:px-6 py-2 sm:py-3 min-h-[48px] sm:min-h-[56px] shrink-0 bg-card select-none z-10 shadow-xs">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold truncate text-[#26251e] flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary shrink-0" />
@@ -899,13 +917,24 @@ function ChatContent() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-secondary rounded-lg" onClick={shareConversation} disabled={!conversationId} title="Share Link">
+            <Button variant="ghost" size="icon" className="hidden sm:inline-flex h-8 w-8 hover:bg-secondary rounded-lg" onClick={shareConversation} disabled={!conversationId} title="Share Link">
               <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
             <Button
               variant="ghost"
+              size="icon"
+              className={`h-8 w-8 hover:bg-secondary rounded-lg sm:hidden ${
+                voiceMode ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs' : 'text-muted-foreground'
+              }`}
+              onClick={toggleVoiceMode}
+              title="Voice Mode"
+            >
+              <Volume2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
               size="sm"
-              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-2.5 ${
+              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-1.5 sm:px-2.5 ${
                 voiceMode ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs' : 'text-muted-foreground'
               }`}
               onClick={toggleVoiceMode}
@@ -916,14 +945,14 @@ function ChatContent() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-2.5 ${
+              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-1.5 sm:px-2.5 ${
                 teamMode ? 'bg-[#1f8a65]/10 text-[#1f8a65] border border-[#1f8a65]/20' : 'text-muted-foreground'
               }`}
               onClick={() => setTeamMode((current) => !current)}
             >
               <Users className="h-3.5 w-3.5" />
               <span className="text-xs hidden sm:inline">Teamwork</span>
-              <span className="rounded bg-[#1f8a65]/10 px-1 py-0.5 text-[9px] font-bold text-[#1f8a65]">BETA</span>
+              <span className="hidden sm:inline rounded bg-[#1f8a65]/10 px-1 py-0.5 text-[9px] font-bold text-[#1f8a65]">BETA</span>
             </Button>
 
             {!teamMode && (
@@ -931,7 +960,7 @@ function ChatContent() {
                 <select
                   value={selectedAgent}
                   onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="h-8 rounded-[8px] bg-card border border-border pl-3 pr-8 text-xs font-semibold text-[#26251e] focus:outline-none hover:bg-secondary/60 transition-all cursor-pointer appearance-none shadow-2xs w-[160px] font-sans"
+                  className="h-8 rounded-[8px] bg-card border border-border pl-2 sm:pl-3 pr-6 sm:pr-8 text-[10px] sm:text-xs font-semibold text-[#26251e] focus:outline-none hover:bg-secondary/60 transition-all cursor-pointer appearance-none shadow-2xs w-[120px] sm:w-[160px] font-sans"
                 >
                   {agents.concat(customAgents).map((agent) => (
                     <option key={agent.id} value={agent.id}>
@@ -939,7 +968,7 @@ function ChatContent() {
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none stroke-[1.5]" />
+                <ChevronDown className="absolute right-1.5 sm:right-2.5 h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground pointer-events-none stroke-[1.5]" />
               </div>
             )}
           </div>
@@ -1057,7 +1086,7 @@ function ChatContent() {
               </div>
             </div>
           ) : (
-            <ScrollArea ref={scrollRef} className="h-full px-6 py-6">
+            <ScrollArea ref={scrollRef} className="h-full px-3 sm:px-6 py-3 sm:py-6">
               <div className="space-y-6 max-w-3xl mx-auto">
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
@@ -1118,7 +1147,42 @@ function ChatContent() {
                               <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '400ms' }} />
                             </span>
                           ) : (
-                            <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm">{msg.content}</pre>
+                            <div className="text-xs sm:text-sm leading-relaxed [&_*]:break-words">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
+                                components={{
+                                  a: ({ href, children }) => (
+                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
+                                  ),
+                                  code: ({ className, children, ...props }) => {
+                                    const isInline = !className
+                                    return isInline ? (
+                                      <code className="bg-muted/60 px-1.5 py-0.5 rounded-md text-xs font-mono text-foreground/80" {...props}>{children}</code>
+                                    ) : (
+                                      <pre className="overflow-x-auto rounded-xl bg-muted/40 p-4 mb-3 mt-1 border border-border/40">
+                                        <code className={`${className || ''} text-xs font-mono leading-relaxed`} {...props}>{children}</code>
+                                      </pre>
+                                    )
+                                  },
+                                  pre: ({ children }) => <>{children}</>,
+                                  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                                  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
+                                  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
+                                  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                  strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                                  em: ({ children }) => <em className="italic">{children}</em>,
+                                  h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 text-foreground">{children}</h1>,
+                                  h2: ({ children }) => <h2 className="text-base font-bold mb-1.5 mt-3 text-foreground">{children}</h2>,
+                                  h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2.5 text-foreground">{children}</h3>,
+                                  blockquote: ({ children }) => <blockquote className="border-l-2 border-primary/30 pl-3 py-0.5 mb-2 text-muted-foreground italic">{children}</blockquote>,
+                                  hr: () => <hr className="my-3 border-border" />,
+                                  table: ({ children }) => <div className="overflow-x-auto mb-2"><table className="min-w-full border-collapse border border-border/40 text-xs">{children}</table></div>,
+                                  th: ({ children }) => <th className="border border-border/40 px-3 py-1.5 bg-muted/30 font-semibold text-left">{children}</th>,
+                                  td: ({ children }) => <td className="border border-border/40 px-3 py-1.5">{children}</td>,
+                                }}
+                              >{msg.content}</ReactMarkdown>
+                            </div>
                           )}
                         </div>
                         {msg.role === 'assistant' && msg.content && (
@@ -1171,7 +1235,7 @@ function ChatContent() {
         </div>
 
         {/* Anchored bottom input block */}
-        <div className="px-6 py-4 border-t border-border bg-background shrink-0">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-border bg-background shrink-0">
           <div className="max-w-3xl mx-auto space-y-2">
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pb-2">
@@ -1254,19 +1318,21 @@ function ChatContent() {
         </div>
       </div>
 
-      {/* 3. RIGHT PANEL: Cursor-Style Editor Canvas */}
+      {/* 3. RIGHT PANEL CONTENT (shared between desktop + mobile) */}
       {tabs.length > 0 && (
         <>
+          {/* Desktop: resizer */}
           <div
             onMouseDown={handleMouseDown}
-            className={`w-1 hover:w-1.5 active:w-1.5 h-full cursor-col-resize select-none shrink-0 transition-all duration-150 z-30 relative ${
-              isResizing ? 'bg-primary/50 w-1.5' : 'bg-border hover:bg-primary/30'
-            }`}
+            className="hidden sm:block w-1 hover:w-1.5 active:w-1.5 h-full cursor-col-resize select-none shrink-0 transition-all duration-150 z-30 relative"
+            style={{ display: isResizing ? undefined : undefined }}
           >
             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-border" />
           </div>
+
+          {/* Desktop right panel (flex child, percentage width) */}
           <aside
-            className="flex flex-col h-full bg-secondary border-l border-border overflow-hidden min-w-0"
+            className="hidden sm:flex flex-col h-full bg-secondary border-l border-border overflow-hidden min-w-0"
             style={{ width: `${100 - leftWidthPercent}%`, flex: 'none' }}
           >
           {/* Tab Header bar */}
@@ -1421,6 +1487,60 @@ function ChatContent() {
             </div>
           )}
         </aside>
+
+          {/* Mobile right panel (fixed overlay) */}
+          <div className="sm:hidden fixed inset-0 z-40 flex flex-col bg-secondary">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card shrink-0">
+              <span className="text-xs font-semibold truncate">{activeTab?.title || 'Document'}</span>
+              <button
+                type="button"
+                onClick={() => handleCloseTab(activeTabId!)}
+                className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-card">
+              {activeTab?.type === 'code' && activeTab.sandboxProps ? (
+                showCodeSource ? (
+                  renderCodeContent(activeTab.content || '')
+                ) : (
+                  <CodeSandbox
+                    html={activeTab.sandboxProps.html}
+                    css={activeTab.sandboxProps.css}
+                    js={activeTab.sandboxProps.js}
+                    fullHtml={activeTab.sandboxProps.fullHtml}
+                    className="h-full border-none rounded-none w-full bg-white flex-1"
+                  />
+                )
+              ) : activeTab?.type === 'document' ? (
+                ['txt', 'md'].includes((activeTab.fileType || '').toLowerCase()) ? (
+                  activeTab.content !== undefined ? (
+                    renderCodeContent(activeTab.content)
+                  ) : (
+                    <div className="flex items-center justify-center p-6 text-muted-foreground text-xs bg-card">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
+                      Loading document text...
+                    </div>
+                  )
+                ) : ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes((activeTab.fileType || '').toLowerCase()) ? (
+                  <div className="flex-1 flex items-center justify-center bg-background p-6 overflow-auto">
+                    <img
+                      src={api.documents.downloadUrl(activeTab.docId!)}
+                      alt={activeTab.title}
+                      className="max-w-full max-h-full object-contain rounded-[12px] border border-border shadow-xs bg-card"
+                    />
+                  </div>
+                ) : (
+                  <iframe
+                    src={api.documents.downloadUrl(activeTab.docId!)}
+                    className="w-full h-full border-none bg-white flex-1"
+                    title={activeTab.title}
+                  />
+                )
+              ) : null}
+            </div>
+          </div>
       </>
     )}
 

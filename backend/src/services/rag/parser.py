@@ -1,5 +1,5 @@
 from typing import Optional
-import PyPDF2
+from pypdf import PdfReader
 from docx import Document as DocxDocument
 from pptx import Presentation
 from src.utils.logger import logger
@@ -32,7 +32,7 @@ class DocumentParser:
     def _parse_pdf(self, file_path: str) -> ParseResult:
         pages = []
         with open(file_path, "rb") as f:
-            reader = PyPDF2.PdfReader(f)
+            reader = PdfReader(f)
             for page in reader.pages:
                 text = page.extract_text() or ""
                 pages.append(text)
