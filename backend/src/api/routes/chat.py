@@ -13,8 +13,56 @@ from src.models.conversation import Conversation, Message
 from src.utils.logger import logger
 from beanie import PydanticObjectId
 from src.models.workspace import Workspace
+from src.models.document import Document
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
+
+# Image extensions used to detect whether an attached file is viewable inline
+IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+
+
+async def _build_attachment_context(attachments: list | None) -> str:
+    """Build a descriptive prefix about attached files for the LLM prompt.
+
+    Looks up each attachment's document metadata from MongoDB so the LLM
+    knows the file name, type, and (for images) the inline download URL.
+    """
+    if not attachments:
+        return ""
+
+    lines: list[str] = []
+    for att in attachments:
+        doc_id = att.get("documentId") if isinstance(att, dict) else getattr(att, "documentId", None)
+        name = att.get("name") if isinstance(att, dict) else getattr(att, "name", "unknown")
+        if not doc_id:
+            lines.append(f"- {name}")
+            continue
+
+        try:
+            doc = await Document.get(doc_id)
+        except Exception:
+            lines.append(f"- {name}")
+            continue
+
+        if not doc:
+            lines.append(f"- {name}")
+            continue
+
+        is_img = doc.file_type in IMAGE_EXTENSIONS
+        if is_img:
+            download_url = f"/api/documents/{doc.id}/download"
+            lines.append(f"- {doc.file_name} ({doc.file_type}, image — viewable at `{download_url}`)")
+        else:
+            lines.append(f"- {doc.file_name} ({doc.file_type})")
+
+    if not lines:
+        return ""
+
+    return (
+        "📎 The user attached the following file(s) for reference:\n"
+        + "\n".join(lines)
+        + "\n\n"
+    )
 
 
 def _friendly_chat_error(error: Exception) -> str:
@@ -81,6 +129,19 @@ async def _save_messages(
         if attachments:
             user_metadata["attachments"] = attachments
 
+        now = datetime.now(timezone.utc)
+        user_msg = Message(
+            role="user",
+            content=user_message,
+            agent_id=agent_id,
+            metadata=user_metadata,
+        )
+        assistant_msg = Message(
+            role="assistant",
+            content=agent_message,
+            agent_id=agent_id,
+        )
+
         if is_new:
             # Create a new conversation with auto-title
             title = user_message[:80] + ("..." if len(user_message) > 80 else "")
@@ -90,41 +151,31 @@ async def _save_messages(
                 title=title,
                 agent_id=agent_id,
                 workspace_id=workspace_id,
-                messages=[
-                    Message(
-                        role="user",
-                        content=user_message,
-                        agent_id=agent_id,
-                        metadata=user_metadata,
-                    )
-                ],
+                messages=[user_msg, assistant_msg],
+                created_at=now,
+                updated_at=now,
             )
             await conv.insert()
         else:
-            conv = await Conversation.get(conv_id)
-            if conv:
-                if workspace_id and not conv.workspace_id:
-                    conv.workspace_id = workspace_id
-                conv.messages.append(
-                    Message(
-                        role="user",
-                        content=user_message,
-                        agent_id=agent_id,
-                        metadata=user_metadata,
-                    )
-                )
-
-        # Add assistant response
-        if conv:
-            conv.messages.append(
-                Message(
-                    role="assistant",
-                    content=agent_message,
-                    agent_id=agent_id,
-                )
+            # Use atomic $push to prevent race conditions from concurrent requests.
+            # Fetch-modify-save would silently drop messages from parallel writes.
+            update: dict[str, object] = {
+                "$push": {
+                    "messages": {"$each": [
+                        user_msg.model_dump(),
+                        assistant_msg.model_dump(),
+                    ]}
+                },
+                "$set": {
+                    "updated_at": now,
+                },
+            }
+            if workspace_id:
+                update["$set"]["workspace_id"] = workspace_id  # type: ignore[index]
+            await Conversation.get_motor_collection().update_one(
+                {"_id": conv_id},
+                update,
             )
-            conv.updated_at = datetime.now(timezone.utc)
-            await conv.save()
     except Exception as e:
         logger.error(f"Failed to save messages: {e}")
 
@@ -199,6 +250,10 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         conv_id = body.conversation_id or str(PydanticObjectId())
         is_new = not bool(body.conversation_id)
 
+        # Build attachment context and prepend it to the message (non-mutating)
+        attachment_context = await _build_attachment_context(body.attachments)
+        augmented_message = attachment_context + body.message if attachment_context else body.message
+
         # Use authenticated user from JWT if available, fall back to request body
         auth_user = getattr(http_request.state, "user", None)
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
@@ -236,9 +291,9 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             )
             result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
         else:
-            result = await process_message(message=body.message, user_id=user_id, conversation_id=conv_id)
+            result = await process_message(message=augmented_message, user_id=user_id, conversation_id=conv_id)
 
-        # Persist messages to MongoDB
+        # Persist messages to MongoDB (use clean body.message for display/title, not augmented)
         attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
         await _save_messages(
             conv_id=conv_id,
@@ -279,6 +334,10 @@ async def chat_stream(
     conv_id = body.conversation_id or str(PydanticObjectId())
     is_new = not bool(body.conversation_id)
 
+    # Build attachment context for the streaming message
+    attachment_context = await _build_attachment_context(body.attachments)
+    augmented_message = attachment_context + body.message if attachment_context else body.message
+
     # Use authenticated user from JWT if available
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
@@ -300,7 +359,7 @@ async def chat_stream(
         try:
             if body.team_agents:
                 team_result = await get_orchestrator().process_team(
-                    body.message, user_id, body.team_agents, conv_id
+                    augmented_message, user_id, body.team_agents, conv_id
                 )
                 yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 for stage in team_result["stages"]:
@@ -322,7 +381,7 @@ async def chat_stream(
             if custom_config:
                 custom_agent = CustomAgent(custom_config)
                 get_orchestrator().registry.register(custom_agent)
-                agent_result = await custom_agent.execute(body.message, {"user_id": user_id})
+                agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id})
                 yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
@@ -336,7 +395,7 @@ async def chat_stream(
                 calendar_agent = get_orchestrator().registry.get_agent("calendar")
                 if not calendar_agent:
                     raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-                agent_result = await calendar_agent.execute(body.message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")})
+                agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")})
                 yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
@@ -350,7 +409,7 @@ async def chat_stream(
                 if not knowledge_agent:
                     raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
                 agent_result = await knowledge_agent.execute(
-                    body.message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
+                    augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
                 )
                 yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
@@ -361,7 +420,7 @@ async def chat_stream(
                 return
 
             async for sse_event in process_message_stream(
-                message=body.message, user_id=user_id, conversation_id=conv_id,
+                message=augmented_message, user_id=user_id, conversation_id=conv_id,
             ):
                 if await http_request.is_disconnected():
                     break

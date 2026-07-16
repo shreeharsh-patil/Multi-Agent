@@ -148,6 +148,9 @@ function ChatContent() {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
+  // Use a ref to track sending state synchronously — React setState is async
+  // and won't prevent double-clicks fast enough when both calls see sending=false.
+  const sendingRef = useRef(false)
   const [isDragging, setIsDragging] = useState(false)
   const [codePreview, setCodePreview] = useState<CodeSandboxProps | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -552,7 +555,9 @@ function ChatContent() {
   }, [idParam, loadConversation, startNewConversation])
 
   const handleSend = useCallback(async () => {
-    if ((!input.trim() && attachments.length === 0) || sending || (teamMode && teamAgents.length === 0)) return
+    // Synchronous ref guard prevents double-submits even when state hasn't updated yet
+    if (sendingRef.current) return
+    if ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)) return
 
     const text = input.trim()
     const attachmentCount = attachments.length
@@ -560,6 +565,7 @@ function ChatContent() {
     const currentAgent = teamMode || selectedAgent === 'auto' ? undefined : selectedAgent
     const currentWorkspace = selectedWorkspace === 'all' ? undefined : selectedWorkspace === 'unfiled' ? '__unfiled__' : selectedWorkspace
 
+    sendingRef.current = true
     setSending(true)
 
     // Attachments already began uploading on select. Await any in-flight
@@ -758,6 +764,7 @@ function ChatContent() {
         )
       }
     } finally {
+      sendingRef.current = false
       setSending(false)
       fetchConversations()
       window.dispatchEvent(new Event('refresh-documents-list'))

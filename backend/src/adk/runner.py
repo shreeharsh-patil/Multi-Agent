@@ -199,6 +199,17 @@ async def _build_conversation_context(conversation_id: str) -> str:
             if m.content.strip():
                 context_parts.append(f"{role}: {m.content.strip()}")
 
+            # Include attachment names from metadata so the LLM knows what
+            # files were attached in previous turns (e.g. image names).
+            metadata = m.metadata
+            if metadata and isinstance(metadata, dict):
+                attachments = metadata.get("attachments")
+                if attachments and isinstance(attachments, list):
+                    for att in attachments:
+                        name = att.get("name") if isinstance(att, dict) else getattr(att, "name", None)
+                        if name:
+                            context_parts.append(f"   📎 attached: {name}")
+
         if not context_parts:
             return ""
 
