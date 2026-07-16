@@ -163,6 +163,8 @@ async def error_handler_middleware(request: Request, call_next):
         elapsed = time.time() - start_time
         response.headers["X-Process-Time"] = str(elapsed)
         return response
+    except HTTPException:
+        raise  # Let FastAPI/Starlette handle HTTPException properly (preserves status code)
     except AppException as e:
         return JSONResponse(
             status_code=e.status_code,
