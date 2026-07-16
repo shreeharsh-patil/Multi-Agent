@@ -223,7 +223,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: googleAccessToken ? { 'X-Google-Access-Token': googleAccessToken } : undefined,
       }),
-    stream: (data: ChatRequest, googleAccessToken?: string) => {
+    stream: (data: ChatRequest, googleAccessToken?: string, signal?: AbortSignal) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       const token = getAccessToken()
       if (token) {
@@ -234,6 +234,7 @@ export const api = {
         method: 'POST',
         headers,
         body: JSON.stringify(data),
+        signal,
       })
     },
     listConversations: (userId?: string) =>

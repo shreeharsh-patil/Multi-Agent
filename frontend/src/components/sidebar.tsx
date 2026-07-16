@@ -54,7 +54,8 @@ export function Sidebar() {
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
-  const [selectedWorkspace, setSelectedWorkspace] = useState('Personal Space')
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedWorkspace, setSelectedWorkspace] = useState('all')
 
   const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/')
   const [documents, setDocuments] = useState<any[]>([])
@@ -117,6 +118,19 @@ export function Sidebar() {
         .catch(err => console.error("Error loading sidebar history", err))
     }
   }, [session, pathname])
+
+  // Fetch the user's real workspaces for the selector
+  useEffect(() => {
+    if (session) {
+      api.workspaces.list()
+        .then((res) => {
+          if (res.success && res.data) {
+            setWorkspaces(res.data.map(w => ({ id: w.id, name: w.name })))
+          }
+        })
+        .catch(err => console.error("Error loading workspaces", err))
+    }
+  }, [session])
 
   // Ctrl+B shortcut to toggle sidebar collapse
   useEffect(() => {
@@ -275,30 +289,35 @@ export function Sidebar() {
             >
               <div className="flex items-center gap-2 truncate">
                 <div className="h-2 w-2 rounded-full bg-[#1f8a65]" />
-                <span className="truncate">{selectedWorkspace}</span>
+                <span className="truncate">
+                  {selectedWorkspace === 'all'
+                    ? 'Personal Space'
+                    : workspaces.find((w) => w.id === selectedWorkspace)?.name || 'Personal Space'}
+                </span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground stroke-[1.5]" />
             </button>
-            
+
             {showWorkspaceMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowWorkspaceMenu(false)} />
                 <div className="absolute top-full left-0 right-0 mt-1.5 p-1 rounded-[8px] bg-card border border-border shadow-xs z-20 space-y-0.5">
-                  {['Personal Space', 'Project Alpha', 'Engineering Team'].map((space) => (
+                  {[{ id: 'all', name: 'Personal Space' }, ...workspaces].map((space) => (
                     <button
-                      key={space}
+                      key={space.id}
                       onClick={() => {
-                        setSelectedWorkspace(space)
+                        setSelectedWorkspace(space.id)
                         setShowWorkspaceMenu(false)
+                        window.dispatchEvent(new CustomEvent('workspace-changed', { detail: space.id }))
                       }}
                       className={cn(
                         "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
-                        selectedWorkspace === space
+                        selectedWorkspace === space.id
                           ? "bg-secondary text-[#26251e] font-semibold"
                           : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
                       )}
                     >
-                      {space}
+                      {space.name}
                     </button>
                   ))}
                 </div>

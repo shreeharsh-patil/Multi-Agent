@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, Share2, ChevronDown } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, Share2, ChevronDown, Copy, RefreshCw } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
@@ -148,9 +148,13 @@ function ChatContent() {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   // Use a ref to track sending state synchronously — React setState is async
   // and won't prevent double-clicks fast enough when both calls see sending=false.
   const sendingRef = useRef(false)
+  // Holds the AbortController for the in-flight streaming request so the user
+  // can stop generation mid-stream.
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [codePreview, setCodePreview] = useState<CodeSandboxProps | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -554,12 +558,13 @@ function ChatContent() {
     }
   }, [idParam, loadConversation, startNewConversation])
 
-  const handleSend = useCallback(async () => {
+  const handleSend = useCallback(async (overrideText?: string) => {
     // Synchronous ref guard prevents double-submits even when state hasn't updated yet
     if (sendingRef.current) return
-    if ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)) return
+    const isRegenerate = typeof overrideText === 'string'
+    if (!isRegenerate && (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)) return
 
-    const text = input.trim()
+    const text = isRegenerate ? overrideText!.trim() : input.trim()
     const attachmentCount = attachments.length
     const currentConvId = conversationId
     const currentAgent = teamMode || selectedAgent === 'auto' ? undefined : selectedAgent
@@ -571,40 +576,47 @@ function ChatContent() {
     // Attachments already began uploading on select. Await any in-flight
     // upload; only kick off a fresh upload for ones that never started
     // (e.g. added programmatically) or previously errored.
+    // On regenerate there are no new attachments to process.
     const uploadedAttachments: Array<{ name: string; size: number; documentId?: string }> = []
-    for (const att of attachments) {
-      let updated: Attachment
-      const inFlight = uploadPromises.current.get(att.id)
-      if (inFlight) {
-        updated = await inFlight
-      } else if (att.status === 'done') {
-        updated = att
-      } else {
-        updated = await uploadAttachment(att)
+    if (!isRegenerate) {
+      for (const att of attachments) {
+        let updated: Attachment
+        const inFlight = uploadPromises.current.get(att.id)
+        if (inFlight) {
+          updated = await inFlight
+        } else if (att.status === 'done') {
+          updated = att
+        } else {
+          updated = await uploadAttachment(att)
+        }
+        uploadedAttachments.push({
+          name: att.file.name,
+          size: att.file.size,
+          documentId: updated.documentId,
+        })
       }
-      uploadedAttachments.push({
-        name: att.file.name,
-        size: att.file.size,
-        documentId: updated.documentId,
-      })
-    }
-    setAttachments([])
+      setAttachments([])
 
-    const userMsg = {
-      id: crypto.randomUUID(),
-      role: 'user' as const,
-      content: text || `Uploaded ${attachmentCount} file(s)`,
-      attachments: uploadedAttachments,
-    }
-    setMessages((prev) => [...prev, userMsg])
-    setInput('')
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+      const userMsg = {
+        id: crypto.randomUUID(),
+        role: 'user' as const,
+        content: text || `Uploaded ${attachmentCount} file(s)`,
+        attachments: uploadedAttachments,
+      }
+      setMessages((prev) => [...prev, userMsg])
+      setInput('')
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
     }
 
     // Add placeholder assistant message (will be updated incrementally via SSE)
     const assistantId = crypto.randomUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }])
+
+    // Fresh AbortController for this request so Stop can cancel it.
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
     // Try SSE streaming first, fall back to non-streaming
     let streamingAttempted = false
@@ -617,7 +629,7 @@ function ChatContent() {
         team_agents: teamMode ? teamAgents as AgentId[] : undefined,
         workspace_id: currentWorkspace,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-      }, googleAccessToken)
+      }, googleAccessToken, abortController.signal)
 
       if (!streamResponse.ok) {
         throw new Error(`HTTP ${streamResponse.status}`)
@@ -730,6 +742,17 @@ function ChatContent() {
         setConversationId(newConvId)
       }
     } catch (err) {
+      // User pressed Stop: keep whatever streamed so far, mark it as stopped.
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? { ...msg, content: msg.content ? msg.content + '\n\n_(stopped)_' : '_(stopped)_' }
+              : msg,
+          ),
+        )
+        return
+      }
       if (!streamingAttempted) {
         // Fall back to non-streaming API
         try {
@@ -784,10 +807,32 @@ function ChatContent() {
     } finally {
       sendingRef.current = false
       setSending(false)
+      abortControllerRef.current = null
       // Refresh side-panel document list on send completion
       window.dispatchEvent(new Event('refresh-documents-list'))
     }
   }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken])
+
+  // Stop an in-flight streaming generation.
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort()
+  }, [])
+
+  // Regenerate the last assistant reply: drop it and re-send the prior user message.
+  const handleRegenerate = useCallback(() => {
+    if (sendingRef.current) return
+    setMessages((prev) => {
+      const lastUserIdx = [...prev].map((m) => m.role).lastIndexOf('user')
+      if (lastUserIdx === -1) return prev
+      const lastUser = prev[lastUserIdx]
+      if (!lastUser) return prev
+      // Drop everything after the last user message (i.e. the assistant reply).
+      const trimmed = prev.slice(0, lastUserIdx + 1)
+      // Kick off regeneration after state settles.
+      setTimeout(() => handleSend(lastUser.content), 0)
+      return trimmed
+    })
+  }, [handleSend])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -1114,7 +1159,7 @@ function ChatContent() {
           ) : (
             <ScrollArea ref={scrollRef} className="h-full px-3 sm:px-6 py-3 sm:py-6">
               <div className="space-y-6 max-w-3xl mx-auto">
-                {messages.map((msg) => (
+                {messages.map((msg, idx) => (
                   <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
                       <Avatar className="h-7 w-7 border border-border shrink-0 mt-0.5 shadow-xs">
@@ -1224,6 +1269,28 @@ function ChatContent() {
                               {speakingId === msg.id ? <Square className="h-2.5 w-2.5 fill-current text-red-600" /> : <Volume2 className="h-3 w-3" />}
                               <span>{speakingId === msg.id ? 'Stop' : 'Listen'}</span>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(msg.content)
+                                setCopiedId(msg.id)
+                                setTimeout(() => setCopiedId((c) => (c === msg.id ? null : c)), 1500)
+                              }}
+                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {copiedId === msg.id ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                              <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
+                            </button>
+                            {idx === messages.length - 1 && !sending && (
+                              <button
+                                type="button"
+                                onClick={handleRegenerate}
+                                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                <span>Regenerate</span>
+                              </button>
+                            )}
                             <CodePreviewButton
                               content={msg.content}
                               onPreview={(sandboxProps) => {
@@ -1333,13 +1400,13 @@ function ChatContent() {
                   {isListening ? <Square className="h-3 w-3 fill-current text-red-500" /> : <Mic className="h-4.5 w-4.5 stroke-[1.5]" />}
                 </Button>
                 <Button
-                  onClick={handleSend}
-                  disabled={sending || (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)}
+                  onClick={sending ? handleStop : () => handleSend()}
+                  disabled={!sending && ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0))}
                   className="rounded-[10px] h-9 w-9 hover:scale-[1.02] transition-all bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs shrink-0 flex items-center justify-center cursor-pointer"
                   size="icon"
-                  title="Send"
+                  title={sending ? 'Stop' : 'Send'}
                 >
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 stroke-[1.8]" />}
+                  {sending ? <Square className="h-3.5 w-3.5 fill-current" /> : <Send className="h-4 w-4 stroke-[1.8]" />}
                 </Button>
               </div>
             </div>

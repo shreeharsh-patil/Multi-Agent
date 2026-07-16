@@ -89,23 +89,12 @@ export default function LandingPage() {
 
         <div className="h-20" />
 
-        <div className="absolute inset-x-0 z-30 flex flex-col justify-end px-6 md:px-12 pb-4 max-w-3xl"
-          style={{ top: '35vh', bottom: 0 }}
+        <div className="absolute inset-x-0 z-30 flex flex-col justify-start px-6 md:px-12 pb-8 max-w-3xl"
+          style={{ top: '140px' }}
         >
-          <span
-            className="inline-block text-[11px] tracking-[0.3em] uppercase text-black/35 mb-5 font-pixel"
-            style={{
-              opacity: heroReady ? 1 : 0,
-              filter: heroReady ? "blur(0px)" : "blur(16px)",
-              transform: heroReady ? "translateY(0px)" : "translateY(20px)",
-              transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) 0ms, filter 0.8s cubic-bezier(0.16,1,0.3,1) 0ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) 0ms`,
-            }}
-          >
-            AgentCampus
-          </span>
 
           <h1
-            className="text-4xl sm:text-5xl md:text-8xl font-light text-[#111] leading-[1.0] tracking-tight mb-3 sm:mb-5"
+            className="text-4xl sm:text-5xl md:text-7xl font-light text-[#111] leading-[1.0] tracking-tight mb-3 sm:mb-5"
             style={{
               fontFamily: '"IBM Plex Sans", sans-serif',
               opacity: heroReady ? 1 : 0,
@@ -125,11 +114,11 @@ export default function LandingPage() {
               transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) 100ms, filter 0.8s cubic-bezier(0.16,1,0.3,1) 100ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) 100ms`,
             }}
           >
-            AgentCampus helps you organize notes, manage Google Drive files, and create or manage Google Calendar events using AI.
+            Agentic helps you organize notes, manage Google Drive files, and create or manage Google Calendar events using AI.
           </p>
 
           <div
-            className="flex flex-wrap gap-2 mb-10"
+            className="flex flex-wrap gap-2 mb-6"
             style={{
               opacity: heroReady ? 1 : 0,
               filter: heroReady ? "blur(0px)" : "blur(16px)",
@@ -172,7 +161,7 @@ export default function LandingPage() {
 
           <a
             href="/login"
-            className="inline-flex items-center gap-2 mt-10 px-7 py-3.5 bg-[#111] text-white text-sm rounded-xl hover:bg-[#333] transition-all duration-200 tracking-widest font-medium w-fit"
+            className="inline-flex items-center gap-2 mt-6 px-7 py-3.5 bg-[#111] text-white text-sm rounded-xl hover:bg-[#333] transition-all duration-200 tracking-widest font-medium w-fit"
             style={{
               opacity: heroReady ? 1 : 0,
               filter: heroReady ? "blur(0px)" : "blur(16px)",
@@ -510,7 +499,7 @@ export default function LandingPage() {
 
       <footer className="py-10 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-          <span className="font-pixel text-xs tracking-[0.25em] text-black/50">AGENTCAMPUS</span>
+          <span className="font-pixel text-xs tracking-[0.25em] text-black/50">AGENTIC</span>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
             {[
               { label: "Platform",     href: "#platform" },
@@ -535,7 +524,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-black/[0.04]">
-          <span className="text-xs text-black/20">&copy; 2026 AgentCampus. All rights reserved.</span>
+          <span className="text-xs text-black/20">&copy; 2026 Agentic. All rights reserved.</span>
         </div>
       </footer>
     </div>
