@@ -8,10 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
 import { clearAccessToken } from '@/lib/auth-store'
-import { User, Bell, Palette, Key, Globe, Database, HardDrive, CalendarDays, CheckCircle2, XCircle, ExternalLink, BookOpen, Loader2, LogOut } from 'lucide-react'
+import { User, Bell, HardDrive, CalendarDays, BookOpen, LogOut, Loader2, CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -59,12 +58,9 @@ export default function SettingsPage() {
     setPreferences(updatedPrefs)
     setSettingsError(null)
     try {
-      const res = await api.auth.updateMe({
-        preferences: updatedPrefs,
-      })
+      const res = await api.auth.updateMe({ preferences: updatedPrefs })
       if (!res.success) {
         setSettingsError(res.error || 'Failed to save preference')
-        // Revert on failure
         setPreferences(prevPrefs)
       }
     } catch (e) {
@@ -78,11 +74,9 @@ export default function SettingsPage() {
     setSettingsError(null)
     setSettingsSuccess(null)
     try {
-      const res = await api.auth.updateMe({
-        name,
-      })
+      const res = await api.auth.updateMe({ name })
       if (res.success) {
-        setSettingsSuccess('Profile updated successfully')
+        setSettingsSuccess('Profile updated')
       } else {
         setSettingsError(res.error || 'Failed to update profile')
       }
@@ -100,167 +94,179 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center bg-background">
+      <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 animate-fade-in bg-background">
+    <div className="mx-auto max-w-3xl space-y-8 animate-fade-in pb-12">
       <div>
         <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage your account and platform preferences
-        </p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account and platform preferences</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <User className="h-4.5 w-4.5 text-primary" />
-              Profile
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Manage your account information</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="grid gap-2">
-              <Label htmlFor="name" className="text-xs text-foreground">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email" className="text-xs text-foreground">Email</Label>
-              <Input id="email" type="email" defaultValue={session?.user?.email || 'user@example.com'} disabled className="opacity-80" />
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-[#1f8a65]" />
-              Signed in with Google
-            </div>
-            <Button onClick={handleProfileSave} disabled={saving} className="shadow-sm">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save Changes
-            </Button>
-          </CardContent>
-        </Card>
-
       {settingsError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-[8px] col-span-full">
-          {settingsError}
-          <Button variant="link" size="sm" className="ml-2 text-red-700 underline" onClick={() => setSettingsError(null)}>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-[8px] flex items-center justify-between">
+          <span>{settingsError}</span>
+          <Button variant="link" size="sm" className="text-red-700 underline p-0 h-auto" onClick={() => setSettingsError(null)}>
             Dismiss
           </Button>
         </div>
       )}
 
       {settingsSuccess && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-[8px] col-span-full">
-          {settingsSuccess}
-          <Button variant="link" size="sm" className="ml-2 text-green-700 underline" onClick={() => setSettingsSuccess(null)}>
+        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-[8px] flex items-center justify-between">
+          <span>{settingsSuccess}</span>
+          <Button variant="link" size="sm" className="text-green-700 underline p-0 h-auto" onClick={() => setSettingsSuccess(null)}>
             Dismiss
           </Button>
         </div>
       )}
 
-        {/* Google Drive Integration */}
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <HardDrive className="h-4.5 w-4.5 text-primary" />
-              Google Drive
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Connect and manage your Google Drive</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="flex items-center gap-3 p-3 rounded-[8px] border border-border bg-secondary">
-              <HardDrive className="h-8 w-8 text-primary" />
-              <div className="flex-1">
-                <p className="font-semibold text-sm text-foreground">Google Drive</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {accessToken
-                    ? 'Connected — you can access your Drive files'
-                    : 'Sign in to access, upload, and manage Drive files'}
-                </p>
+      {/* Profile */}
+      <Card>
+        <CardHeader className="p-6 pb-0">
+          <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base">
+            <User className="h-5 w-5 text-primary" />
+            Profile
+          </CardTitle>
+          <CardDescription>Manage your account information</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5 p-6">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Name</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" value={session?.user?.email || ''} disabled className="opacity-70" />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4 text-[#1f8a65]" />
+            Signed in with Google
+          </div>
+          <Button onClick={handleProfileSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Save Changes
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Integrations */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-sans font-normal tracking-[-0.02em] text-foreground">Integrations</h2>
+          <p className="text-sm text-muted-foreground">Connect your accounts and services</p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Google Drive */}
+          <Card>
+            <CardHeader className="p-5 pb-0">
+              <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-sm">
+                <HardDrive className="h-4 w-4 text-primary" />
+                Google Drive
+              </CardTitle>
+              <CardDescription className="text-xs">Connect and manage your Google Drive</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-center gap-3 p-3 rounded-[8px] border bg-secondary/50">
+                <HardDrive className="h-8 w-8 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-foreground">Google Drive</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {accessToken
+                      ? 'Connected — access your Drive files'
+                      : 'Sign in to access and manage Drive files'}
+                  </p>
+                </div>
+                <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full shrink-0">
+                  {accessToken ? (
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <XCircle className="h-3 w-3" />
+                      Disconnected
+                    </span>
+                  )}
+                </Badge>
               </div>
-              <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full">
-                {accessToken ? (
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Connected
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <XCircle className="h-3 w-3" />
-                    Disconnected
-                  </span>
-                )}
-              </Badge>
-            </div>
-            {!accessToken ? (
-              <Button
-                variant="default"
-                className="w-full gap-2 shadow-sm"
-                onClick={() => signIn('google', { callbackUrl: '/drive' })}
-              >
-                <HardDrive className="h-4 w-4" />
-                Connect Google Drive
-              </Button>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  You have Drive access through your Google authentication.
-                  Visit the Drive page to manage your files.
-                </p>
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 gap-2 shadow-sm h-10 text-xs" onClick={() => window.location.href = '/drive'}>
+              {!accessToken ? (
+                <Button className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/drive' })}>
+                  <HardDrive className="h-4 w-4" />
+                  Connect Google Drive
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Drive access is available through your Google authentication.
+                  </p>
+                  <Button variant="outline" className="w-full gap-2" onClick={() => window.location.href = '/drive'}>
                     <ExternalLink className="h-4 w-4 text-primary" />
                     Open Drive
                   </Button>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <CalendarDays className="h-4.5 w-4.5 text-primary" />
-              Google Calendar
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Let the Calendar Agent manage your schedule</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="flex items-center gap-3 p-3 rounded-[8px] border border-border bg-secondary">
-              <CalendarDays className="h-8 w-8 text-primary" />
-              <div className="flex-1">
-                <p className="font-semibold text-sm text-foreground">Calendar access</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{accessToken ? 'Available to the Calendar Agent' : 'Reconnect Google to grant calendar access'}</p>
+          {/* Google Calendar */}
+          <Card>
+            <CardHeader className="p-5 pb-0">
+              <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-sm">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                Google Calendar
+              </CardTitle>
+              <CardDescription className="text-xs">Let the Calendar Agent manage your schedule</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-center gap-3 p-3 rounded-[8px] border bg-secondary/50">
+                <CalendarDays className="h-8 w-8 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-foreground">Calendar access</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {accessToken ? 'Available to the Calendar Agent' : 'Reconnect Google to grant calendar access'}
+                  </p>
+                </div>
+                <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full shrink-0">
+                  {accessToken ? 'Connected' : 'Not connected'}
+                </Badge>
               </div>
-              <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full">{accessToken ? 'Connected' : 'Not connected'}</Badge>
-            </div>
-            <Button variant="outline" className="w-full gap-2 shadow-sm h-10 text-xs" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
-              <CalendarDays className="h-4 w-4 text-primary" />
-              {accessToken ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}
-            </Button>
-            <p className="text-[10px] text-muted-foreground leading-relaxed">After connecting, ask the Calendar Agent in Chat to list events, create meetings, check availability, or reschedule.</p>
-          </CardContent>
-        </Card>
+              <Button variant="outline" className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
+                <CalendarDays className="h-4 w-4 text-primary" />
+                {accessToken ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}
+              </Button>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                After connecting, ask the Calendar Agent in Chat to list events, create meetings, check availability, or reschedule.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
-        {/* OpenDocuments Integration */}
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <BookOpen className="h-4.5 w-4.5 text-primary" />
+      {/* Knowledge */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-sans font-normal tracking-[-0.02em] text-foreground">Knowledge</h2>
+          <p className="text-sm text-muted-foreground">Configure your knowledge sources</p>
+        </div>
+        <Card>
+          <CardHeader className="p-6 pb-0">
+            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base">
+              <BookOpen className="h-5 w-5 text-primary" />
               OpenDocuments RAG
             </CardTitle>
-            <CardDescription className="text-muted-foreground">Use OpenDocuments as your self-hosted RAG backend</CardDescription>
+            <CardDescription>Use OpenDocuments as your self-hosted RAG backend</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="flex items-center justify-between text-sm">
+          <CardContent className="space-y-5 p-6">
+            <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-foreground text-xs">Enable OpenDocuments</Label>
-                <p className="text-xs text-muted-foreground">
+                <Label>Enable OpenDocuments</Label>
+                <p className="text-sm text-muted-foreground">
                   Route document searches and knowledge base queries to OpenDocuments
                 </p>
               </div>
@@ -269,159 +275,64 @@ export default function SettingsPage() {
                 onCheckedChange={(checked) => handleTogglePreference('useOpendocumentsRag', checked)}
               />
             </div>
-            <Separator className="bg-border" />
-            <div className="grid gap-2">
-              <Label htmlFor="opendocuments-url" className="text-xs text-foreground">API URL</Label>
-              <Input
-                id="opendocuments-url"
-                value="http://localhost:5001"
-                disabled
-                className="opacity-75"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Configured globally in backend settings.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <Palette className="h-4.5 w-4.5 text-primary" />
-              Appearance
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Customize your interface</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs text-foreground">Warm Cream Theme</Label>
-                <p className="text-xs text-muted-foreground">Forced editorial warm-canvas floor</p>
+            <div className="border-t border-border pt-5">
+              <div className="grid gap-2">
+                <Label htmlFor="opendocuments-url">API URL</Label>
+                <Input id="opendocuments-url" value="http://localhost:5001" disabled className="opacity-70" />
+                <p className="text-xs text-muted-foreground">Configured globally in backend settings.</p>
               </div>
-              <Switch checked={true} disabled />
-            </div>
-            <Separator className="bg-border" />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs text-foreground">Compact Mode</Label>
-                <p className="text-xs text-muted-foreground">Reduce spacing in the interface</p>
-              </div>
-              <Switch />
             </div>
           </CardContent>
         </Card>
+      </section>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <Bell className="h-4.5 w-4.5 text-primary" />
-              Notifications
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Configure notification preferences</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs text-foreground">Push Notifications</Label>
-                <p className="text-xs text-muted-foreground">Receive push notifications</p>
-              </div>
-              <Switch checked={preferences.notifications} onCheckedChange={(checked) => handleTogglePreference('notifications', checked)} />
+      {/* Notifications */}
+      <Card>
+        <CardHeader className="p-6 pb-0">
+          <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base">
+            <Bell className="h-5 w-5 text-primary" />
+            Notifications
+          </CardTitle>
+          <CardDescription>Configure your notification preferences</CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Push Notifications</Label>
+              <p className="text-sm text-muted-foreground">Receive push notifications</p>
             </div>
-            <Separator className="bg-border" />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs text-foreground">Email Notifications</Label>
-                <p className="text-xs text-muted-foreground">Receive email updates</p>
-              </div>
-              <Switch />
-            </div>
-          </CardContent>
-        </Card>
+            <Switch
+              checked={preferences.notifications}
+              onCheckedChange={(checked) => handleTogglePreference('notifications', checked)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <Globe className="h-4.5 w-4.5 text-primary" />
-              Language & Region
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Set your preferences</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <div className="grid gap-2">
-              <Label className="text-xs text-foreground">Language</Label>
-              <Input value={preferences.language} onChange={(e) => setPreferences({ ...preferences, language: e.target.value })} />
-            </div>
-            <div className="grid gap-2">
-              <Label className="text-xs text-foreground">Timezone</Label>
-              <Input defaultValue="America/New_York" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <Key className="h-4.5 w-4.5 text-primary" />
-              API Keys
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Manage your API integrations</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              No API keys configured. Connect to external services in the integrations settings.
-            </p>
-            <Button variant="outline" className="shadow-sm">Configure API Keys</Button>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-xs">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <Database className="h-4.5 w-4.5 text-primary" />
-              Data Management
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">Manage your data and storage</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Manage your stored data, export options, and connected services.
-            </p>
-            <div className="flex gap-3">
-              <Button variant="outline" className="shadow-sm">Export Data</Button>
-              <Button variant="outline" className="text-[#c64545] hover:bg-[#c64545]/10 border-border shadow-sm">Clear Cache</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Sign Out */}
-        <Card className="shadow-xs border-red-200/60 col-span-full">
-          <CardHeader className="p-5">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
-              <LogOut className="h-4.5 w-4.5 text-red-500" />
-              Sign Out
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">End your current session</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5 pt-0">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              You are signed in as{' '}
-              <span className="font-semibold text-foreground">{session?.user?.email || 'user@example.com'}</span>.
-              Signing out will redirect you to the login page.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-all shadow-sm"
-                onClick={handleLogout}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Sign Out */}
+      <Card className="border-destructive/20">
+        <CardHeader className="p-6 pb-0">
+          <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base">
+            <LogOut className="h-5 w-5 text-destructive" />
+            Sign Out
+          </CardTitle>
+          <CardDescription>End your current session</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 p-6">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Signed in as <span className="font-semibold text-foreground">{session?.user?.email || 'Unknown'}</span>.
+            Signing out will redirect you to the login page.
+          </p>
+          <Button
+            variant="outline"
+            className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

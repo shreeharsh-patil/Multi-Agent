@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
-import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, Share2, ChevronDown, Copy, RefreshCw } from 'lucide-react'
+import { Send, Bot, User, MessageSquare, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, Users, CheckCircle2, Share2, ChevronDown, Copy, RefreshCw, Download, Pencil } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
@@ -149,6 +149,8 @@ function ChatContent() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
   // Use a ref to track sending state synchronously — React setState is async
   // and won't prevent double-clicks fast enough when both calls see sending=false.
   const sendingRef = useRef(false)
@@ -409,6 +411,27 @@ function ChatContent() {
       console.error('Share failed:', e)
     }
   }, [conversationId])
+
+  // Export the current conversation as a downloadable Markdown file.
+  const exportConversation = useCallback(() => {
+    if (messages.length === 0) return
+    const title = chatTitle || 'Conversation'
+    const lines = [`# ${title}`, '']
+    for (const m of messages) {
+      if (!m.content) continue
+      lines.push(m.role === 'user' ? '## You' : '## Assistant')
+      lines.push('', m.content, '')
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'conversation'}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [messages, chatTitle])
 
   // Fetch conversations list
   const fetchConversations = useCallback(async () => {
@@ -834,6 +857,37 @@ function ChatContent() {
     })
   }, [handleSend])
 
+  // Begin editing a user message.
+  const startEdit = useCallback((id: string, content: string) => {
+    setEditingId(id)
+    setEditText(content)
+  }, [])
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null)
+    setEditText('')
+  }, [])
+
+  // Save an edited user message: replace its text, drop everything after it,
+  // and resend so the assistant answers the revised message.
+  const saveEdit = useCallback((id: string) => {
+    if (sendingRef.current) return
+    const newText = editText.trim()
+    if (!newText) return
+    setEditingId(null)
+    setEditText('')
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === id)
+      if (idx === -1) return prev
+      // Keep messages up to and including the edited one, with updated content.
+      const trimmed = prev.slice(0, idx + 1).map((m) =>
+        m.id === id ? { ...m, content: newText } : m,
+      )
+      setTimeout(() => handleSend(newText), 0)
+      return trimmed
+    })
+  }, [editText, handleSend])
+
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
     const newAttachments: Attachment[] = fileArray.map((file) => ({
@@ -988,6 +1042,9 @@ function ChatContent() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="hidden sm:inline-flex h-8 w-8 hover:bg-secondary rounded-lg" onClick={exportConversation} disabled={messages.length === 0} title="Export as Markdown">
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
             <Button variant="ghost" size="icon" className="hidden sm:inline-flex h-8 w-8 hover:bg-secondary rounded-lg" onClick={shareConversation} disabled={!conversationId} title="Share Link">
               <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
@@ -1207,6 +1264,43 @@ function ChatContent() {
                       )}
 
                       <div className="group relative">
+                        {msg.role === 'user' && editingId === msg.id ? (
+                          <div className="w-full min-w-[280px] rounded-[12px] border border-border bg-card p-2 shadow-xs">
+                            <textarea
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault()
+                                  saveEdit(msg.id)
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault()
+                                  cancelEdit()
+                                }
+                              }}
+                              autoFocus
+                              rows={3}
+                              className="w-full resize-none bg-transparent text-sm text-[#26251e] focus:outline-none px-1 py-0.5"
+                            />
+                            <div className="flex items-center justify-end gap-2 mt-1.5">
+                              <button
+                                type="button"
+                                onClick={cancelEdit}
+                                className="px-2.5 py-1 text-[11px] rounded-[6px] text-muted-foreground hover:bg-secondary/60 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => saveEdit(msg.id)}
+                                disabled={!editText.trim()}
+                                className="px-2.5 py-1 text-[11px] rounded-[6px] bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                              >
+                                Save &amp; resend
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
                         <div
                           className={`rounded-[12px] px-4 py-2.5 text-sm leading-relaxed ${
                             msg.role === 'user'
@@ -1259,6 +1353,19 @@ function ChatContent() {
                             </div>
                           )}
                         </div>
+                        )}
+                        {msg.role === 'user' && msg.content && editingId !== msg.id && !sending && (
+                          <div className="flex items-center justify-end gap-3 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(msg.id, msg.content)}
+                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              <span>Edit</span>
+                            </button>
+                          </div>
+                        )}
                         {msg.role === 'assistant' && msg.content && (
                           <div className="flex items-center gap-3 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
                             <button

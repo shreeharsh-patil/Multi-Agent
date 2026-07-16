@@ -53,6 +53,7 @@ export function Sidebar() {
   const { isCollapsed, toggle } = useSidebar()
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
+  const [conversationSearch, setConversationSearch] = useState('')
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
   const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState('all')
@@ -158,7 +159,12 @@ export function Sidebar() {
     const sevenDaysAgo = new Date(todayStart)
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-    conversations.forEach((conv) => {
+    const q = conversationSearch.trim().toLowerCase()
+    const visible = q
+      ? conversations.filter((c) => c.title.toLowerCase().includes(q))
+      : conversations
+
+    visible.forEach((conv) => {
       const date = new Date(conv.createdAt)
       if (date >= todayStart) {
         today.push(conv)
@@ -441,10 +447,23 @@ export function Sidebar() {
         )}>
           {conversations.length > 0 && (
             <>
+              <div className="relative mb-2">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={conversationSearch}
+                  onChange={(e) => setConversationSearch(e.target.value)}
+                  placeholder="Search chats..."
+                  className="w-full h-8 pl-8 pr-2 rounded-[8px] bg-card border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
               {renderHistorySection("Today", today)}
               {renderHistorySection("Yesterday", yesterday)}
               {renderHistorySection("Previous 7 Days", previous7Days)}
               {renderHistorySection("Older", older)}
+              {conversationSearch.trim() && today.length + yesterday.length + previous7Days.length + older.length === 0 && (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">No chats found.</p>
+              )}
             </>
           )}
         </div>
