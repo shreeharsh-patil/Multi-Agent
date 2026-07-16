@@ -234,7 +234,13 @@ function ChatContent() {
       )
 
       if (!response.ok) {
-        throw new Error('Failed to synthesize speech')
+        let detail = `TTS failed (${response.status})`
+        try {
+          const err = await response.json()
+          if (err.detail) detail = err.detail
+          else if (err.error) detail = err.error
+        } catch {}
+        throw new Error(detail)
       }
 
       const blob = await response.blob()
