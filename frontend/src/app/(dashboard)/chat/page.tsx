@@ -151,6 +151,7 @@ function ChatContent() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   // Use a ref to track sending state synchronously — React setState is async
   // and won't prevent double-clicks fast enough when both calls see sending=false.
   const sendingRef = useRef(false)
@@ -171,11 +172,37 @@ function ChatContent() {
   // an upload already started on select instead of uploading a second time.
   const uploadPromises = useRef<Map<string, Promise<Attachment>>>(new Map())
 
+  // The Radix ScrollArea scrolls its inner viewport, not the Root element.
+  const getScrollViewport = useCallback((): HTMLElement | null => {
+    return scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') ?? null
+  }, [])
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const vp = getScrollViewport()
+    if (vp) vp.scrollTo({ top: vp.scrollHeight, behavior })
+  }, [getScrollViewport])
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    // Only auto-follow new messages when already near the bottom, so we don't
+    // yank the view away while the user is reading scrollback.
+    const vp = getScrollViewport()
+    if (!vp) return
+    const nearBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 120
+    if (nearBottom) scrollToBottom('auto')
+  }, [messages, getScrollViewport, scrollToBottom])
+
+  // Toggle the scroll-to-bottom button based on scroll position.
+  useEffect(() => {
+    const vp = getScrollViewport()
+    if (!vp) return
+    const onScroll = () => {
+      const distance = vp.scrollHeight - vp.scrollTop - vp.clientHeight
+      setShowScrollToBottom(distance > 200)
     }
-  }, [messages])
+    vp.addEventListener('scroll', onScroll)
+    onScroll()
+    return () => vp.removeEventListener('scroll', onScroll)
+  }, [getScrollViewport])
 
   const uploadAttachment = useCallback(async (att: Attachment): Promise<Attachment> => {
     setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, status: 'uploading', progress: 0 } : a))
@@ -381,6 +408,30 @@ function ChatContent() {
   const [, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
 
+  // Persist unsent composer text per-conversation so it survives navigation
+  // and refreshes. Keyed by conversation id ("new" for a fresh chat).
+  const draftKey = `chat-draft:${conversationId ?? 'new'}`
+  const draftRestoredRef = useRef<string | null>(null)
+  useEffect(() => {
+    // Restore the saved draft once per conversation switch.
+    if (draftRestoredRef.current === draftKey) return
+    draftRestoredRef.current = draftKey
+    try {
+      const saved = localStorage.getItem(draftKey)
+      setInput(saved ?? '')
+    } catch {
+      // localStorage may be unavailable (private mode); ignore.
+    }
+  }, [draftKey])
+  useEffect(() => {
+    try {
+      if (input.trim()) localStorage.setItem(draftKey, input)
+      else localStorage.removeItem(draftKey)
+    } catch {
+      // ignore storage failures
+    }
+  }, [input, draftKey])
+
   const shareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => {
@@ -570,6 +621,26 @@ function ChatContent() {
     setChatTitle('')
     setMessages([])
   }, [])
+
+  // Global keyboard shortcuts: Ctrl/Cmd+Shift+O starts a new chat; pressing
+  // "/" while not already typing focuses the composer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        startNewConversation()
+        return
+      }
+      if (e.key === '/' && !typing) {
+        e.preventDefault()
+        textareaRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [startNewConversation])
 
   // Load conversation from search param
   const idParam = searchParams?.get('id')
@@ -1435,6 +1506,16 @@ function ChatContent() {
               </div>
             </ScrollArea>
           )}
+          {showScrollToBottom && messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom('smooth')}
+              title="Scroll to bottom"
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 h-9 w-9 rounded-full bg-card border border-border shadow-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Anchored bottom input block */}
@@ -1516,6 +1597,14 @@ function ChatContent() {
                   {sending ? <Square className="h-3.5 w-3.5 fill-current" /> : <Send className="h-4 w-4 stroke-[1.8]" />}
                 </Button>
               </div>
+            </div>
+            <div className="flex items-center justify-between px-1 text-[10px] text-muted-foreground select-none">
+              <span>
+                <kbd className="font-sans">Enter</kbd> to send · <kbd className="font-sans">Shift+Enter</kbd> for newline · <kbd className="font-sans">/</kbd> to focus
+              </span>
+              {input.trim() && (
+                <span>{input.trim().split(/\s+/).length} words · {input.length} chars</span>
+              )}
             </div>
           </div>
         </div>

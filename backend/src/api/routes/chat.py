@@ -247,6 +247,29 @@ async def delete_conversation(conv_id: str, http_request: Request) -> dict:
     return {"success": True, "message": "Conversation deleted"}
 
 
+class RenameConversationRequest(BaseModel):
+    title: str
+
+
+@router.patch("/conversations/{conv_id}")
+async def rename_conversation(
+    conv_id: str, body: RenameConversationRequest, http_request: Request
+) -> dict:
+    """Rename a conversation (owner only)."""
+    conv = await Conversation.get(conv_id)
+    user_id = (getattr(http_request.state, "user", None) or {}).get("sub", "default")
+    if not conv or conv.user_id != user_id:
+        raise HTTPException(404, "Conversation not found")
+    new_title = body.title.strip()[:120]
+    if not new_title:
+        raise HTTPException(400, "Title cannot be empty")
+    conv.title = new_title
+    conv.updated_at = datetime.now(timezone.utc)
+    await conv.save()
+    return {"success": True, "id": str(conv.id), "title": conv.title}
+
+
+
 @router.post("")
 async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
     try:

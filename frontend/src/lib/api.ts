@@ -264,6 +264,11 @@ export const api = {
       }>(`/api/chat/conversations/${id}`),
     deleteConversation: (id: string) =>
       fetchApi<{ success: boolean }>(`/api/chat/conversations/${id}`, { method: 'DELETE' }),
+    renameConversation: (id: string, title: string) =>
+      fetchApi<{ success: boolean; id: string; title: string }>(`/api/chat/conversations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      }),
     createShare: (id: string) => fetchApi<{ token: string; conversationId: string }>(`/api/shares/chat/${id}`, { method: 'POST' }),
     revokeShare: (id: string) => fetchApi<{ success: boolean }>(`/api/shares/chat/${id}`, { method: 'DELETE' }),
   },

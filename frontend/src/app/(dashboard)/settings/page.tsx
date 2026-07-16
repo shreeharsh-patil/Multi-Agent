@@ -275,13 +275,7 @@ export default function SettingsPage() {
                 onCheckedChange={(checked) => handleTogglePreference('useOpendocumentsRag', checked)}
               />
             </div>
-            <div className="border-t border-border pt-5">
-              <div className="grid gap-2">
-                <Label htmlFor="opendocuments-url">API URL</Label>
-                <Input id="opendocuments-url" value="http://localhost:5001" disabled className="opacity-70" />
-                <p className="text-xs text-muted-foreground">Configured globally in backend settings.</p>
-              </div>
-            </div>
+
           </CardContent>
         </Card>
       </section>

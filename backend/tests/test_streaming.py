@@ -26,11 +26,13 @@ class MockEvent:
         node_name: str = "orchestrator",
         content: str | None = None,
         is_final: bool = False,
+        partial: bool = True,
     ):
         self.node_name = node_name
         self.content = content
         self.message = content
         self._is_final = is_final
+        self.partial = partial
 
     def is_final_response(self) -> bool:
         return self._is_final
@@ -102,8 +104,8 @@ class TestProcessMessageStream:
         """Content from multiple events is accumulated into the complete event."""
         runner = MagicMock()
         runner.run_async.return_value.__aiter__.return_value = iter([
-            MockEvent("orchestrator", "Hello ", is_final=False),
-            MockEvent("knowledge", "World!", is_final=True),
+            MockEvent("orchestrator", "Hello ", is_final=False, partial=True),
+            MockEvent("knowledge", "Hello World!", is_final=True, partial=False),
         ])
 
         with patch("src.adk.runner.create_runner", return_value=runner):

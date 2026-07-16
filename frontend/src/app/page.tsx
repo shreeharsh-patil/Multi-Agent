@@ -524,7 +524,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-black/[0.04]">
-          <span className="text-xs text-black/20">&copy; 2026 Agentic. All rights reserved.</span>
+          <span className="text-xs text-black/20">&copy; 2026 Agentic. All rights reserved. Built By Shreeharsh</span>
         </div>
       </footer>
     </div>

@@ -24,7 +24,8 @@ import {
   Trash2,
   FolderOpen,
   FileText,
-  ImageIcon
+  ImageIcon,
+  Pencil
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -54,6 +55,8 @@ export function Sidebar() {
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [conversationSearch, setConversationSearch] = useState('')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
   const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState('all')
@@ -202,6 +205,33 @@ export function Sidebar() {
     }
   }
 
+  const startRename = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setRenamingId(id)
+    setRenameText(currentTitle)
+  }
+
+  const cancelRename = () => {
+    setRenamingId(null)
+    setRenameText('')
+  }
+
+  const saveRename = async (id: string) => {
+    const title = renameText.trim()
+    if (!title) {
+      cancelRename()
+      return
+    }
+    const res = await api.chat.renameConversation(id, title)
+    if (res.success && res.data) {
+      setConversations(prev => prev.map(c => (c.id === id ? { ...c, title: res.data!.title } : c)))
+    } else {
+      console.error('Failed to rename conversation:', res.error)
+    }
+    cancelRename()
+  }
+
   const renderHistorySection = (title: string, list: SidebarConversation[]) => {
     if (list.length === 0) return null
     return (
@@ -212,30 +242,57 @@ export function Sidebar() {
         <div className="space-y-0.5">
           {list.map((conv) => {
             const isActive = pathname.includes(conv.id)
+            const isRenaming = renamingId === conv.id
             return (
               <div
                 key={conv.id}
-                onClick={() => router.push(`/chat?id=${conv.id}`)}
+                onClick={() => { if (!isRenaming) router.push(`/chat?id=${conv.id}`) }}
                 className={cn(
                   "group relative flex items-center justify-between px-3 py-2 rounded-[8px] text-sm cursor-pointer transition-all duration-150",
-                  isActive 
-                    ? "bg-background text-foreground border border-border font-semibold shadow-xs" 
+                  isActive
+                    ? "bg-background text-foreground border border-border font-semibold shadow-xs"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                 )}
               >
-                <span className="truncate w-full pr-6 text-xs">
-                  {conv.title}
-                </span>
+                {isRenaming ? (
+                  <input
+                    type="text"
+                    value={renameText}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setRenameText(e.target.value)}
+                    onBlur={() => saveRename(conv.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); saveRename(conv.id) }
+                      else if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
+                    }}
+                    className="w-full bg-background border border-border rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                ) : (
+                  <>
+                    <span className="truncate w-full pr-10 text-xs">
+                      {conv.title}
+                    </span>
 
-                {/* Hover actions */}
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                  <button 
-                    onClick={(e) => handleDeleteConversation(conv.id, e)}
-                    className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="h-3 w-3 stroke-[1.5]" />
-                  </button>
-                </div>
+                    {/* Hover actions */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                      <button
+                        onClick={(e) => startRename(conv.id, conv.title, e)}
+                        className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Rename"
+                      >
+                        <Pencil className="h-3 w-3 stroke-[1.5]" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteConversation(conv.id, e)}
+                        className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3 stroke-[1.5]" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}
