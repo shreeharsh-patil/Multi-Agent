@@ -273,11 +273,17 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
 
 
 @router.get("/{document_id}")
-async def get_document(document_id: str) -> dict:
+async def get_document(document_id: str, http_request: Request) -> dict:
     """Get document metadata."""
     doc = await Document.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if doc.user_id != resolved_user_id:
+        if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
+            raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     is_image = doc.file_type in IMAGE_EXTENSIONS
     return {
@@ -297,7 +303,7 @@ async def get_document(document_id: str) -> dict:
 
 
 @router.get("/{document_id}/download")
-async def download_document(document_id: str):
+async def download_document(document_id: str, http_request: Request):
     """Serve an uploaded file for inline preview.
 
     If a Google Drive ``webViewLink`` is available the request is redirected
@@ -308,6 +314,12 @@ async def download_document(document_id: str):
     doc = await Document.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if doc.user_id != resolved_user_id:
+        if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
+            raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     # Prefer Drive's viewer when available — it survives server restarts
     # and provides a better preview experience (especially for PDFs).
@@ -351,6 +363,12 @@ async def upload_document_to_drive(document_id: str, http_request: Request) -> d
     doc = await Document.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if doc.user_id != resolved_user_id:
+        if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
+            raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     drive_access_token = http_request.headers.get("X-Drive-Access-Token", "")
     if not drive_access_token:

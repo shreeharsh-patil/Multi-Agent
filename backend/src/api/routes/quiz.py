@@ -218,6 +218,11 @@ async def check_answer(body: CheckAnswerRequest, http_request: Request) -> dict:
     if not session:
         raise HTTPException(404, "Quiz session not found")
 
+    auth_user = getattr(http_request.state, "user", None)
+    user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if session.user_id != user_id:
+        raise HTTPException(403, "Not authorized to access this quiz session")
+
     if body.question_index < 0 or body.question_index >= len(session.questions):
         raise HTTPException(400, "Invalid question index")
 
@@ -253,6 +258,11 @@ async def submit_quiz(body: SubmitRequest, http_request: Request) -> dict:
     session = await QuizSession.get(body.quiz_id)
     if not session:
         raise HTTPException(404, "Quiz session not found")
+
+    auth_user = getattr(http_request.state, "user", None)
+    user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if session.user_id != user_id:
+        raise HTTPException(403, "Not authorized to access this quiz session")
 
     score = sum(1 for a in session.answers if a.is_correct)
     session.score = score
@@ -309,11 +319,16 @@ async def list_quiz_history(http_request: Request, user_id: str = "default") -> 
 
 
 @router.get("/{quiz_id}")
-async def get_quiz(quiz_id: str) -> dict:
+async def get_quiz(quiz_id: str, http_request: Request) -> dict:
     """Get a single quiz session with its results."""
     session = await QuizSession.get(quiz_id)
     if not session:
         raise HTTPException(404, "Quiz session not found")
+
+    auth_user = getattr(http_request.state, "user", None)
+    user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if session.user_id != user_id:
+        raise HTTPException(403, "Not authorized to access this quiz session")
 
     return {
         "id": str(session.id),
@@ -345,10 +360,15 @@ async def get_quiz(quiz_id: str) -> dict:
 
 
 @router.delete("/{quiz_id}")
-async def delete_quiz(quiz_id: str) -> dict:
+async def delete_quiz(quiz_id: str, http_request: Request) -> dict:
     """Delete a quiz session."""
     session = await QuizSession.get(quiz_id)
     if not session:
         raise HTTPException(404, "Quiz session not found")
+
+    auth_user = getattr(http_request.state, "user", None)
+    user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if session.user_id != user_id:
+        raise HTTPException(403, "Not authorized to access this quiz session")
     await session.delete()
     return {"success": True}
