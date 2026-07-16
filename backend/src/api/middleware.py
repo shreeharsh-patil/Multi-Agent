@@ -139,7 +139,21 @@ async def jwt_auth_middleware(request: Request, call_next):
     return JSONResponse(
         status_code=401,
         content={"success": False, "error": "Authentication required. Provide a Bearer token in the Authorization header."},
+        headers=_cors_headers(request),
     )
+
+
+def _cors_headers(request: Request) -> dict:
+    origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    origin = request.headers.get("origin", "")
+    if origin in origins or "*" in origins:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    return {}
 
 
 async def error_handler_middleware(request: Request, call_next):
@@ -153,12 +167,14 @@ async def error_handler_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=e.status_code,
             content={"success": False, "error": e.message},
+            headers=_cors_headers(request),
         )
     except Exception as e:
         logger.error(f"Unhandled error: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": "Internal server error"},
+            headers=_cors_headers(request),
         )
 
 
@@ -204,6 +220,7 @@ async def api_response_envelope_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=response.status_code,
             content={"success": False, "error": error},
+            headers=_cors_headers(request),
         )
 
     if isinstance(payload, dict) and set(payload) >= {"success", "data"}:
