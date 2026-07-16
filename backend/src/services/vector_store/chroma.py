@@ -55,7 +55,7 @@ class ChromaVectorStore(VectorStore):
         collection: str,
         query_embedding: list[float],
         top_k: int = 10,
-        filter: Optional[dict] = None,
+        filter_dict: Optional[dict] = None,
     ) -> list[dict]:
         try:
             client = await self._get_client()
@@ -64,7 +64,7 @@ class ChromaVectorStore(VectorStore):
                 collection_obj.query,
                 query_embeddings=[query_embedding],
                 n_results=top_k,
-                where=filter,
+                where=filter_dict,
             )
             hits = []
             if results["ids"] and results["ids"][0]:

@@ -31,7 +31,7 @@ def serialize_custom(agent: AgentConfig) -> dict:
 
 AGENT_METADATA = [
     {"id": "knowledge", "name": "Knowledge Agent", "description": "RAG-based document search, summaries, and citations using the knowledge base.", "icon": "BookOpen", "capabilities": ["rag", "document_search", "citations", "summaries"]},
-    {"id": "drive", "name": "Drive Agent", "description": "Google Drive file management, uploads, downloads, and folder organization.", "icon": "Brain", "capabilities": ["drive_list", "drive_upload", "drive_download", "folder_management"]},
+    {"id": "drive", "name": "Drive Agent", "description": "Google Drive file management, uploads, downloads, and folder organization.", "icon": "HardDrive", "capabilities": ["drive_list", "drive_upload", "drive_download", "folder_management"]},
     {"id": "notes", "name": "Notes Agent", "description": "Structured notes, summaries, flashcards, and revision materials.", "icon": "StickyNote", "capabilities": ["note_taking", "summaries", "flashcards", "revision_notes"]},
     {"id": "quiz", "name": "Quiz Agent", "description": "MCQs, exams, and practice questions with answer keys and explanations.", "icon": "GraduationCap", "capabilities": ["mcq", "exam_generation", "practice_questions"]},
     {"id": "planner", "name": "Planner Agent", "description": "Study planning, task management, scheduling, and deadline tracking.", "icon": "Calendar", "capabilities": ["study_planning", "task_management", "scheduling"]},

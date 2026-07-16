@@ -286,10 +286,12 @@ async def submit_quiz(body: SubmitRequest, http_request: Request) -> dict:
 
 
 @router.get("/history")
-async def list_quiz_history(user_id: str = "default") -> list[QuizSummary]:
+async def list_quiz_history(http_request: Request, user_id: str = "default") -> list[QuizSummary]:
     """List all quiz sessions for a user, newest first."""
+    from src.api.middleware import resolve_user_id
+    resolved = resolve_user_id(http_request, user_id)
     sessions = await QuizSession.find(
-        QuizSession.user_id == user_id
+        QuizSession.user_id == resolved
     ).sort(-QuizSession.created_at).to_list()
 
     return [

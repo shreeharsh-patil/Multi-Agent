@@ -14,8 +14,16 @@ def user_id(request: Request) -> str:
 @router.post("/chat/{conversation_id}")
 async def create_chat_share(conversation_id: str, request: Request) -> dict:
     conv = await Conversation.get(conversation_id)
-    if not conv or conv.user_id != user_id(request):
+    uid = user_id(request)
+    if not conv:
         raise HTTPException(404, "Conversation not found")
+    # Allow sharing if user owns the conversation or is a workspace member
+    if conv.user_id != uid:
+        if not conv.workspace_id:
+            raise HTTPException(404, "Conversation not found")
+        workspace = await Workspace.get(conv.workspace_id)
+        if not workspace or (workspace.user_id != uid and uid not in workspace.member_ids):
+            raise HTTPException(404, "Conversation not found")
     existing = await ChatShare.find_one(ChatShare.conversation_id == conversation_id, ChatShare.owner_id == user_id(request))
     share = existing or ChatShare(token=secrets.token_urlsafe(32), conversation_id=conversation_id, owner_id=user_id(request))
     if not existing:

@@ -19,7 +19,7 @@ class VectorStore(ABC):
         collection: str,
         query_embedding: list[float],
         top_k: int = 10,
-        filter: Optional[dict] = None,
+        filter_dict: Optional[dict] = None,
     ) -> list[dict]:
         pass
 

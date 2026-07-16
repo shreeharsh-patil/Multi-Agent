@@ -54,12 +54,12 @@ class QdrantVectorStore(VectorStore):
         collection: str,
         query_embedding: list[float],
         top_k: int = 10,
-        filter: Optional[dict] = None,
+        filter_dict: Optional[dict] = None,
     ) -> list[dict]:
         try:
             search_filter = None
-            if filter:
-                conditions = [FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filter.items()]
+            if filter_dict:
+                conditions = [FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filter_dict.items()]
                 search_filter = Filter(must=conditions)
 
             results = await asyncio.to_thread(

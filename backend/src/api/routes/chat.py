@@ -172,8 +172,11 @@ async def _save_messages(
             }
             if workspace_id:
                 update["$set"]["workspace_id"] = workspace_id  # type: ignore[index]
+            # Use PydanticObjectId so the string _id is correctly matched
+            # against the ObjectId stored in MongoDB.
+            from beanie import PydanticObjectId
             await Conversation.get_motor_collection().update_one(
-                {"_id": conv_id},
+                {"_id": PydanticObjectId(conv_id)},
                 update,
             )
     except Exception as e:

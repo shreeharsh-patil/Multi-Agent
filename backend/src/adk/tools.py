@@ -11,6 +11,20 @@ from google.adk.tools import FunctionTool
 from src.utils.logger import logger
 from src.config import settings
 
+# Shared httpx client for Firecrawl to reuse TCP connections across requests.
+_firecrawl_client: httpx.AsyncClient | None = None
+
+
+def _get_firecrawl_client() -> httpx.AsyncClient:
+    global _firecrawl_client
+    if _firecrawl_client is None:
+        _firecrawl_client = httpx.AsyncClient(
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            timeout=httpx.Timeout(30.0, connect=5.0),
+        )
+    return _firecrawl_client
+
+
 class FirecrawlRotator:
     def __init__(self):
         self._current_idx = 0
@@ -24,7 +38,7 @@ class FirecrawlRotator:
         keys = self.get_keys()
         if not keys:
             raise ValueError("FIRECRAWL_API_KEY is not configured in .env.")
-        
+
         attempts = len(keys)
         async with self._lock:
             start_idx = self._current_idx
@@ -34,42 +48,43 @@ class FirecrawlRotator:
             idx = (start_idx + i) % attempts
             key = keys[idx]
             masked_key = f"...{key[-4:]}" if len(key) > 4 else "..."
-            
+
             # Copy kwargs to prevent mutation between retries
             req_kwargs = kwargs.copy()
             headers = req_kwargs.pop("headers", {})
             headers = headers.copy() if headers else {}
             headers["Authorization"] = f"Bearer {key}"
-            
+
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    url = f"https://api.firecrawl.dev/v1{endpoint}"
-                    if method.upper() == "POST":
-                        response = await client.post(url, headers=headers, **req_kwargs)
-                    else:
-                        response = await client.get(url, headers=headers, **req_kwargs)
-                    
-                    if response.status_code == 429:
-                        raise Exception("Rate limit reached (429)")
-                    elif response.status_code in (401, 403):
-                        raise Exception(f"Authentication failure ({response.status_code})")
-                    elif response.status_code != 200:
-                        raise Exception(f"Request failed with status {response.status_code}: {response.text}")
-                    
-                    # Update index to the successful key
-                    async with self._lock:
-                        self._current_idx = idx
-                        
-                    return response.json()
+                client = _get_firecrawl_client()
+                url = f"https://api.firecrawl.dev/v1{endpoint}"
+                if method.upper() == "POST":
+                    response = await client.post(url, headers=headers, **req_kwargs)
+                else:
+                    response = await client.get(url, headers=headers, **req_kwargs)
+
+                if response.status_code == 429:
+                    raise Exception("Rate limit reached (429)")
+                elif response.status_code in (401, 403):
+                    raise Exception(f"Authentication failure ({response.status_code})")
+                elif response.status_code != 200:
+                    raise Exception(f"Request failed with status {response.status_code}: {response.text}")
+
+                # Update index to the successful key
+                async with self._lock:
+                    self._current_idx = idx
+
+                return response.json()
             except Exception as e:
                 last_error = e
                 logger.warning(
                     f"Firecrawl API key rotation: Key {masked_key} failed. "
                     f"Error: {e}. Retrying with next key..."
                 )
-        
+
         logger.error(f"All {attempts} Firecrawl keys failed.")
         raise last_error
+
 
 firecrawl_rotator = FirecrawlRotator()
 
@@ -261,47 +276,46 @@ async def web_search(query: str, for_research: bool = False) -> str:
             logger.error(f"Firecrawl search failed, falling back to DuckDuckGo: {e}")
 
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Try DuckDuckGo-style search via a free API
-            response = await client.get(
-                "https://api.duckduckgo.com/",
-                params={
-                    "q": query,
-                    "format": "json",
-                    "no_html": 1,
-                    "skip_disambig": 1,
-                },
-            )
-            if response.status_code == 200:
-                data = response.json()
-                results = []
+        client = _get_firecrawl_client()
+        # Try DuckDuckGo-style search via a free API
+        response = await client.get(
+            "https://api.duckduckgo.com/",
+            params={
+                "q": query,
+                "format": "json",
+                "no_html": 1,
+                "skip_disambig": 1,
+            },
+        )
+        if response.status_code == 200:
+            data = response.json()
+            results = []
 
-                # Abstract text
-                abstract = data.get("AbstractText", "")
-                if abstract:
-                    results.append(f"Summary: {abstract}")
+            # Abstract text
+            abstract = data.get("AbstractText", "")
+            if abstract:
+                results.append(f"Summary: {abstract}")
 
-                # Related topics
-                topics = data.get("RelatedTopics", [])
-                for topic in topics[:5]:
-                    if "Text" in topic:
-                        results.append(f"- {topic['Text']}")
-                    elif "Topics" in topic:
-                        for sub in topic.get("Topics", [])[:3]:
-                            if "Text" in sub:
-                                results.append(f"- {sub['Text']}")
+            # Related topics
+            topics = data.get("RelatedTopics", [])
+            for topic in topics[:5]:
+                if "Text" in topic:
+                    results.append(f"- {topic['Text']}")
+                elif "Topics" in topic:
+                    for sub in topic.get("Topics", [])[:3]:
+                        if "Text" in sub:
+                            results.append(f"- {sub['Text']}")
 
-                if results:
-                    return "\n".join(results)
+            if results:
+                return "\n".join(results)
 
-            # Fallback to a simple text message
-            return (
-                f"Search results for '{query}':\n"
-                "1. Check Google for the latest information\n"
-                "2. Browse relevant Wikipedia articles\n"
-                f"Note: Full web search requires a dedicated API key (Google Custom Search, etc.)"
-            )
+        # Fallback to a simple text message
+        return (
+            f"Search results for '{query}':\n"
+            "1. Check Google for the latest information\n"
+            "2. Browse relevant Wikipedia articles\n"
+            f"Note: Full web search requires a dedicated API key (Google Custom Search, etc.)"
+        )
     except ImportError:
         return f"Web search unavailable: httpx library not installed. Run: pip install httpx"
     except Exception as e:
@@ -339,23 +353,23 @@ async def scrape_page(url: str) -> str:
 
     # Basic fallback: fetch HTML and strip tags
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code == 200:
-                import re
-                html = resp.text
-                # Remove script/style tags and their content
-                html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-                html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
-                # Strip remaining HTML tags
-                text = re.sub(r'<[^>]+>', '', html)
-                # Collapse whitespace
-                text = re.sub(r'\n\s*\n', '\n\n', text)
-                text = re.sub(r' {2,}', ' ', text)
-                text = text.strip()[:15000]
-                if text:
-                    logger.info(f"Successfully scraped URL via HTTP fallback: {url}")
-                    return text
+        client = _get_firecrawl_client()
+        resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
+        if resp.status_code == 200:
+            import re
+            html = resp.text
+            # Remove script/style tags and their content
+            html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            # Strip remaining HTML tags
+            text = re.sub(r'<[^>]+>', '', html)
+            # Collapse whitespace
+            text = re.sub(r'\n\s*\n', '\n\n', text)
+            text = re.sub(r' {2,}', ' ', text)
+            text = text.strip()[:15000]
+            if text:
+                logger.info(f"Successfully scraped URL via HTTP fallback: {url}")
+                return text
     except Exception as e:
         logger.warning(f"HTTP fallback scrape failed for {url}: {e}")
 

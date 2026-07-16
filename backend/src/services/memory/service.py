@@ -60,7 +60,7 @@ class MemoryService:
             collection=self.collection,
             query_embedding=query_embedding,
             top_k=top_k,
-            filter={"user_id": user_id},
+            filter_dict={"user_id": user_id},
         )
 
         return results

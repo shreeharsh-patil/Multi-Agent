@@ -28,7 +28,7 @@ class Retriever:
             collection=self.collection,
             query_embedding=query_embedding,
             top_k=top_k,
-            filter=filter_dict,
+            filter_dict=filter_dict,
         )
 
         logger.info(f"Retrieved {len(results)} results for query")
