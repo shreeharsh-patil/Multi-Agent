@@ -62,3 +62,6 @@ docker-data/
 # Misc
 *.tsbuildinfo
 next-env.d.ts
+
+# Windows artifact (reserved name collision)
+nul
