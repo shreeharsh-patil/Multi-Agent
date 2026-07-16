@@ -169,6 +169,20 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          <a
+            href="/login"
+            className="inline-flex items-center gap-2 mt-10 px-7 py-3.5 bg-[#111] text-white text-sm rounded-xl hover:bg-[#333] transition-all duration-200 tracking-widest font-medium w-fit"
+            style={{
+              opacity: heroReady ? 1 : 0,
+              filter: heroReady ? "blur(0px)" : "blur(16px)",
+              transform: heroReady ? "translateY(0px)" : "translateY(20px)",
+              transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) 360ms, filter 0.8s cubic-bezier(0.16,1,0.3,1) 360ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) 360ms`,
+            }}
+          >
+            Start building
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
         </div>
       </section>
 
@@ -459,10 +473,12 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <a href="/login" className="w-full block">
-                  <button className={`w-full py-3 rounded-xl text-sm tracking-widest transition-all duration-200 ${plan.highlight ? "bg-[#111] text-white hover:bg-[#333]" : "border border-black/10 text-black/60 hover:border-black/25 hover:text-black hover:bg-black/[0.04]"}`}>
-                    {plan.name === "Team" ? "CONTACT SALES" : "GET STARTED"}
-                  </button>
+                <a
+                  href={plan.name === "Team" ? "#" : "/login"}
+                  className={`block w-full py-3 rounded-xl text-sm tracking-widest transition-all duration-200 text-center ${plan.highlight ? "bg-[#111] text-white hover:bg-[#333]" : "border border-black/10 text-black/60 hover:border-black/25 hover:text-black hover:bg-black/[0.04]"}`}
+                  {...(plan.name !== "Team" ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
+                >
+                  {plan.name === "Team" ? "CONTACT SALES" : "GET STARTED"}
                 </a>
               </BentoCard>
             ))}
