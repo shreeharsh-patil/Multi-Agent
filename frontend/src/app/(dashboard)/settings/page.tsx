@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signIn } from 'next-auth/react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
-import { User, Bell, Palette, Key, Globe, Database, HardDrive, CalendarDays, CheckCircle2, XCircle, ExternalLink, BookOpen, Loader2 } from 'lucide-react'
+import { clearAccessToken } from '@/lib/auth-store'
+import { User, Bell, Palette, Key, Globe, Database, HardDrive, CalendarDays, CheckCircle2, XCircle, ExternalLink, BookOpen, Loader2, LogOut } from 'lucide-react'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -90,6 +91,11 @@ export default function SettingsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleLogout = async () => {
+    clearAccessToken()
+    await signOut({ callbackUrl: '/login' })
   }
 
   if (loading) {
@@ -384,6 +390,34 @@ export default function SettingsPage() {
             <div className="flex gap-3">
               <Button variant="outline" className="shadow-sm">Export Data</Button>
               <Button variant="outline" className="text-[#c64545] hover:bg-[#c64545]/10 border-border shadow-sm">Clear Cache</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sign Out */}
+        <Card className="shadow-xs border-red-200/60 col-span-full">
+          <CardHeader className="p-5">
+            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-base text-foreground">
+              <LogOut className="h-4.5 w-4.5 text-red-500" />
+              Sign Out
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">End your current session</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 p-5 pt-0">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              You are signed in as{' '}
+              <span className="font-semibold text-foreground">{session?.user?.email || 'user@example.com'}</span>.
+              Signing out will redirect you to the login page.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-all shadow-sm"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </Button>
             </div>
           </CardContent>
         </Card>

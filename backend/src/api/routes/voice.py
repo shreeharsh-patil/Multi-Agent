@@ -10,6 +10,21 @@ router = APIRouter(prefix="/api/voice", tags=["Voice"])
 class SynthesizeRequest(BaseModel):
     text: str
 
+
+# Shared httpx client for connection pooling across all voice requests.
+# Keeps TCP connections alive instead of creating new ones per request.
+_voice_client: httpx.AsyncClient | None = None
+
+
+def _get_voice_client() -> httpx.AsyncClient:
+    global _voice_client
+    if _voice_client is None:
+        _voice_client = httpx.AsyncClient(
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            timeout=httpx.Timeout(60.0, connect=10.0),
+        )
+    return _voice_client
+
 @router.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """Transcribes an uploaded audio file using Deepgram's Nova-2 model."""
@@ -28,13 +43,12 @@ async def transcribe(file: UploadFile = File(...)):
     }
     
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true",
-                content=content,
-                headers=headers,
-                timeout=60.0
-            )
+        client = _get_voice_client()
+        response = await client.post(
+            "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true",
+            content=content,
+            headers=headers,
+        )
     except httpx.RequestError as exc:
         logger.error(f"HTTP request to Deepgram failed: {exc}")
         raise HTTPException(status_code=502, detail=f"Network error communicating with Deepgram: {str(exc)}")
@@ -72,13 +86,12 @@ async def synthesize(req: SynthesizeRequest):
     }
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.deepgram.com/v1/speak?model=aura-asteria-en",
-                json={"text": req.text},
-                headers=headers,
-                timeout=60.0
-            )
+        client = _get_voice_client()
+        response = await client.post(
+            "https://api.deepgram.com/v1/speak?model=aura-asteria-en",
+            json={"text": req.text},
+            headers=headers,
+        )
     except httpx.RequestError as exc:
         logger.error(f"HTTP request to Deepgram speak failed: {exc}")
         raise HTTPException(status_code=502, detail=f"Network error communicating with Deepgram Speak: {str(exc)}")

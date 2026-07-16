@@ -75,21 +75,23 @@ class RotatingProvider(BaseLLMProvider):
     def __init__(
         self,
         providers: list[BaseLLMProvider],
-        rate_limit_rpm: int = 25,
+        rate_limit_rpm: int = 60,
     ):
         """
         Args:
             providers: Ordered list of providers to rotate through.
             rate_limit_rpm: Target max requests per minute across all
-                providers. Defaults to 25 to stay safely within most
-                free-tier limits.
+                providers. Defaults to 60 to stay safely within most
+                free-tier limits. Burst capacity is double the RPM so
+                short bursts don't artificially delay users.
         """
         if not providers:
             raise ValueError("At least one provider is required")
         self.providers = providers
         self._current_idx = 0
         self._lock = asyncio.Lock()
-        self._limiter = TokenBucket(capacity=rate_limit_rpm, window_seconds=60.0)
+        # Burst capacity = 2x RPM so the first N requests are never delayed
+        self._limiter = TokenBucket(capacity=rate_limit_rpm * 2, window_seconds=60.0)
 
     # ── internal ──────────────────────────────────────────────────────
 

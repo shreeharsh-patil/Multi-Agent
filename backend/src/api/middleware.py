@@ -212,24 +212,36 @@ async def api_response_envelope_middleware(request: Request, call_next):
     except (TypeError, ValueError):
         return response
 
+    # Build a new JSONResponse with the original status and headers so the
+    # response body is not consumed in-place (which would leave the client
+    # with an empty response when the original response is returned directly).
+    headers = dict(response.headers)
+    headers.pop("content-length", None)
+
     # Error responses are already in the public contract.  Successful
     # responses are wrapped, including ChatResponse/Auth responses whose
     # payloads contain their own domain fields.
     if response.status_code >= 400:
         if isinstance(payload, dict) and "success" in payload:
-            return response
+            return JSONResponse(
+                status_code=response.status_code,
+                content=payload,
+                headers=headers,
+            )
         error = payload.get("detail", payload) if isinstance(payload, dict) else payload
         return JSONResponse(
             status_code=response.status_code,
             content={"success": False, "error": error},
-            headers=_cors_headers(request),
+            headers=headers,
         )
 
     if isinstance(payload, dict) and set(payload) >= {"success", "data"}:
-        return response
+        return JSONResponse(
+            status_code=response.status_code,
+            content=payload,
+            headers=headers,
+        )
 
-    headers = dict(response.headers)
-    headers.pop("content-length", None)
     return JSONResponse(
         status_code=response.status_code,
         content={"success": True, "data": payload},

@@ -75,9 +75,9 @@ async def list_documents(http_request: Request, user_id: str = "default", worksp
     if not workspace_id and await should_use_opendocuments(resolved_user_id):
         return await opendocuments_client.list_documents()
 
+    # Build a query scoped to the user. When a workspace is specified, also
+    # filter by workspace — but never remove the user ownership filter.
     query = Document.find(Document.user_id == resolved_user_id)
-    if workspace_id and workspace_id != "__unfiled__":
-        query = Document.find(Document.workspace_id == workspace_id)
     if workspace_id == "__unfiled__":
         query = query.find(Document.workspace_id == None)
     elif workspace_id:

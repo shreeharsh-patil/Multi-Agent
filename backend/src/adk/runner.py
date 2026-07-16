@@ -182,33 +182,45 @@ async def _build_conversation_context(conversation_id: str) -> str:
 
     Returns a formatted string of previous messages, or an empty string
     if the conversation doesn't exist yet or has no history.
+
+    Uses a MongoDB projection to fetch only the messages array instead of
+    the entire document — much faster for long conversations.
     """
     if conversation_id in ("default", ""):
         return ""
     try:
+        from beanie import PydanticObjectId
         from src.models.conversation import Conversation
-        conv = await Conversation.get(conversation_id)
-        if not conv or not conv.messages:
+
+        # Use projection to fetch only messages — avoids transferring
+        # the full document (title, metadata, timestamps, etc.) over the wire.
+        raw = await Conversation.get_motor_collection().find_one(
+            {"_id": PydanticObjectId(conversation_id)},
+            {"messages": 1},
+        )
+        if not raw or "messages" not in raw:
             return ""
 
-        # Take all messages except the last user message (that's the current one)
-        # to build the prior context
+        messages_raw = raw["messages"]
+        if not messages_raw:
+            return ""
+
         context_parts = []
-        for m in conv.messages:
-            role = "User" if m.role == "user" else "Assistant"
-            if m.content.strip():
-                context_parts.append(f"{role}: {m.content.strip()}")
+        for m in messages_raw:
+            role = "User" if m.get("role") == "user" else "Assistant"
+            content = (m.get("content") or "").strip()
+            if content:
+                context_parts.append(f"{role}: {content}")
 
             # Include attachment names from metadata so the LLM knows what
             # files were attached in previous turns (e.g. image names).
-            metadata = m.metadata
-            if metadata and isinstance(metadata, dict):
-                attachments = metadata.get("attachments")
-                if attachments and isinstance(attachments, list):
-                    for att in attachments:
-                        name = att.get("name") if isinstance(att, dict) else getattr(att, "name", None)
-                        if name:
-                            context_parts.append(f"   📎 attached: {name}")
+            metadata = m.get("metadata") or {}
+            attachments = metadata.get("attachments")
+            if attachments and isinstance(attachments, list):
+                for att in attachments:
+                    name = att.get("name") if isinstance(att, dict) else getattr(att, "name", None)
+                    if name:
+                        context_parts.append(f"   📎 attached: {name}")
 
         if not context_parts:
             return ""
@@ -249,13 +261,9 @@ async def _fallback_process_message(
         output = await llm_service.generate(
             prompt=full_prompt,
             system_instruction=(
-                "You are a helpful AI assistant on a multi-agent platform. "
-                "You are having a conversation with a user. Use the conversation "
-                "history provided before the latest message to understand context. "
-                "Be creative, expressive, and provide thorough, well-structured "
-                "answers. Use rich formatting: **bold** for emphasis, *italic* for "
-                "terms, bullet points for lists, headings for structure, and "
-                "examples or analogies to explain concepts."
+                "You are a helpful assistant. Use conversation history before the latest message to understand context. "
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, "
+                "bullet points for lists, headings for structure."
             ),
         )
         return {
@@ -381,13 +389,9 @@ async def _fallback_process_message_stream(
         async for chunk in llm_service.generate_stream(
             prompt=prompt_with_context,
             system_instruction=(
-                "You are a helpful AI assistant on a multi-agent platform. "
-                "You are having a conversation with a user. Use the conversation "
-                "history provided before the latest message to understand context. "
-                "Be creative, expressive, and provide thorough, well-structured "
-                "answers. Use rich formatting: **bold** for emphasis, *italic* for "
-                "terms, bullet points for lists, headings for structure, and "
-                "examples or analogies to explain concepts."
+                "You are a helpful assistant. Use conversation history before the latest message to understand context. "
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, "
+                "bullet points for lists, headings for structure."
             ),
         ):
             if chunk:

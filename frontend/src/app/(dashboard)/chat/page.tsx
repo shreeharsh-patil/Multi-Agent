@@ -171,12 +171,6 @@ function ChatContent() {
     }
   }, [messages])
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages])
-
   const uploadAttachment = useCallback(async (att: Attachment): Promise<Attachment> => {
     setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, status: 'uploading', progress: 0 } : a))
     let final: Attachment
@@ -644,6 +638,23 @@ function ChatContent() {
       let accumulatedContent = ''
       let newConvId = currentConvId
 
+      // Accumulate content in a ref and flush to React state at ~60 fps
+      // to avoid hundreds of re-renders per second during streaming.
+      const pendingContentRef = { current: '' }
+      let frameId: number | null = null
+      const flushState = () => {
+        frameId = null
+        if (pendingContentRef.current === accumulatedContent) return
+        pendingContentRef.current = accumulatedContent
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? { ...msg, content: accumulatedContent }
+              : msg,
+          ),
+        )
+      }
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -665,13 +676,10 @@ function ChatContent() {
 
               if (currentEvent === 'chunk' && data.text) {
                 accumulatedContent += data.text
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantId
-                      ? { ...msg, content: accumulatedContent }
-                      : msg,
-                  ),
-                )
+                // Schedule a single visual update per frame
+                if (frameId === null) {
+                  frameId = requestAnimationFrame(flushState)
+                }
               } else if (currentEvent === 'agent' && data.agent_id) {
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -682,6 +690,8 @@ function ChatContent() {
                 )
               } else if (currentEvent === 'complete' && data.conversation_id) {
                 newConvId = data.conversation_id
+                if (frameId !== null) cancelAnimationFrame(frameId)
+                accumulatedContent = data.output || accumulatedContent
                 setConversationId(data.conversation_id)
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -691,6 +701,7 @@ function ChatContent() {
                   ),
                 )
               } else if (currentEvent === 'error' && data.error) {
+                if (frameId !== null) cancelAnimationFrame(frameId)
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -706,7 +717,8 @@ function ChatContent() {
         }
       }
 
-      // Final safety update
+      // Cancel any remaining frame and apply the final state
+      if (frameId !== null) cancelAnimationFrame(frameId)
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
@@ -772,10 +784,10 @@ function ChatContent() {
     } finally {
       sendingRef.current = false
       setSending(false)
-      fetchConversations()
+      // Refresh side-panel document list on send completion
       window.dispatchEvent(new Event('refresh-documents-list'))
     }
-  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, fetchConversations])
+  }, [input, attachments, sending, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)

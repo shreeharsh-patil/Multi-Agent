@@ -16,6 +16,7 @@ from src.services.llm.gemini_provider import GeminiProvider
 from src.services.llm.openai_compat import OpenAICompatibleProvider
 
 _LLMProvider: Optional[BaseLLMProvider] = None
+_aiand_warmup_done: asyncio.Event | None = None
 
 
 def _build_providers() -> list[BaseLLMProvider]:
@@ -86,22 +87,32 @@ async def _warmup_aiand(providers: list[BaseLLMProvider]) -> None:
     The free-tier model unloads after inactivity and takes ~30-60s
     to cold-start. This keeps it warm after the first real use or
     primes it for a fast first reply.
+
+    Sets ``_aiand_warmup_done`` so that ``wait_for_aiand_warmup()``
+    can await completion before routing real requests to AIand.
     """
-    for p in providers:
-        name = getattr(p, "name", "")
-        if name == "AIand":
-            logger.info("Warming up AIand (Qwen) in background...")
-            try:
-                await asyncio.wait_for(
-                    p.generate(prompt="Hello"),
-                    timeout=70.0,
-                )
-                logger.info("AIand (Qwen) warmup complete")
-            except asyncio.TimeoutError:
-                logger.warning("AIand warmup timed out (cold start slow) — will warm on first real request")
-            except Exception as e:
-                logger.warning(f"AIand warmup failed: {e}")
-            return
+    global _aiand_warmup_done
+    try:
+        for p in providers:
+            name = getattr(p, "name", "")
+            if name == "AIand":
+                logger.info("Warming up AIand (Qwen) in background...")
+                try:
+                    await asyncio.wait_for(
+                        p.generate(prompt="Hello"),
+                        timeout=70.0,
+                    )
+                    logger.info("AIand (Qwen) warmup complete")
+                except asyncio.TimeoutError:
+                    logger.warning("AIand warmup timed out (cold start slow) — will warm on first real request")
+                except Exception as e:
+                    logger.warning(f"AIand warmup failed: {e}")
+                return
+    finally:
+        # Signal completion in all exit paths so wait_for_aiand_warmup()
+        # never hangs, even if AIand is not configured at all.
+        if _aiand_warmup_done is not None:
+            _aiand_warmup_done.set()
 
 
 def get_llm_provider() -> BaseLLMProvider:
@@ -128,14 +139,28 @@ def get_llm_provider() -> BaseLLMProvider:
             "MISTRAL_API_KEY, NARAROUTER_API_KEY, AIAND_API_KEY in your .env file."
         )
 
-    _LLMProvider = RotatingProvider(providers, rate_limit_rpm=30)
+    _LLMProvider = RotatingProvider(providers, rate_limit_rpm=60)
     logger.info(
         f"LLM service ready with {len(providers)} provider(s) — "
         f"auto-rotation enabled, rate-limited to ~30 RPM (free-tier safe)"
     )
 
     # Fire-and-forget AIand warmup so its cold start doesn't
-    # affect the first real user request.
-    asyncio.create_task(_warmup_aiand(providers))
+    # affect the first real user request. Only create the event
+    # when AIand is actually in the provider chain.
+    if any(getattr(p, "name", "") == "AIand" for p in providers):
+        global _aiand_warmup_done
+        _aiand_warmup_done = asyncio.Event()
+        asyncio.create_task(_warmup_aiand(providers))
 
     return _LLMProvider
+
+
+async def wait_for_aiand_warmup():
+    """Await AIand warmup completion.
+
+    Call this before routing a real request to AIand so the
+    free-tier cold start doesn't delay the user.
+    """
+    if _aiand_warmup_done is not None:
+        await _aiand_warmup_done.wait()
