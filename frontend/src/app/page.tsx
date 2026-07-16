@@ -89,9 +89,11 @@ export default function LandingPage() {
 
         <div className="h-20" />
 
-        <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col px-6 md:px-12 pb-12 max-w-3xl">
+        <div className="absolute inset-x-0 z-30 flex flex-col justify-end px-6 md:px-12 pb-4 max-w-3xl"
+          style={{ top: '35vh', bottom: 0 }}
+        >
           <h1
-            className="text-6xl sm:text-7xl md:text-8xl font-light text-[#111] leading-[1.0] tracking-tight mb-10"
+            className="text-4xl sm:text-5xl md:text-8xl font-light text-[#111] leading-[1.0] tracking-tight mb-4 sm:mb-8"
             style={{
               fontFamily: '"IBM Plex Sans", sans-serif',
               opacity: heroReady ? 1 : 0,
