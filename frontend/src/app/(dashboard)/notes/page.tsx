@@ -45,6 +45,7 @@ export default function NotesPage() {
   const [saving, setSaving] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false)
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
@@ -71,6 +72,27 @@ export default function NotesPage() {
   useEffect(() => {
     fetchNotes()
   }, [fetchNotes])
+
+  useEffect(() => {
+    if (deepLinkHandled || notes.length === 0) return
+    const noteId = new URLSearchParams(window.location.search).get('note')
+    if (!noteId) {
+      setDeepLinkHandled(true)
+      return
+    }
+    const note = notes.find((item) => item.id === noteId)
+    if (!note) {
+      setDeepLinkHandled(true)
+      return
+    }
+    setDeepLinkHandled(true)
+    setSelectedNote(note)
+    if (!note.content) {
+      api.notes.get(note.id).then((res) => {
+        if (res.success && res.data) setSelectedNote(res.data)
+      })
+    }
+  }, [deepLinkHandled, notes])
 
   const filteredNotes = notes.filter(
     (n) =>

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileText, Upload, Trash2, Loader2, HardDrive, FolderOpen, Plus, Share2, ExternalLink } from 'lucide-react'
 import { api, mkheaders } from '@/lib/api'
-import { formatBytes, formatDate } from '@/lib/utils'
+import { cn, formatBytes, formatDate } from '@/lib/utils'
 
 interface Document {
   id: string
@@ -47,6 +47,7 @@ export default function DocumentsPage() {
   const [creatingWorkspace, setCreatingWorkspace] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
   const [storageUsed, setStorageUsed] = useState<number | null>(null)
+  const [highlightedDocumentId, setHighlightedDocumentId] = useState<string | null>(null)
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
@@ -90,6 +91,21 @@ export default function DocumentsPage() {
     fetchWorkspaces()
     fetchStorage()
   }, [fetchDocuments, fetchWorkspaces, fetchStorage])
+
+  useEffect(() => {
+    if (loading || documents.length === 0) return
+    const documentId = new URLSearchParams(window.location.search).get('document')
+    if (!documentId || !documents.some((document) => document.id === documentId)) return
+    setHighlightedDocumentId(documentId)
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`document-${documentId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    const timer = window.setTimeout(() => setHighlightedDocumentId(null), 2600)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [documents, loading])
 
   const createWorkspace = async () => {
     if (!newWorkspaceName.trim()) return
@@ -361,7 +377,11 @@ export default function DocumentsPage() {
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center gap-4 p-3 rounded-[8px] border border-border bg-secondary hover:bg-secondary/70 transition-colors group shadow-xs"
+                    id={`document-${doc.id}`}
+                    className={cn(
+                      'flex items-center gap-4 p-3 rounded-[8px] border bg-secondary hover:bg-secondary/70 transition-colors group shadow-xs',
+                      highlightedDocumentId === doc.id ? 'border-primary ring-2 ring-primary/15' : 'border-border',
+                    )}
                   >
                     <div className="p-2 rounded-[8px] bg-card text-primary border border-border">
                       <FileText className="h-5 w-5" />

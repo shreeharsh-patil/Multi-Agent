@@ -28,6 +28,7 @@ import {
   Pencil
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { openCommandPalette } from '@/components/command-palette'
 
 // Map existing functional routes to standard names from prompt style
 const navigation = [
@@ -388,6 +389,25 @@ export function Sidebar() {
             )}
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={openCommandPalette}
+          className={cn(
+            'flex h-9 items-center rounded-[8px] border border-border bg-card text-muted-foreground shadow-xs transition-colors hover:bg-secondary/40 hover:text-foreground',
+            isCollapsed ? 'w-9 justify-center self-center' : 'w-full gap-2.5 px-3',
+          )}
+          title="Search workspace (Ctrl+K)"
+          aria-label="Search workspace"
+        >
+          <Search className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+          {!isCollapsed ? (
+            <>
+              <span className="flex-1 text-left text-xs">Search workspace</span>
+              <kbd className="rounded-[4px] border border-border bg-secondary px-1.5 py-0.5 text-[9px] text-muted-foreground">Ctrl K</kbd>
+            </>
+          ) : null}
+        </button>
 
         {/* New Chat Button */}
         <button
