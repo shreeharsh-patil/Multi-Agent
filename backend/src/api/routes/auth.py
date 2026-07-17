@@ -142,6 +142,8 @@ async def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileR
             "notifications": user.preferences.notifications,
             "language": user.preferences.language,
             "useOpendocumentsRag": getattr(user.preferences, "use_opendocuments_rag", False),
+            "memoryEnabled": getattr(user.preferences, "memory_enabled", True),
+            "memoryAutoExtract": getattr(user.preferences, "memory_auto_extract", True),
         },
     )
 
@@ -186,6 +188,12 @@ async def update_me(
         if "useOpendocumentsRag" in pref and getattr(user.preferences, "use_opendocuments_rag", False) != pref["useOpendocumentsRag"]:
             user.preferences.use_opendocuments_rag = pref["useOpendocumentsRag"]
             needs_save = True
+        if "memoryEnabled" in pref and getattr(user.preferences, "memory_enabled", True) != pref["memoryEnabled"]:
+            user.preferences.memory_enabled = pref["memoryEnabled"]
+            needs_save = True
+        if "memoryAutoExtract" in pref and getattr(user.preferences, "memory_auto_extract", True) != pref["memoryAutoExtract"]:
+            user.preferences.memory_auto_extract = pref["memoryAutoExtract"]
+            needs_save = True
 
     if needs_save:
         user.updated_at = datetime.now(timezone.utc)
@@ -205,5 +213,7 @@ async def update_me(
             "notifications": user.preferences.notifications,
             "language": user.preferences.language,
             "useOpendocumentsRag": getattr(user.preferences, "use_opendocuments_rag", False),
+            "memoryEnabled": getattr(user.preferences, "memory_enabled", True),
+            "memoryAutoExtract": getattr(user.preferences, "memory_auto_extract", True),
         },
     )

@@ -40,6 +40,8 @@
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.31",
     "zod": "^3.24.0"
   },
   "devDependencies": {

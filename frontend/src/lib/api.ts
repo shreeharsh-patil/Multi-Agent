@@ -3,6 +3,35 @@ import { getAccessToken } from '@/lib/auth-store'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
+export interface MemoryItem {
+  id: string
+  key: string
+  content: string
+  type: string
+  category: string
+  confidence: number
+  status: string
+  sourceConversationId?: string
+  evidence?: string
+  pinned: boolean
+  accessCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MemoryDashboard {
+  items: MemoryItem[]
+  profile: {
+    summary: string[]
+    categories: Record<string, Array<{ id: string; content: string; confidence: number }>>
+    completeness: number
+    memoryCount: number
+    highConfidenceCount: number
+  }
+  settings: { enabled: boolean; autoExtract: boolean }
+  categories: string[]
+}
+
 /** Retry configuration for network-level failures (cold starts, QUIC errors, etc.). */
 const RETRY_LIMIT = 3
 const RETRY_BASE_MS = 1000
@@ -202,6 +231,27 @@ export function mkheaders(accessToken: string, refreshToken?: string): Record<st
 }
 
 export const api = {
+  memory: {
+    dashboard: (category?: string, query?: string) => {
+      const params = new URLSearchParams()
+      if (category && category !== 'all') params.set('category', category)
+      if (query) params.set('query', query)
+      const suffix = params.toString()
+      return fetchApi<MemoryDashboard>(`/api/memory${suffix ? `?${suffix}` : ''}`)
+    },
+    create: (data: { content: string; category: string; type?: string; pinned?: boolean }) =>
+      fetchApi<MemoryItem>('/api/memory', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<MemoryItem, 'content' | 'category' | 'confidence' | 'pinned' | 'status'>>) =>
+      fetchApi<MemoryItem>(`/api/memory/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string) =>
+      fetchApi<{ deleted: boolean }>(`/api/memory/${id}`, { method: 'DELETE' }),
+    clear: () => fetchApi<{ deleted: number }>('/api/memory', { method: 'DELETE' }),
+    settings: (data: { enabled?: boolean; autoExtract?: boolean }) =>
+      fetchApi<{ enabled: boolean; autoExtract: boolean }>('/api/memory/settings/preferences', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
   auth: {
     login: (data: { email: string; name: string; image?: string; google_id?: string }) =>
       fetchApi<{ access_token: string; token_type: string; user: { id: string; email: string; name: string; avatar?: string } }>(
@@ -366,21 +416,26 @@ export const api = {
   },
 
   notes: {
-    list: (userId?: string) =>
-      fetchApi<Array<{ id: string; title: string; preview: string; tags: string[]; createdAt: string; updatedAt: string }>>(
-        `/api/notes${userId ? `?user_id=${userId}` : ''}`,
-      ),
+    list: (workspaceId?: string, userId?: string) => {
+      const params = new URLSearchParams()
+      if (workspaceId) params.append('workspace_id', workspaceId)
+      if (userId) params.append('user_id', userId)
+      const query = params.toString()
+      return fetchApi<Array<{ id: string; title: string; preview: string; tags: string[]; workspaceId?: string; createdAt: string; updatedAt: string }>>(
+        `/api/notes${query ? `?${query}` : ''}`,
+      )
+    },
     get: (id: string) =>
-      fetchApi<{ id: string; title: string; content: string; tags: string[]; sourceDocumentId?: string; createdAt: string; updatedAt: string }>(
+      fetchApi<{ id: string; title: string; content: string; tags: string[]; sourceDocumentId?: string; workspaceId?: string; createdAt: string; updatedAt: string }>(
         `/api/notes/${id}`,
       ),
-    create: (data: { title: string; content: string; tags?: string[]; user_id?: string }) =>
-      fetchApi<{ id: string; title: string; content: string; tags: string[] }>(
+    create: (data: { title: string; content: string; tags?: string[]; workspace_id?: string; user_id?: string }) =>
+      fetchApi<{ id: string; title: string; content: string; tags: string[]; workspaceId?: string }>(
         '/api/notes',
         { method: 'POST', body: JSON.stringify(data) },
       ),
-    update: (id: string, data: { title?: string; content?: string; tags?: string[] }) =>
-      fetchApi<{ id: string; title: string; content: string; tags: string[] }>(
+    update: (id: string, data: { title?: string; content?: string; tags?: string[]; workspace_id?: string }) =>
+      fetchApi<{ id: string; title: string; content: string; tags: string[]; workspaceId?: string }>(
         `/api/notes/${id}`,
         { method: 'PUT', body: JSON.stringify(data) },
       ),

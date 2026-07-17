@@ -14,5 +14,10 @@
   "workspaces": [
     "frontend",
     "shared"
-  ]
+  ],
+  "dependencies": {
+    "ws": "^8.21.1",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.31"
+  }
 }

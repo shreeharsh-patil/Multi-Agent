@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
@@ -179,6 +180,19 @@ async def _save_messages(
                 {"_id": PydanticObjectId(conv_id)},
                 update,
             )
+
+        # Extraction is intentionally best-effort and runs after persistence so
+        # chat latency and reliability do not depend on the profiling model call.
+        from src.services.memory.service import memory_service
+        task = asyncio.create_task(memory_service.extract_from_exchange(
+            user_id=user_id,
+            user_message=user_message,
+            assistant_message=agent_message,
+            conversation_id=conv_id,
+        ))
+        task.add_done_callback(
+            lambda completed: completed.exception() if not completed.cancelled() else None
+        )
     except Exception as e:
         logger.error(f"Failed to save messages: {e}")
 
@@ -276,13 +290,13 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         conv_id = body.conversation_id or str(PydanticObjectId())
         is_new = not bool(body.conversation_id)
 
-        # Build attachment context and prepend it to the message (non-mutating)
-        attachment_context = await _build_attachment_context(body.attachments)
-        augmented_message = attachment_context + body.message if attachment_context else body.message
-
         # Use authenticated user from JWT if available, fall back to request body
         auth_user = getattr(http_request.state, "user", None)
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+        from src.services.memory.service import memory_service
+        memory_context = await memory_service.build_context(user_id, body.message)
+        attachment_context = await _build_attachment_context(body.attachments)
+        augmented_message = memory_context + attachment_context + body.message
         if body.conversation_id:
             existing = await Conversation.get(body.conversation_id)
             if not existing or not await can_access_conversation(existing, user_id):
@@ -296,24 +310,24 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
         if body.team_agents:
-            result = await get_orchestrator().process_team(body.message, user_id, body.team_agents, conv_id)
+            result = await get_orchestrator().process_team(augmented_message, user_id, body.team_agents, conv_id)
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
             get_orchestrator().registry.register(custom_agent)
-            agent_result = await custom_agent.execute(body.message, {"user_id": user_id})
+            agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "calendar":
             calendar_agent = get_orchestrator().registry.get_agent("calendar")
             if not calendar_agent:
                 raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-            agent_result = await calendar_agent.execute(body.message, {"user_id": user_id, "google_access_token": google_access_token})
+            agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif body.workspace_id:
             knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
             if not knowledge_agent:
                 raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
             agent_result = await knowledge_agent.execute(
-                body.message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
+                augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
             )
             result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
         else:
@@ -360,13 +374,13 @@ async def chat_stream(
     conv_id = body.conversation_id or str(PydanticObjectId())
     is_new = not bool(body.conversation_id)
 
-    # Build attachment context for the streaming message
-    attachment_context = await _build_attachment_context(body.attachments)
-    augmented_message = attachment_context + body.message if attachment_context else body.message
-
     # Use authenticated user from JWT if available
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+    from src.services.memory.service import memory_service
+    memory_context = await memory_service.build_context(user_id, body.message)
+    attachment_context = await _build_attachment_context(body.attachments)
+    augmented_message = memory_context + attachment_context + body.message
     if body.conversation_id:
         existing = await Conversation.get(body.conversation_id)
         if not existing or not await can_access_conversation(existing, user_id):

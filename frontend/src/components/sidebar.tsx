@@ -25,7 +25,8 @@ import {
   FolderOpen,
   FileText,
   ImageIcon,
-  Pencil
+  Pencil,
+  BrainCircuit,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { openCommandPalette } from '@/components/command-palette'
@@ -39,6 +40,7 @@ const navigation = [
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Notes', href: '/notes', icon: StickyNote },
   { name: 'Scheduled', href: '/planner', icon: Calendar },
+  { name: 'Memory', href: '/memory', icon: BrainCircuit },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

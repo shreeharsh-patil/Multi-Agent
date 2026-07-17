@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
+import { useSession } from 'next-auth/react'
+import * as Y from 'yjs'
+import { getAccessToken } from '@/lib/auth-store'
 import {
   StickyNote,
   Plus,
@@ -31,11 +34,62 @@ interface Note {
   preview?: string
   content?: string
   tags: string[]
+  workspaceId?: string
   createdAt: string
   updatedAt: string
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return window.btoa(binary);
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary_string = window.atob(base64);
+  const len = binary_string.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary_string.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function applyTextDiff(ytext: Y.Text, prev: string, curr: string) {
+  if (prev === curr) return;
+  
+  let start = 0;
+  while (start < prev.length && start < curr.length && prev[start] === curr[start]) {
+    start++;
+  }
+  
+  let endPrev = prev.length;
+  let endCurr = curr.length;
+  while (endPrev > start && endCurr > start && prev[endPrev - 1] === curr[endCurr - 1]) {
+    endPrev--;
+    endCurr--;
+  }
+  
+  if (endPrev > start) {
+    ytext.delete(start, endPrev - start);
+  }
+  if (endCurr > start) {
+    ytext.insert(start, curr.slice(start, endCurr));
+  }
+}
+
+const getWsUrl = (noteId: string, token?: string) => {
+  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+  const wsScheme = baseUrl.startsWith('https') ? 'wss' : 'ws'
+  const rawBase = baseUrl.replace(/^https?:\/\//, '')
+  return `${wsScheme}://${rawBase}/api/notes/${noteId}/ws${token ? `?token=${token}` : ''}`
+}
+
 export default function NotesPage() {
+  const { data: session } = useSession()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,16 +101,50 @@ export default function NotesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [deepLinkHandled, setDeepLinkHandled] = useState(false)
 
+  // Workspaces state
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; color: string }>>([])
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string>('personal')
+
   // Form state
   const [formTitle, setFormTitle] = useState('')
   const [formContent, setFormContent] = useState('')
   const [formTags, setFormTags] = useState('')
 
+  // Collaboration State
+  const [syncStatus, setSyncStatus] = useState<'connecting' | 'connected' | 'offline'>('offline')
+  const [collaborators, setCollaborators] = useState<Array<{ userId: string; name: string; color: string }>>([])
+  
+  const ydocRef = useRef<Y.Doc | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const isSyncingRef = useRef<boolean>(false)
+
+  // Keep references to values that should not re-run connection effect when they change
+  const formContentRef = useRef(formContent)
+  useEffect(() => {
+    formContentRef.current = formContent
+  }, [formContent])
+
+  const sessionRef = useRef(session)
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
+  // Load workspaces
+  useEffect(() => {
+    api.workspaces.list()
+      .then((res) => {
+        if (res.success && res.data) {
+          setWorkspaces(res.data.map(w => ({ id: w.id, name: w.name, color: w.color })))
+        }
+      })
+      .catch(err => console.error("Error loading workspaces", err))
+  }, [])
+
   const fetchNotes = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await api.notes.list()
+      const res = await api.notes.list(selectedWorkspace === 'personal' ? undefined : selectedWorkspace)
       if (res.success && res.data) {
         setNotes(res.data)
       } else {
@@ -67,11 +155,164 @@ export default function NotesPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedWorkspace])
 
   useEffect(() => {
     fetchNotes()
   }, [fetchNotes])
+
+  // Real-time synchronization connection
+  useEffect(() => {
+    if (!selectedNote || isCreating) {
+      setSyncStatus('offline')
+      setCollaborators([])
+      return
+    }
+
+    const noteId = selectedNote.id
+    const token = getAccessToken()
+    
+    setSyncStatus('connecting')
+    
+    const ydoc = new Y.Doc()
+    ydocRef.current = ydoc
+    const ytext = ydoc.getText('content')
+    
+    const wsUrl = getWsUrl(noteId, token || undefined)
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+    
+    const activePeers: Record<string, { name: string; color: string; lastSeen: number }> = {}
+    let presenceInterval: NodeJS.Timeout
+    
+    ws.onopen = () => {
+      setSyncStatus('connected')
+      
+      // Periodically announce our presence
+      presenceInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'awareness',
+            data: {
+              userId: sessionRef.current?.user?.id || 'anonymous-' + Math.random().toString(36).substring(2, 7),
+              name: sessionRef.current?.user?.name || 'Collaborator',
+              color: '#' + Math.floor(Math.random() * 16777215).toString(16)
+            }
+          }))
+        }
+      }, 5000)
+
+      // Initialize doc content if server has no updates
+      setTimeout(() => {
+        if (ytext.toString() === '' && formContentRef.current !== '') {
+          isSyncingRef.current = true
+          ytext.insert(0, formContentRef.current)
+          isSyncingRef.current = false
+          
+          const update = Y.encodeStateAsUpdate(ydoc)
+          const encoded = arrayBufferToBase64(update)
+          ws.send(JSON.stringify({
+            type: 'sync',
+            data: encoded
+          }))
+        }
+      }, 300)
+    }
+    
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.type === 'sync' && payload.data) {
+          const updateBytes = base64ToArrayBuffer(payload.data)
+          isSyncingRef.current = true
+          Y.applyUpdate(ydoc, new Uint8Array(updateBytes), 'websocket')
+          
+          // Sync Yjs text updates directly to the text content state and restore cursor if active
+          const newText = ytext.toString()
+          const textarea = document.getElementById('note-editor-textarea') as HTMLTextAreaElement
+          if (textarea && document.activeElement === textarea) {
+            const start = textarea.selectionStart
+            const end = textarea.selectionEnd
+            const prevLen = textarea.value.length
+            
+            setFormContent(newText)
+            
+            setTimeout(() => {
+              const diff = newText.length - prevLen
+              textarea.setSelectionRange(start + (diff > 0 ? diff : 0), end + (diff > 0 ? diff : 0))
+            }, 0)
+          } else {
+            setFormContent(newText)
+          }
+          isSyncingRef.current = false
+        } else if (payload.type === 'awareness' && payload.data) {
+          const peer = payload.data
+          const currentUserId = sessionRef.current?.user?.id || 'anonymous'
+          if (peer.userId !== currentUserId) {
+            activePeers[peer.userId] = {
+              name: peer.name,
+              color: peer.color,
+              lastSeen: Date.now()
+            }
+            
+            const now = Date.now()
+            const currentCollaborators = Object.entries(activePeers)
+              .filter(([_, data]) => now - data.lastSeen < 12000)
+              .map(([id, data]) => ({
+                userId: id,
+                name: data.name,
+                color: data.color
+              }))
+            setCollaborators(currentCollaborators)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to process WebSocket message:", err)
+      }
+    }
+    
+    ws.onclose = () => {
+      setSyncStatus('offline')
+      setCollaborators([])
+    }
+    
+    ws.onerror = () => {
+      setSyncStatus('offline')
+    }
+    
+    const handleLocalUpdate = (update: Uint8Array, origin: any) => {
+      if (origin === 'websocket') return
+      
+      if (ws.readyState === WebSocket.OPEN) {
+        const encoded = arrayBufferToBase64(update)
+        ws.send(JSON.stringify({
+          type: 'sync',
+          data: encoded
+        }))
+      }
+    }
+    
+    ydoc.on('update', handleLocalUpdate)
+    
+    const handleYjsTextChange = () => {
+      if (isSyncingRef.current) return
+      setFormContent(ytext.toString())
+    }
+    
+    ytext.observe(handleYjsTextChange)
+    
+    return () => {
+      clearInterval(presenceInterval)
+      ydoc.off('update', handleLocalUpdate)
+      ytext.unobserve(handleYjsTextChange)
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
+      ydoc.destroy()
+      ydocRef.current = null
+      wsRef.current = null
+    }
+  }, [selectedNote, isCreating])
 
   useEffect(() => {
     if (deepLinkHandled || notes.length === 0) return
@@ -113,18 +354,22 @@ export default function NotesPage() {
     if (isCreating) return
     setSelectedNote(note)
     setIsEditing(false)
-    // Fetch full content if we only have preview
     if (!note.content) {
       try {
         const res = await api.notes.get(note.id)
         if (res.success && res.data) {
           setSelectedNote(res.data)
+          setFormContent(res.data.content || '')
+          setFormTitle(res.data.title || '')
         } else {
           console.warn('Failed to load full note content:', res.error)
         }
       } catch (e) {
         console.error('Failed to load note content:', e)
       }
+    } else {
+      setFormContent(note.content || '')
+      setFormTitle(note.title || '')
     }
   }
 
@@ -137,7 +382,12 @@ export default function NotesPage() {
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean)
-      const data = { title: formTitle, content: formContent, tags }
+      const data = { 
+        title: formTitle, 
+        content: formContent, 
+        tags,
+        workspace_id: selectedWorkspace === 'personal' ? undefined : selectedWorkspace
+      }
 
       let res
       if (selectedNote && !isCreating) {
@@ -186,7 +436,6 @@ export default function NotesPage() {
     setExportingFormat(format)
     try {
       const url = api.notes.exportUrl(selectedNote.id, format)
-      // Open in new tab to download
       window.open(url, '_blank')
     } catch (e) {
       setError('Export failed')
@@ -203,7 +452,17 @@ export default function NotesPage() {
         message: `Create structured notes on the following topic. Include sections, bullet points, key concepts, definitions, and examples: ${formTitle || 'General notes'}`,
       })
       if (res.success && res.data) {
-        setFormContent((prev) => prev + '\n\n---\n\n' + res.data!.output)
+        const aiOutput = res.data!.output
+        const combined = formContent ? formContent + '\n\n---\n\n' + aiOutput : aiOutput
+        setFormContent(combined)
+        
+        // Sync to Yjs if active
+        if (ydocRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+          const ytext = ydocRef.current.getText('content')
+          isSyncingRef.current = true
+          applyTextDiff(ytext, ytext.toString(), combined)
+          isSyncingRef.current = false
+        }
       } else {
         setError(res.error || 'AI generation failed')
       }
@@ -211,6 +470,18 @@ export default function NotesPage() {
       setError('AI generation failed')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleContentChange = (val: string) => {
+    setFormContent(val)
+    
+    // Apply changes to Yjs if active
+    if (ydocRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+      const ytext = ydocRef.current.getText('content')
+      isSyncingRef.current = true
+      applyTextDiff(ytext, ytext.toString(), val)
+      isSyncingRef.current = false
     }
   }
 
@@ -223,11 +494,23 @@ export default function NotesPage() {
   return (
     <div className="space-y-6 animate-fade-in bg-background">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+        <div className="flex flex-col sm:flex-row sm:items-baseline gap-4">
           <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Notes</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {notes.length} note{notes.length !== 1 ? 's' : ''}
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Workspace:</span>
+            <select
+              value={selectedWorkspace}
+              onChange={(e) => setSelectedWorkspace(e.target.value)}
+              className="text-xs bg-background border border-border rounded-[8px] px-3 py-1.5 focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer font-medium hover:bg-secondary/40 transition-colors"
+            >
+              <option value="personal">👤 Personal Notes</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  📁 {w.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex gap-3">
           <Button onClick={handleCreate} className="gap-2 shadow-sm">
@@ -399,9 +682,30 @@ export default function NotesPage() {
               <Card className="shadow-xs">
                 <CardHeader className="pb-3 p-5">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-sans font-normal tracking-[-0.02em] text-foreground">
-                      {isCreating ? 'New Note' : isEditing ? 'Edit Note' : selectedNote?.title}
-                    </CardTitle>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <CardTitle className="text-base font-sans font-normal tracking-[-0.02em] text-foreground">
+                        {isCreating ? 'New Note' : isEditing ? 'Edit Note' : selectedNote?.title}
+                      </CardTitle>
+                      
+                      {/* Presence Indicator */}
+                      {syncStatus === 'connected' && (
+                        <div className="flex items-center gap-1.5 ml-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Connected to collaboration room" />
+                          <span className="text-[10px] text-muted-foreground mr-1 font-mono">Syncing</span>
+                          {collaborators.map((c) => (
+                            <Badge 
+                              key={c.userId} 
+                              variant="outline" 
+                              className="text-[9px] px-1.5 py-0.5 rounded-[4px] font-sans"
+                              style={{ borderColor: c.color, color: c.color }}
+                            >
+                              {c.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
                     <div className="flex gap-2">
                       {!isCreating && !isEditing && (
                         <Button
@@ -438,10 +742,11 @@ export default function NotesPage() {
                         onChange={(e) => setFormTitle(e.target.value)}
                       />
                       <Textarea
+                        id="note-editor-textarea"
                         placeholder="Write your note content here. You can use Markdown formatting..."
                         className="min-h-[300px] font-mono text-xs text-foreground"
                         value={formContent}
-                        onChange={(e) => setFormContent(e.target.value)}
+                        onChange={(e) => handleContentChange(e.target.value)}
                       />
                       <Input
                         placeholder="Tags (comma-separated)..."
@@ -479,7 +784,7 @@ export default function NotesPage() {
                       </div>
                       <ScrollArea className="h-[400px]">
                         <div className="max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans pr-2">
-                          {selectedNote.content || selectedNote.preview || 'No content'}
+                          {formContent || 'No content'}
                         </div>
                       </ScrollArea>
                       <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border text-[10px] text-muted-foreground font-sans">

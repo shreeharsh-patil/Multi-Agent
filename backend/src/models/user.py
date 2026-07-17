@@ -10,6 +10,8 @@ class UserPreferences(BaseModel):
     notifications: bool = True
     language: str = "en"
     use_opendocuments_rag: bool = False
+    memory_enabled: bool = True
+    memory_auto_extract: bool = True
 
 
 class User(BeanieDocument):

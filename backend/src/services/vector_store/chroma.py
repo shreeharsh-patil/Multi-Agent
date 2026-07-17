@@ -42,7 +42,7 @@ class ChromaVectorStore(VectorStore):
             documents.append(p.get("content", ""))
 
         await asyncio.to_thread(
-            collection_obj.add,
+            collection_obj.upsert,
             ids=ids,
             embeddings=embeddings,
             metadatas=metadatas,
