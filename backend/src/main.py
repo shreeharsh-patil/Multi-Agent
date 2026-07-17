@@ -20,14 +20,14 @@ async def lifespan(app: FastAPI):
 
     # --- Initialize MongoDB / Beanie ---
     mongo_client = None
-    import re
-    cleaned_uri = re.sub(r"\s+", "", settings.mongodb_uri)
-    cleaned_uri = "".join(ch for ch in cleaned_uri if 31 < ord(ch) < 127)
-
-    uris_to_try = [cleaned_uri]
-    # If using SRV, also try with direct connection params
-    if "+srv" in cleaned_uri:
-        direct_uri = cleaned_uri.replace("mongodb+srv://", "mongodb://")
+    # The MongoDB URI is already cleaned by the Settings validator (config.py).
+    # Build a short list of fallback URIs for different deployment scenarios.
+    primary_uri = settings.mongodb_uri
+    uris_to_try = [primary_uri]
+    # If using SRV, also try with direct connection params (some environments
+    # don't resolve SRV records properly).
+    if "+srv" in primary_uri:
+        direct_uri = primary_uri.replace("mongodb+srv://", "mongodb://")
         direct_uri += ("&" if "?" in direct_uri else "?") + "ssl=true&retryWrites=true&w=majority"
         uris_to_try.append(direct_uri)
     uris_to_try.append("mongodb://localhost:27017/multi-agent-platform")

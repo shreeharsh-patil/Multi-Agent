@@ -141,7 +141,7 @@ function ChatContent() {
     }
   }, [searchParams, customAgents])
   const [, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
-  const [selectedWorkspace] = useState('all')
+  const [selectedWorkspace, setSelectedWorkspace] = useState('all')
   const [voiceMode, setVoiceMode] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [speakingId, setSpeakingId] = useState<string | null>(null)
@@ -553,6 +553,16 @@ function ChatContent() {
     return () => window.removeEventListener('open-document-tab', handleOpenDoc)
   }, [handleDocumentClick])
 
+  // Sync workspace with sidebar selection via events
+  useEffect(() => {
+    const handleWorkspaceChange = (e: Event) => {
+      const workspaceId = (e as CustomEvent).detail
+      setSelectedWorkspace(workspaceId)
+    }
+    window.addEventListener('workspace-changed', handleWorkspaceChange)
+    return () => window.removeEventListener('workspace-changed', handleWorkspaceChange)
+  }, [])
+
   useEffect(() => {
     const event = new CustomEvent('workspace-changed', { detail: selectedWorkspace })
     window.dispatchEvent(event)
@@ -656,7 +666,7 @@ function ChatContent() {
     // Synchronous ref guard prevents double-submits even when state hasn't updated yet
     if (sendingRef.current) return
     const isRegenerate = typeof overrideText === 'string'
-    if (!isRegenerate && (!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0)) return
+    if (!isRegenerate && ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0))) return
 
     const text = isRegenerate ? overrideText!.trim() : input.trim()
     const attachmentCount = attachments.length

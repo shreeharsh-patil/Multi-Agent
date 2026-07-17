@@ -337,7 +337,8 @@ class TestStreamEndpoint:
         # _save_messages should be called with the partial content
         sse_client._mock_save.assert_called()
         call = sse_client._mock_save.call_args
-        kwargs = call.kwargs if hasattr(call, 'kwargs') else call[1]
+        # Access the keyword arguments directly (call.kwargs is always available in modern Python)
+        kwargs = call.kwargs
         # agent_message is passed as a keyword argument
         agent_msg = kwargs.get('agent_message', '')
         assert "Partial" in agent_msg or "Partial content" in agent_msg

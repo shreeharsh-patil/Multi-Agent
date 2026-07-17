@@ -62,18 +62,17 @@ export function Sidebar() {
   const [renameText, setRenameText] = useState('')
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
   const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([])
-  const [selectedWorkspace, setSelectedWorkspace] = useState('all')
+  const [activeWorkspace, setActiveWorkspace] = useState('all')
 
   const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/')
   const [documents, setDocuments] = useState<any[]>([])
   const [loadingDocuments, setLoadingDocuments] = useState(false)
-  const [currentWorkspace, setCurrentWorkspace] = useState('all')
 
   const fetchDocuments = useCallback(async () => {
     if (!isChatRoute) return
     setLoadingDocuments(true)
     try {
-      const res = await api.documents.list(currentWorkspace === 'all' ? undefined : currentWorkspace === 'unfiled' ? '__unfiled__' : currentWorkspace)
+      const res = await api.documents.list(activeWorkspace === 'all' ? undefined : activeWorkspace === 'unfiled' ? '__unfiled__' : activeWorkspace)
       if (res.success && res.data) {
         setDocuments(res.data)
       } else {
@@ -84,7 +83,7 @@ export function Sidebar() {
     } finally {
       setLoadingDocuments(false)
     }
-  }, [isChatRoute, currentWorkspace])
+  }, [isChatRoute, activeWorkspace])
 
   useEffect(() => {
     if (isChatRoute && session) {
@@ -103,7 +102,7 @@ export function Sidebar() {
   useEffect(() => {
     const handleWorkspaceChange = (e: Event) => {
       const workspaceId = (e as CustomEvent).detail
-      setCurrentWorkspace(workspaceId)
+      setActiveWorkspace(workspaceId)
     }
     window.addEventListener('workspace-changed', handleWorkspaceChange)
     return () => window.removeEventListener('workspace-changed', handleWorkspaceChange)
@@ -355,10 +354,10 @@ export function Sidebar() {
             >
               <div className="flex items-center gap-2 truncate">
                 <div className="h-2 w-2 rounded-full bg-[#1f8a65]" />
-                <span className="truncate">
-                  {selectedWorkspace === 'all'
-                    ? 'Personal Space'
-                    : workspaces.find((w) => w.id === selectedWorkspace)?.name || 'Personal Space'}
+                <span className="truncate">                    {activeWorkspace === 'all'
+                      ? 'Personal Space'
+                      : workspaces.find((w) => w.id === activeWorkspace)?.name || 'Personal Space'}
+
                 </span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground stroke-[1.5]" />
@@ -372,15 +371,15 @@ export function Sidebar() {
                     <button
                       key={space.id}
                       onClick={() => {
-                        setSelectedWorkspace(space.id)
-                        setShowWorkspaceMenu(false)
-                        window.dispatchEvent(new CustomEvent('workspace-changed', { detail: space.id }))
-                      }}
-                      className={cn(
-                        "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
-                        selectedWorkspace === space.id
-                          ? "bg-secondary text-[#26251e] font-semibold"
-                          : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
+                    setActiveWorkspace(space.id)
+                    setShowWorkspaceMenu(false)
+                    window.dispatchEvent(new CustomEvent('workspace-changed', { detail: space.id }))
+                  }}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
+                    activeWorkspace === space.id
+                      ? "bg-secondary text-[#26251e] font-semibold"
+                      : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
                       )}
                     >
                       {space.name}
