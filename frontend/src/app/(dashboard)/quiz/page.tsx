@@ -69,6 +69,7 @@ type Phase = 'idle' | 'generating' | 'answering' | 'submitting' | 'results'
 function formatDate(iso: string) {
   try {
     const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return 'Unknown date'
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
   } catch {
     return iso

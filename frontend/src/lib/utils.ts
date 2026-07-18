@@ -14,16 +14,19 @@ export function formatBytes(bytes: number): string {
 }
 
 export function formatDate(date: string | Date): string {
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return 'Unknown date'
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  }).format(new Date(date))
+  }).format(parsed)
 }
 
 export function formatRelativeTime(date: string | Date): string {
   const now = new Date()
   const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return 'unknown'
   const diff = now.getTime() - d.getTime()
   const seconds = Math.floor(diff / 1000)
   const minutes = Math.floor(seconds / 60)

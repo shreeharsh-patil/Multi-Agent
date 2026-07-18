@@ -44,7 +44,9 @@ const activityMeta = {
 const FOCUS_STORAGE_KEY = 'multi-agent:dashboard-focus:v1'
 
 function relativeTime(value: string) {
-  const timestamp = new Date(value).getTime()
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Unknown date'
+  const timestamp = parsed.getTime()
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
   if (seconds < 60) return 'Just now'
   const minutes = Math.floor(seconds / 60)
@@ -53,7 +55,7 @@ function relativeTime(value: string) {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d ago`
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(value))
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(parsed)
 }
 
 export default function DashboardPage() {
@@ -128,7 +130,11 @@ export default function DashboardPage() {
               updatedAt: document.updatedAt,
             })))
           }
-          recentItems.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          recentItems.sort((a, b) => {
+            const aTime = new Date(a.updatedAt).getTime()
+            const bTime = new Date(b.updatedAt).getTime()
+            return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime)
+          })
           setActivity(recentItems)
         }
       } catch (e) {

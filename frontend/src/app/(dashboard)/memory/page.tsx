@@ -47,7 +47,9 @@ const CATEGORY_COLOR: Record<string, string> = {
 }
 
 function relativeDate(value: string) {
-  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000)
+  const timestamp = new Date(value).getTime()
+  if (Number.isNaN(timestamp)) return 'Unknown date'
+  const days = Math.floor((Date.now() - timestamp) / 86_400_000)
   if (days <= 0) return 'Today'
   if (days === 1) return 'Yesterday'
   if (days < 30) return `${days} days ago`
