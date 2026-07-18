@@ -775,28 +775,33 @@ function ChatContent() {
         const { done, value } = await reader.read()
         if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
 
-        // Parse SSE messages from buffer
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+        // Parse complete SSE blocks. Keeping the entire unfinished block in
+        // the buffer is important because event/data lines can arrive in
+        // separate network reads.
+        const blocks = buffer.split('\n\n')
+        buffer = blocks.pop() || ''
 
-        let currentEvent = ''
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6).trim()
-            try {
-              const data = JSON.parse(dataStr)
+        for (const block of blocks) {
+          let currentEvent = 'message'
+          const dataLines: string[] = []
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event:')) currentEvent = line.slice(6).trim()
+            if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+          }
+          if (!dataLines.length) continue
 
-              if (currentEvent === 'chunk' && data.text) {
+          try {
+            const data = JSON.parse(dataLines.join('\n'))
+
+            if (currentEvent === 'chunk' && data.text) {
                 accumulatedContent += data.text
                 // Schedule a single visual update per frame
                 if (frameId === null) {
                   frameId = requestAnimationFrame(flushState)
                 }
-              } else if (currentEvent === 'agent' && data.agent_id) {
+            } else if (currentEvent === 'agent' && data.agent_id) {
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -804,7 +809,7 @@ function ChatContent() {
                       : msg,
                   ),
                 )
-              } else if (currentEvent === 'complete' && data.conversation_id) {
+            } else if (currentEvent === 'complete' && data.conversation_id) {
                 newConvId = data.conversation_id
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 accumulatedContent = data.output || accumulatedContent
@@ -816,7 +821,7 @@ function ChatContent() {
                       : msg,
                   ),
                 )
-              } else if (currentEvent === 'error' && data.error) {
+            } else if (currentEvent === 'error' && data.error) {
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -825,10 +830,9 @@ function ChatContent() {
                       : msg,
                   ),
                 )
-              }
-            } catch (e) {
-              // Skip malformed JSON
             }
+          } catch {
+            // Ignore a malformed event without interrupting the stream.
           }
         }
       }

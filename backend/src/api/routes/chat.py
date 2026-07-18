@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -20,6 +21,14 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
 # Image extensions used to detect whether an attached file is viewable inline
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+
+
+async def _word_chunks(text: str):
+    """Yield display-friendly chunks for agents without native streaming."""
+    for word in re.findall(r"\S+\s*|\s+", text):
+        yield word
+        # Give the response transport a chance to flush each visible word.
+        await asyncio.sleep(0.012)
 
 
 async def _build_attachment_context(attachments: list | None) -> str:
@@ -377,10 +386,6 @@ async def chat_stream(
     # Use authenticated user from JWT if available
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
-    from src.services.memory.service import memory_service
-    memory_context = await memory_service.build_context(user_id, body.message)
-    attachment_context = await _build_attachment_context(body.attachments)
-    augmented_message = memory_context + attachment_context + body.message
     if body.conversation_id:
         existing = await Conversation.get(body.conversation_id)
         if not existing or not await can_access_conversation(existing, user_id):
@@ -397,16 +402,26 @@ async def chat_stream(
     async def event_generator():
         nonlocal accumulated_output
         try:
+            # Open the response immediately, then prepare optional context while
+            # the client is already showing the active assistant state.
+            yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
+            from src.services.memory.service import memory_service
+            memory_context, attachment_context = await asyncio.gather(
+                memory_service.build_context(user_id, body.message),
+                _build_attachment_context(body.attachments),
+            )
+            augmented_message = memory_context + attachment_context + body.message
+
             if body.team_agents:
                 team_result = await get_orchestrator().process_team(
                     augmented_message, user_id, body.team_agents, conv_id
                 )
-                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 for stage in team_result["stages"]:
                     yield f"event: agent\ndata: {json.dumps({'agent_id': stage['agent_id']})}\n\n"
                     yield f"event: team_stage\ndata: {json.dumps({'agent_id': stage['agent_id'], 'status': 'complete'})}\n\n"
                     stage_text = f"### {stage['agent_id'].title()} Agent\n{stage['output']}\n\n"
-                    yield f"event: chunk\ndata: {json.dumps({'text': stage_text})}\n\n"
+                    async for word in _word_chunks(stage_text):
+                        yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = team_result["output"]
                 attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
                 await _save_messages(
@@ -422,9 +437,9 @@ async def chat_stream(
                 custom_agent = CustomAgent(custom_config)
                 get_orchestrator().registry.register(custom_agent)
                 agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id})
-                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
-                yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
                 attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
                 await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new, attachments=attachments_data, workspace_id=body.workspace_id)
@@ -436,9 +451,9 @@ async def chat_stream(
                 if not calendar_agent:
                     raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
                 agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")})
-                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
-                yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
                 await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
@@ -451,9 +466,9 @@ async def chat_stream(
                 agent_result = await knowledge_agent.execute(
                     augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
                 )
-                yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
-                yield f"event: chunk\ndata: {json.dumps({'text': agent_result.output})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
                 await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
@@ -467,6 +482,11 @@ async def chat_stream(
 
                 event_type = sse_event["event"]
                 data = sse_event["data"]
+
+                # The endpoint has already sent its start event before context
+                # preparation, so avoid sending a duplicate from the runner.
+                if event_type == "start":
+                    continue
 
                 # Track accumulated output for persistence
                 if event_type == "chunk" and "text" in data:

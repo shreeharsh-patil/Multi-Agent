@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { Bot, MessageSquare, FileText, BookOpen, Sparkles, Loader2, Compass, ArrowUpRight, FolderUp, NotebookPen, Link2, Clock3, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Bot, MessageSquare, FileText, BookOpen, Sparkles, Loader2, Compass, ArrowUpRight, FolderUp, NotebookPen, Link2, Clock3, ChevronRight, Bookmark, BookmarkCheck, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 const statConfig = [
   { label: 'Specialist Agents', icon: Bot, desc: 'Active multi-agent configs', key: 'agents' as const },
@@ -38,6 +41,8 @@ const activityMeta = {
   document: { label: 'File', icon: FileText },
 }
 
+const FOCUS_STORAGE_KEY = 'multi-agent:dashboard-focus:v1'
+
 function relativeTime(value: string) {
   const timestamp = new Date(value).getTime()
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
@@ -57,6 +62,21 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all')
+  const [focusedIds, setFocusedIds] = useState<string[]>([])
+  const [captureOpen, setCaptureOpen] = useState(false)
+  const [captureTitle, setCaptureTitle] = useState('')
+  const [captureContent, setCaptureContent] = useState('')
+  const [captureTags, setCaptureTags] = useState('')
+  const [capturing, setCapturing] = useState(false)
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(FOCUS_STORAGE_KEY)
+      if (stored) setFocusedIds(JSON.parse(stored))
+    } catch {
+      window.localStorage.removeItem(FOCUS_STORAGE_KEY)
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -128,10 +148,67 @@ export default function DashboardPage() {
     return filtered.slice(0, 6)
   }, [activity, activityFilter])
 
+  const focusedActivity = useMemo(() => {
+    const focusOrder = new Map(focusedIds.map((id, index) => [id, index]))
+    return activity
+      .filter((item) => focusOrder.has(item.id))
+      .sort((a, b) => (focusOrder.get(a.id) ?? 0) - (focusOrder.get(b.id) ?? 0))
+  }, [activity, focusedIds])
+
+  const toggleFocus = useCallback((id: string) => {
+    setFocusedIds((current) => {
+      const next = current.includes(id)
+        ? current.filter((focusedId) => focusedId !== id)
+        : [id, ...current].slice(0, 8)
+      window.localStorage.setItem(FOCUS_STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const resetCapture = useCallback(() => {
+    setCaptureOpen(false)
+    setCaptureTitle('')
+    setCaptureContent('')
+    setCaptureTags('')
+  }, [])
+
+  const captureNote = useCallback(async () => {
+    const title = captureTitle.trim()
+    const content = captureContent.trim()
+    if (!title || !content || capturing) return
+
+    setCapturing(true)
+    const result = await api.notes.create({
+      title,
+      content,
+      tags: captureTags.split(',').map((tag) => tag.trim()).filter(Boolean),
+    })
+    setCapturing(false)
+
+    if (!result.success || !result.data) {
+      toast.error(result.error || 'Could not save note')
+      return
+    }
+
+    const now = new Date().toISOString()
+    setActivity((current) => [{
+      id: `note-${result.data!.id}`,
+      type: 'note',
+      title: result.data!.title,
+      detail: content.slice(0, 120),
+      href: `/notes?note=${encodeURIComponent(result.data!.id)}`,
+      updatedAt: now,
+    }, ...current])
+    setStats((current) => ({ ...current, notes: current.notes + 1 }))
+    resetCapture()
+    toast.success('Note captured')
+  }, [captureContent, captureTags, captureTitle, capturing, resetCapture])
+
   return (
     <div className="space-y-12 max-w-7xl mx-auto py-6 px-4 animate-fade-in bg-[#f7f7f4]">
       {/* Header section with generous spacing */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 text-[11px] font-semibold text-primary uppercase tracking-[1.5px] select-none">
           <Sparkles className="h-3 w-3 text-primary" />
           <span>Intelligent Workspace</span>
@@ -142,6 +219,11 @@ export default function DashboardPage() {
         <p className="text-sm text-[#5a5852] max-w-lg leading-relaxed font-sans">
           Welcome back. Here is the operational status of your collaborative agent workspace.
         </p>
+        </div>
+        <Button onClick={() => setCaptureOpen(true)} className="h-9 w-fit gap-2 shadow-sm">
+          <Plus className="h-4 w-4" />
+          Capture note
+        </Button>
       </div>
 
       {error && (
@@ -216,26 +298,36 @@ export default function DashboardPage() {
               const meta = activityMeta[item.type]
               const Icon = meta.icon
               return (
-                <Link
+                <div
                   key={item.id}
-                  href={item.href}
                   className="group grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-border bg-secondary text-muted-foreground group-hover:border-primary/30 group-hover:text-primary">
+                  <Link href={item.href} className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-border bg-secondary text-muted-foreground group-hover:border-primary/30 group-hover:text-primary" aria-label={`Open ${item.title}`}>
                     <Icon className="h-4 w-4" strokeWidth={1.5} />
-                  </span>
-                  <span className="min-w-0">
+                  </Link>
+                  <Link href={item.href} className="min-w-0 focus-visible:outline-none focus-visible:underline">
                     <span className="flex items-center gap-2">
                       <span className="truncate text-xs font-semibold text-foreground">{item.title}</span>
                       <span className="hidden shrink-0 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline">{meta.label}</span>
                     </span>
                     <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{item.detail}</span>
-                  </span>
+                  </Link>
                   <span className="flex items-center gap-3">
                     <span className="hidden whitespace-nowrap text-[10px] text-muted-foreground sm:block">{relativeTime(item.updatedAt)}</span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    <button
+                      type="button"
+                      onClick={() => toggleFocus(item.id)}
+                      className="flex h-8 w-8 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-card hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      aria-label={focusedIds.includes(item.id) ? `Remove ${item.title} from focus` : `Add ${item.title} to focus`}
+                      title={focusedIds.includes(item.id) ? 'Remove from focus' : 'Add to focus'}
+                    >
+                      {focusedIds.includes(item.id) ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4" />}
+                    </button>
+                    <Link href={item.href} aria-label={`Open ${item.title}`}>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </Link>
                   </span>
-                </Link>
+                </div>
               )
             })}
           </div>
@@ -245,6 +337,41 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-foreground">No recent {activityFilter === 'all' ? 'work' : `${activityMeta[activityFilter].label.toLowerCase()}s`}</p>
             <p className="mt-1 text-[10px] text-muted-foreground">New items will appear here as you use the workspace.</p>
           </div>
+        )}
+      </section>
+
+      <section className="border-y border-border bg-secondary/45 px-5 py-5">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Bookmark className="h-4 w-4 text-primary" strokeWidth={1.5} />
+              Focus list
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">Keep up to eight active items close at hand.</p>
+          </div>
+          <span className="text-[10px] font-semibold text-muted-foreground">{focusedActivity.length}/8</span>
+        </div>
+        {focusedActivity.length ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {focusedActivity.map((item) => {
+              const meta = activityMeta[item.type]
+              const Icon = meta.icon
+              return (
+                <div key={item.id} className="flex min-w-0 items-center gap-3 rounded-[7px] border border-border bg-card px-3 py-2.5">
+                  <Icon className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.5} />
+                  <Link href={item.href} className="min-w-0 flex-1 focus-visible:outline-none focus-visible:underline">
+                    <span className="block truncate text-xs font-semibold text-foreground">{item.title}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">{meta.label}</span>
+                  </Link>
+                  <button type="button" onClick={() => toggleFocus(item.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label={`Remove ${item.title} from focus`} title="Remove from focus">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Bookmark an item in Continue working to build your focus list.</p>
         )}
       </section>
 
@@ -357,6 +484,49 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {captureOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
+          <button type="button" className="absolute inset-0 bg-[#26251e]/35 backdrop-blur-[2px]" onClick={resetCapture} aria-label="Close note capture" />
+          <section role="dialog" aria-modal="true" aria-labelledby="capture-note-title" className="relative w-full max-w-lg rounded-[8px] border border-border bg-card shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border px-5 py-4">
+              <div>
+                <h2 id="capture-note-title" className="text-sm font-semibold text-foreground">Capture a note</h2>
+                <p className="mt-1 text-[11px] text-muted-foreground">Save an idea without leaving your workspace.</p>
+              </div>
+              <button type="button" onClick={resetCapture} className="flex h-8 w-8 items-center justify-center rounded-[6px] text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-5" onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') captureNote()
+            }}>
+              <div className="space-y-1.5">
+                <label htmlFor="capture-title" className="text-[11px] font-semibold text-foreground">Title</label>
+                <Input id="capture-title" autoFocus value={captureTitle} onChange={(event) => setCaptureTitle(event.target.value)} placeholder="What should you remember?" />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="capture-content" className="text-[11px] font-semibold text-foreground">Note</label>
+                <Textarea id="capture-content" value={captureContent} onChange={(event) => setCaptureContent(event.target.value)} placeholder="Add the useful details..." className="min-h-32 resize-y" />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="capture-tags" className="text-[11px] font-semibold text-foreground">Tags</label>
+                <Input id="capture-tags" value={captureTags} onChange={(event) => setCaptureTags(event.target.value)} placeholder="research, follow-up" />
+              </div>
+            </div>
+            <footer className="flex items-center justify-between gap-3 border-t border-border bg-secondary/50 px-5 py-3">
+              <span className="hidden text-[10px] text-muted-foreground sm:block">Ctrl + Enter to save</span>
+              <div className="ml-auto flex gap-2">
+                <Button variant="outline" size="sm" onClick={resetCapture}>Cancel</Button>
+                <Button size="sm" onClick={captureNote} disabled={capturing || !captureTitle.trim() || !captureContent.trim()} className="gap-2">
+                  {capturing ? <Loader2 className="h-4 w-4 animate-spin" /> : <NotebookPen className="h-4 w-4" />}
+                  Save note
+                </Button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </div>
   )
 }
