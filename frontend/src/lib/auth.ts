@@ -43,9 +43,10 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar',
+          scope: 'openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar',
           access_type: 'offline',
           prompt: 'consent',
+          include_granted_scopes: 'true',
         },
       },
     }),

@@ -177,8 +177,8 @@ export default function SettingsPage() {
                   <p className="font-medium text-sm text-foreground">Google Drive</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {accessToken
-                      ? 'Connected — access your Drive files'
-                      : 'Sign in to access and manage Drive files'}
+                      ? 'Connected — full Drive access granted'
+                      : 'Sign in to access and manage all Drive files'}
                   </p>
                 </div>
                 <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full shrink-0">
@@ -203,7 +203,7 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Drive access is available through your Google authentication.
+                    Drive access is available through your Google authentication, including existing files and folders.
                   </p>
                   <Button variant="outline" className="w-full gap-2" onClick={() => window.location.href = '/drive'}>
                     <ExternalLink className="h-4 w-4 text-primary" />
