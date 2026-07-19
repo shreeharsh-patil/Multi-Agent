@@ -625,12 +625,23 @@ function ChatContent() {
 
   // Start a new conversation
   const startNewConversation = useCallback(() => {
-    if (isLoadingRef.current) return
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    sendingRef.current = false
+    setSending(false)
     loadedIdRef.current = null
+    isLoadingRef.current = false
     setConversationId(undefined)
     setChatTitle('')
     setMessages([])
+    setAttachments([])
+    setShareUrl(null)
   }, [])
+
+  useEffect(() => {
+    window.addEventListener('start-new-chat', startNewConversation)
+    return () => window.removeEventListener('start-new-chat', startNewConversation)
+  }, [startNewConversation])
 
   // Global keyboard shortcuts: Ctrl/Cmd+Shift+O starts a new chat; pressing
   // "/" while not already typing focuses the composer.

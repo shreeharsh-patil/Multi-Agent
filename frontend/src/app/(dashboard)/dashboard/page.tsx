@@ -42,6 +42,7 @@ const activityMeta = {
 }
 
 const FOCUS_STORAGE_KEY = 'multi-agent:dashboard-focus:v1'
+const BUILT_IN_AGENT_COUNT = 10
 
 function relativeTime(value: string) {
   const parsed = new Date(value)
@@ -59,7 +60,7 @@ function relativeTime(value: string) {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({ agents: 0, documents: 0, notes: 0, conversations: 0 })
+  const [stats, setStats] = useState({ agents: BUILT_IN_AGENT_COUNT, documents: 0, notes: 0, conversations: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activity, setActivity] = useState<ActivityItem[]>([])
@@ -93,7 +94,7 @@ export default function DashboardPage() {
         ])
         if (mounted) {
           setStats({
-            agents: (agentsRes.success && agentsRes.data ? agentsRes.data.length : 0),
+            agents: (agentsRes.success && agentsRes.data?.length ? agentsRes.data.length : BUILT_IN_AGENT_COUNT),
             documents: (docsRes.success && docsRes.data ? docsRes.data.length : 0),
             notes: (notesRes.success && notesRes.data ? notesRes.data.length : 0),
             conversations: (convsRes.success && convsRes.data ? convsRes.data.length : 0),

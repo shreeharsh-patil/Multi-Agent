@@ -188,6 +188,11 @@ export function Sidebar() {
   const { today, yesterday, previous7Days, older } = groupConversations()
 
   const handleNewChat = () => {
+    if (isChatRoute) {
+      window.dispatchEvent(new Event('start-new-chat'))
+      router.replace('/chat')
+      return
+    }
     router.push('/chat')
   }
 
