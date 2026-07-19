@@ -119,6 +119,23 @@ async def jwt_auth_middleware(request: Request, call_next):
     if user_payload:
         # Authenticated via JWT
         request.state.user = user_payload
+
+        # Capture and persist Google OAuth access token to database so ADK agent tools can access it.
+        google_token = request.headers.get("X-Google-Access-Token") or request.headers.get("X-Drive-Access-Token")
+        if google_token and user_payload.get("sub"):
+            try:
+                from beanie import PydanticObjectId
+                from src.models.user import User
+                user_id = user_payload["sub"]
+                PydanticObjectId(user_id)
+                user = await User.get(user_id)
+                if user and user.access_token != google_token:
+                    user.access_token = google_token
+                    await user.save()
+                    logger.info(f"Updated Google access token in database for user: {user.email}")
+            except Exception:
+                pass
+
         return await call_next(request)
 
     # Development fallback: allow X-User-Id header or user_id query param
@@ -128,6 +145,20 @@ async def jwt_auth_middleware(request: Request, call_next):
             user_id = request.query_params.get("user_id", "")
         if user_id:
             request.state.user = {"sub": user_id, "email": "dev@localhost", "name": "Developer"}
+
+            google_token = request.headers.get("X-Google-Access-Token") or request.headers.get("X-Drive-Access-Token")
+            if google_token:
+                try:
+                    from beanie import PydanticObjectId
+                    from src.models.user import User
+                    PydanticObjectId(user_id)
+                    user = await User.get(user_id)
+                    if user and user.access_token != google_token:
+                        user.access_token = google_token
+                        await user.save()
+                except Exception:
+                    pass
+
             return await call_next(request)
         # Even in dev mode, if there's absolutely no user context, use "default"
         # so existing routes don't break

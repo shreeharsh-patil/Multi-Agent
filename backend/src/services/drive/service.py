@@ -46,20 +46,34 @@ class DriveService:
         refresh_token: str = "",
         folder_id: Optional[str] = None,
         page_size: int = 20,
+        name_query: Optional[str] = None,
     ) -> list[dict]:
         service = await self._get_service(access_token, refresh_token)
-        query = None
+        filters = ["trashed = false"]
         if folder_id:
-            query = f"'{folder_id}' in parents"
+            safe_folder_id = folder_id.replace("'", "\\'")
+            filters.append(f"'{safe_folder_id}' in parents")
+        if name_query:
+            safe_name = name_query.replace("'", "\\'")
+            filters.append(f"name contains '{safe_name}'")
 
-        request = service.files().list(
-            q=query,
-            pageSize=page_size,
-            fields="files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink)",
-        )
-        results = await asyncio.to_thread(request.execute)
+        requested = max(1, min(page_size, 1000))
+        files: list[dict] = []
+        page_token = None
+        while len(files) < requested:
+            request = service.files().list(
+                q=" and ".join(filters),
+                pageSize=min(requested - len(files), 1000),
+                pageToken=page_token,
+                fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink)",
+            )
+            results = await asyncio.to_thread(request.execute)
+            files.extend(results.get("files", []))
+            page_token = results.get("nextPageToken")
+            if not page_token:
+                break
 
-        return results.get("files", [])
+        return files[:requested]
 
     async def upload_file(
         self,

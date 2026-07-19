@@ -31,6 +31,7 @@ function AuthTokenBridge() {
           name: session.user.name ?? session.user.email!,
           image: session.user.image ?? undefined,
           google_id: (session.user as { id?: string }).id ?? undefined,
+          access_token: (session as any).accessToken ?? undefined,
         })
         if (res.success && res.data?.access_token) {
           setAccessToken(res.data.access_token)

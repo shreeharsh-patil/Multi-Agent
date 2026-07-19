@@ -104,6 +104,7 @@ class AgentOrchestrator:
         user_id: str,
         agent_ids: list[str],
         conversation_id: Optional[str] = None,
+        context: Optional[dict] = None,
     ) -> dict:
         """Run a deterministic specialist handoff.
 
@@ -121,10 +122,13 @@ class AgentOrchestrator:
             agent = self.registry.get_agent(agent_id)
             if not agent:
                 continue
-            result = await agent.execute(
-                handoff,
-                {"user_id": user_id, "conversation_id": conversation_id, "team_index": index},
-            )
+            agent_context = {
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "team_index": index,
+                **(context or {}),
+            }
+            result = await agent.execute(handoff, agent_context)
             stage = {
                 "agent_id": agent_id,
                 "output": result.output,

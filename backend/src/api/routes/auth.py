@@ -21,6 +21,7 @@ class LoginRequest(BaseModel):
     name: str
     image: Optional[str] = None
     google_id: Optional[str] = None
+    access_token: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
@@ -80,6 +81,7 @@ async def login(body: LoginRequest) -> LoginResponse:
             name=body.name,
             avatar=body.image,
             google_id=body.google_id,
+            access_token=body.access_token,
         )
         await user.insert()
         logger.info(f"Created new user: {body.email} ({user.id})")
@@ -94,6 +96,9 @@ async def login(body: LoginRequest) -> LoginResponse:
             needs_save = True
         if body.google_id and user.google_id != body.google_id:
             user.google_id = body.google_id
+            needs_save = True
+        if body.access_token and user.access_token != body.access_token:
+            user.access_token = body.access_token
             needs_save = True
         if needs_save:
             user.updated_at = datetime.now(timezone.utc)

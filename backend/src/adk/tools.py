@@ -386,14 +386,22 @@ async def find_user_access_token(user_id: str) -> str:
     from src.models.user import User
 
     # Try by MongoDB _id first (most common case)
-    user = await User.get(user_id)
-    if user and user.access_token:
-        return user.access_token
+    try:
+        from beanie import PydanticObjectId
+        PydanticObjectId(user_id)
+        user = await User.get(user_id)
+        if user and user.access_token:
+            return user.access_token
+    except Exception:
+        pass
 
     # Fallback: try by email
-    user = await User.find_one(User.email == user_id)
-    if user and user.access_token:
-        return user.access_token
+    try:
+        user = await User.find_one(User.email == user_id)
+        if user and user.access_token:
+            return user.access_token
+    except Exception:
+        pass
 
     return ""
 

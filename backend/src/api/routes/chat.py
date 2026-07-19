@@ -345,7 +345,13 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             output = await _generate_image_message(body.message, user_id, body.workspace_id)
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
         elif body.team_agents:
-            result = await get_orchestrator().process_team(augmented_message, user_id, body.team_agents, conv_id)
+            result = await get_orchestrator().process_team(
+                augmented_message,
+                user_id,
+                body.team_agents,
+                conv_id,
+                context={"google_access_token": google_access_token},
+            )
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
             get_orchestrator().registry.register(custom_agent)
@@ -357,6 +363,12 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
             agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
+        elif routed_agent_id == "drive":
+            drive_agent = get_orchestrator().registry.get_agent("drive")
+            if not drive_agent:
+                raise HTTPException(status_code=503, detail="Drive Agent is not initialized")
+            agent_result = await drive_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token})
+            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "drive", "event_type": "DriveAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif body.workspace_id:
             knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
             if not knowledge_agent:
@@ -453,7 +465,11 @@ async def chat_stream(
 
             if body.team_agents:
                 team_result = await get_orchestrator().process_team(
-                    augmented_message, user_id, body.team_agents, conv_id
+                    augmented_message,
+                    user_id,
+                    body.team_agents,
+                    conv_id,
+                    context={"google_access_token": http_request.headers.get("X-Google-Access-Token", "")},
                 )
                 for stage in team_result["stages"]:
                     yield f"event: agent\ndata: {json.dumps({'agent_id': stage['agent_id']})}\n\n"
@@ -495,6 +511,22 @@ async def chat_stream(
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
                 await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new, workspace_id=body.workspace_id)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if routed_agent_id == "drive":
+                drive_agent = get_orchestrator().registry.get_agent("drive")
+                if not drive_agent:
+                    raise HTTPException(status_code=503, detail="Drive Agent is not initialized")
+                agent_result = await drive_agent.execute(
+                    augmented_message,
+                    {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")},
+                )
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'drive'})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="drive", is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
