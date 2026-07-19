@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     firecrawl_api_key: str = ""
     deepgram_api_key: str = ""
 
+    image_provider: str = "auto"
+    openai_api_key: str = ""
+    openai_image_model: str = "gpt-image-1"
+    openai_image_quality: str = "medium"
+    stability_api_key: str = ""
+
     google_client_id: str = ""
     google_client_secret: str = ""
     google_drive_credentials_path: str = ""
@@ -141,5 +147,4 @@ if settings.firecrawl_api_key:
     first_key = next((k.strip() for k in settings.firecrawl_api_key.split(",") if k.strip()), "")
     if first_key:
         os.environ["FIRECRAWL_API_KEY"] = first_key
-
 

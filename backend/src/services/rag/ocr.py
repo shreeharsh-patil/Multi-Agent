@@ -56,3 +56,20 @@ async def enrich_pdf_with_ocr(file_path: str, parsed: ParseResult) -> tuple[Pars
 
     parsed.text = "\n\n".join(parsed.pages)
     return parsed, ocr_count
+
+
+async def analyze_image(image_bytes: bytes, mime_type: str, file_name: str) -> str:
+    """Extract readable text and useful visual context from an image."""
+    prompt = (
+        f"Analyze the uploaded image named {file_name!r}. Extract all readable text exactly, "
+        "including handwriting, labels, tables, equations, and UI text. Then describe the "
+        "important objects, layout, relationships, and any visible issue relevant to a user asking "
+        "questions about the image. Return concise plain text with 'Extracted text' and "
+        "'Visual analysis' sections. Do not mention the OCR process."
+    )
+    return await llm_service.generate_multimodal(
+        prompt,
+        image_bytes,
+        mime_type,
+        max_output_tokens=4096,
+    )

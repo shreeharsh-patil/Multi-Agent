@@ -34,6 +34,7 @@ const typingKeyframes = `
 
 const agents = [
   { id: 'auto', name: 'Auto (Orchestrator)' },
+  { id: 'image', name: 'Image Generation Agent' },
   { id: 'knowledge', name: 'Knowledge Agent' },
   { id: 'drive', name: 'Drive Agent' },
   { id: 'notes', name: 'Notes Agent' },
@@ -63,6 +64,15 @@ interface Attachment {
 }
 
 const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+
+const resolveApiUrl = (url?: string) => url?.startsWith('/api/') ? `${backendUrl}${url}` : url
+
+const toSpeechText = (content: string) => content
+  .replace(/!\[[^\]]*\]\([^)]*\)/g, 'Generated image.')
+  .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+  .replace(/[`#*_>~-]/g, '')
+  .trim()
 
 interface PanelTab {
   id: string
@@ -236,6 +246,7 @@ function ChatContent() {
         activeAudioRef.current.pause()
         activeAudioRef.current = null
       }
+      window.speechSynthesis?.cancel()
       setSpeakingId(null)
       return
     }
@@ -256,7 +267,7 @@ function ChatContent() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ text: content }),
+          body: JSON.stringify({ text: toSpeechText(content) }),
         }
       )
 
@@ -290,7 +301,15 @@ function ChatContent() {
       await audio.play()
     } catch (error) {
       console.error('Text-to-speech error:', error)
-      setSpeakingId(null)
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(toSpeechText(content))
+        utterance.onend = () => setSpeakingId(null)
+        utterance.onerror = () => setSpeakingId(null)
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.speak(utterance)
+      } else {
+        setSpeakingId(null)
+      }
     }
   }, [speakingId])
 
@@ -371,6 +390,7 @@ function ChatContent() {
           activeAudioRef.current.pause()
           activeAudioRef.current = null
         }
+        window.speechSynthesis?.cancel()
         setIsListening(false)
         setSpeakingId(null)
       }
@@ -394,6 +414,7 @@ function ChatContent() {
       activeAudioRef.current.pause()
       activeAudioRef.current = null
     }
+    window.speechSynthesis?.cancel()
   }, [])
 
   const [conversationId, setConversationId] = useState<string>()
@@ -1417,8 +1438,20 @@ function ChatContent() {
                                 rehypePlugins={[rehypeRaw]}
                                 components={{
                                   a: ({ href, children }) => (
-                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
+                                    <a href={resolveApiUrl(href)} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
                                   ),
+                                  img: ({ src, alt }) => typeof src === 'string' ? (
+                                    <a href={resolveApiUrl(src)} target="_blank" rel="noopener noreferrer" className="block my-3">
+                                      <Image
+                                        src={resolveApiUrl(src) || ''}
+                                        alt={alt || 'Generated image'}
+                                        width={768}
+                                        height={768}
+                                        className="h-auto max-h-[560px] w-auto max-w-full rounded-[8px] border border-border object-contain shadow-sm"
+                                        unoptimized
+                                      />
+                                    </a>
+                                  ) : null,
                                   code: ({ className, children, ...props }) => {
                                     const isInline = !className
                                     return isInline ? (

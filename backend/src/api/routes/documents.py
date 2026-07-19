@@ -5,11 +5,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi.responses import FileResponse
-from src.models.document import Document
+from src.models.document import Document, DocumentChunk
 from src.services.rag.parser import document_parser
 from src.services.rag.chunker import text_chunker
 from src.services.rag.retriever import get_retriever
-from src.services.rag.ocr import enrich_pdf_with_ocr
+from src.services.rag.ocr import analyze_image, enrich_pdf_with_ocr
 from src.utils.logger import logger
 from src.models.workspace import Workspace
 
@@ -145,6 +145,29 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
         )
         await doc.insert()
 
+        vision_analyzed = False
+        if ext in {"png", "jpg", "jpeg", "gif", "webp"}:
+            mime_map = {
+                "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                "gif": "image/gif", "webp": "image/webp",
+            }
+            try:
+                analysis = await analyze_image(content, mime_map[ext], file.filename)
+                if analysis.strip():
+                    await DocumentChunk(
+                        document_id=str(doc.id),
+                        user_id=resolved_user_id,
+                        content=analysis.strip(),
+                        chunk_index=0,
+                        section="Image analysis",
+                        metadata={"file_name": file.filename, "kind": "vision_ocr"},
+                    ).insert()
+                    doc.chunk_count = 1
+                    await doc.save()
+                    vision_analyzed = True
+            except Exception as e:
+                logger.warning(f"Vision analysis failed for {file.filename}: {e}")
+
         if drive_access_token:
             try:
                 from src.services.drive.service import DriveService
@@ -174,6 +197,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             "status": doc.status,
             "chunks": doc.chunk_count,
             "imageUrl": f"/api/documents/{doc.id}/download",
+            "visionAnalyzed": vision_analyzed,
             "driveFileId": doc.drive_file_id,
             "driveWebViewLink": doc.drive_web_view_link,
         }

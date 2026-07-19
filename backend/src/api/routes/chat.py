@@ -15,7 +15,8 @@ from src.models.conversation import Conversation, Message
 from src.utils.logger import logger
 from beanie import PydanticObjectId
 from src.models.workspace import Workspace
-from src.models.document import Document
+from src.models.document import Document, DocumentChunk
+from src.services.image_generation import generate_and_store_image
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
@@ -31,7 +32,7 @@ async def _word_chunks(text: str):
         await asyncio.sleep(0.012)
 
 
-async def _build_attachment_context(attachments: list | None) -> str:
+async def _build_attachment_context(attachments: list | None, user_id: str | None = None) -> str:
     """Build a descriptive prefix about attached files for the LLM prompt.
 
     Looks up each attachment's document metadata from MongoDB so the LLM
@@ -58,10 +59,21 @@ async def _build_attachment_context(attachments: list | None) -> str:
             lines.append(f"- {name}")
             continue
 
+        if user_id and doc.user_id != user_id:
+            lines.append(f"- {name} (attachment unavailable)")
+            continue
+
         is_img = doc.file_type in IMAGE_EXTENSIONS
         if is_img:
             download_url = f"/api/documents/{doc.id}/download"
             lines.append(f"- {doc.file_name} ({doc.file_type}, image — viewable at `{download_url}`)")
+            analysis = await DocumentChunk.find_one(
+                DocumentChunk.document_id == str(doc.id),
+                DocumentChunk.user_id == doc.user_id,
+                DocumentChunk.section == "Image analysis",
+            )
+            if analysis:
+                lines.append(f"  Image analysis:\n{analysis.content}")
         else:
             lines.append(f"- {doc.file_name} ({doc.file_type})")
 
@@ -72,6 +84,17 @@ async def _build_attachment_context(attachments: list | None) -> str:
         "📎 The user attached the following file(s) for reference:\n"
         + "\n".join(lines)
         + "\n\n"
+    )
+
+
+async def _generate_image_message(prompt: str, user_id: str, workspace_id: str | None) -> str:
+    image = await generate_and_store_image(prompt, user_id, workspace_id)
+    details = f"Generated with {image.provider.title()}"
+    if image.revised_prompt and image.revised_prompt != prompt:
+        details += f"\n\nPrompt used: {image.revised_prompt}"
+    return (
+        f"![Generated image]({image.download_url})\n\n"
+        f"{details}\n\n[Download image]({image.download_url})"
     )
 
 
@@ -304,7 +327,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
         from src.services.memory.service import memory_service
         memory_context = await memory_service.build_context(user_id, body.message)
-        attachment_context = await _build_attachment_context(body.attachments)
+        attachment_context = await _build_attachment_context(body.attachments, user_id)
         augmented_message = memory_context + attachment_context + body.message
         if body.conversation_id:
             existing = await Conversation.get(body.conversation_id)
@@ -318,7 +341,10 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
-        if body.team_agents:
+        if routed_agent_id == "image":
+            output = await _generate_image_message(body.message, user_id, body.workspace_id)
+            result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
+        elif body.team_agents:
             result = await get_orchestrator().process_team(augmented_message, user_id, body.team_agents, conv_id)
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
@@ -408,9 +434,22 @@ async def chat_stream(
             from src.services.memory.service import memory_service
             memory_context, attachment_context = await asyncio.gather(
                 memory_service.build_context(user_id, body.message),
-                _build_attachment_context(body.attachments),
+                _build_attachment_context(body.attachments, user_id),
             )
             augmented_message = memory_context + attachment_context + body.message
+
+            if routed_agent_id == "image":
+                accumulated_output = await _generate_image_message(body.message, user_id, body.workspace_id)
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'image'})}\n\n"
+                yield f"event: chunk\ndata: {json.dumps({'text': accumulated_output})}\n\n"
+                attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                await _save_messages(
+                    conv_id=conv_id, user_id=user_id, user_message=body.message,
+                    agent_message=accumulated_output, agent_id="image", is_new=is_new,
+                    attachments=attachments_data, workspace_id=body.workspace_id,
+                )
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
 
             if body.team_agents:
                 team_result = await get_orchestrator().process_team(

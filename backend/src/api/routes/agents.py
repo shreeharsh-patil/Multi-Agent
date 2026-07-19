@@ -30,6 +30,7 @@ def serialize_custom(agent: AgentConfig) -> dict:
     }
 
 AGENT_METADATA = [
+    {"id": "image", "name": "Image Generation Agent", "description": "Creates downloadable images and visual assets from natural-language prompts.", "icon": "Image", "capabilities": ["image_generation", "text_to_image", "visual_assets"]},
     {"id": "knowledge", "name": "Knowledge Agent", "description": "RAG-based document search, summaries, and citations using the knowledge base.", "icon": "BookOpen", "capabilities": ["rag", "document_search", "citations", "summaries"]},
     {"id": "drive", "name": "Drive Agent", "description": "Google Drive file management, uploads, downloads, and folder organization.", "icon": "HardDrive", "capabilities": ["drive_list", "drive_upload", "drive_download", "folder_management"]},
     {"id": "notes", "name": "Notes Agent", "description": "Structured notes, summaries, flashcards, and revision materials.", "icon": "StickyNote", "capabilities": ["note_taking", "summaries", "flashcards", "revision_notes"]},

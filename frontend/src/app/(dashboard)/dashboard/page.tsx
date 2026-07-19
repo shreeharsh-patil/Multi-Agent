@@ -42,7 +42,7 @@ const activityMeta = {
 }
 
 const FOCUS_STORAGE_KEY = 'multi-agent:dashboard-focus:v1'
-const BUILT_IN_AGENT_COUNT = 10
+const BUILT_IN_AGENT_COUNT = 11
 
 function relativeTime(value: string) {
   const parsed = new Date(value)

@@ -16,6 +16,7 @@ import {
   GraduationCap,
   Calendar,
   Puzzle,
+  Image as ImageIcon,
   Loader2,
   Plus,
   Trash2,
@@ -32,9 +33,11 @@ const iconMap: Record<string, import('lucide-react').LucideIcon> = {
   Search: Search,
   FileCode: FileCode,
   Puzzle: Puzzle,
+  Image: ImageIcon,
 }
 
 const colorMap: Record<string, string> = {
+  image: 'text-[#1f8a65]',
   knowledge: 'text-primary',
   drive: 'text-primary',
   notes: 'text-primary',
@@ -47,6 +50,7 @@ const colorMap: Record<string, string> = {
 }
 
 const tagMap: Record<string, string[]> = {
+  image: ['Text to image', 'Visual assets'],
   knowledge: ['RAG', 'Search', 'Citations'],
   drive: ['Drive', 'Files', 'Sync'],
   notes: ['Notes', 'Flashcards'],

@@ -589,4 +589,12 @@ export const api = {
       fetchApi<{ id: string; name: string; description: string; icon: string; tools: string[]; custom: boolean }>(`/api/agents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: string) => fetchApi<{ success: boolean }>(`/api/agents/${id}`, { method: 'DELETE' }),
   },
+
+  images: {
+    generate: (data: { prompt: string; size?: string; workspace_id?: string }) =>
+      fetchApi<{ documentId: string; fileName: string; imageUrl: string; provider: string; revisedPrompt?: string }>(
+        '/api/images/generate',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+  },
 }

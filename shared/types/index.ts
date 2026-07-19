@@ -1,4 +1,5 @@
 export type AgentId =
+  | 'image'
   | 'knowledge'
   | 'drive'
   | 'notes'
@@ -93,6 +94,9 @@ export interface DocumentInfo {
   createdAt: string
   updatedAt: string
   workspaceId?: string
+  imageUrl?: string
+  visionAnalyzed?: boolean
+  ocrPages?: number
 }
 
 export interface KnowledgeBaseItem {
