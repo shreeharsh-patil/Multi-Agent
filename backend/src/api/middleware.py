@@ -31,7 +31,6 @@ PUBLIC_METHOD_PREFIXES = (
 PUBLIC_GET_SUFFIXES = (
     "/download",
     "/download/content",
-    "/export",
 )
 
 
@@ -247,4 +246,3 @@ async def api_response_envelope_middleware(request: Request, call_next):
         content={"success": True, "data": payload},
         headers=headers,
     )
-

@@ -259,15 +259,13 @@ async def delete_note(note_id: str, http_request: Request) -> dict:
 @router.get("/{note_id}/export")
 async def export_note(
     note_id: str,
+    http_request: Request,
     format: Literal["pdf", "docx", "markdown"] = Query("markdown", alias="format"),
 ) -> Response:
-    """Export a note as PDF, DOCX, or Markdown.
-
-    Accessed via a direct browser link (no Authorization header), so it is not
-    user-scoped; the note id itself is the capability.
-    """
+    """Export an accessible note as PDF, DOCX, or Markdown."""
     note = await Note.get(note_id)
-    if not note:
+    user_id = resolve_user_id(http_request)
+    if not note or not await check_note_access(note, user_id):
         raise HTTPException(404, "Note not found")
 
     content_type_map = {

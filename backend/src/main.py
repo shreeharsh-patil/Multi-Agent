@@ -11,7 +11,7 @@ from src.api.middleware import (
     error_handler_middleware,
     jwt_auth_middleware,
 )
-from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images
+from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates
 
 
 @asynccontextmanager
@@ -70,6 +70,8 @@ async def lifespan(app: FastAPI):
     from src.models.quiz import QuizSession
     from src.models.workspace import Workspace, ChatShare
     from src.models.search_history import SearchHistory
+    from src.models.flashcard import Flashcard, FlashcardDeck, FlashcardReview
+    from src.models.prompt_template import PromptTemplate
 
     await init_beanie(
         database=mongo_client[settings.mongodb_db_name],
@@ -77,6 +79,7 @@ async def lifespan(app: FastAPI):
             User, Document, DocumentChunk, Conversation, MemoryItem,
             AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
             PlannerPlan, QuizSession, Workspace, ChatShare, SearchHistory,
+            FlashcardDeck, Flashcard, FlashcardReview, PromptTemplate,
         ],
     )
     logger.info("Beanie models initialized")
@@ -129,6 +132,9 @@ app.include_router(sharing.router)
 app.include_router(voice.router)
 app.include_router(memory.router)
 app.include_router(images.router)
+app.include_router(flashcards.router)
+app.include_router(reports.router)
+app.include_router(templates.router)
 
 
 @app.get("/api/health")

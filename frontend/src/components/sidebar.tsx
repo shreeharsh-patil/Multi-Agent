@@ -27,6 +27,8 @@ import {
   ImageIcon,
   Pencil,
   BrainCircuit,
+  GalleryVerticalEnd,
+  LibraryBig,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { openCommandPalette } from '@/components/command-palette'
@@ -41,6 +43,8 @@ const navigation = [
   { name: 'Notes', href: '/notes', icon: StickyNote },
   { name: 'Scheduled', href: '/planner', icon: Calendar },
   { name: 'Memory', href: '/memory', icon: BrainCircuit },
+  { name: 'Flashcards', href: '/flashcards', icon: GalleryVerticalEnd },
+  { name: 'Templates', href: '/templates', icon: LibraryBig },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

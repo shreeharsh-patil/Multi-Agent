@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { useSession } from 'next-auth/react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import * as Y from 'yjs'
 import { getAccessToken } from '@/lib/auth-store'
 import {
@@ -354,22 +356,18 @@ export default function NotesPage() {
     if (isCreating) return
     setSelectedNote(note)
     setIsEditing(false)
-    if (!note.content) {
-      try {
-        const res = await api.notes.get(note.id)
-        if (res.success && res.data) {
-          setSelectedNote(res.data)
-          setFormContent(res.data.content || '')
-          setFormTitle(res.data.title || '')
-        } else {
-          console.warn('Failed to load full note content:', res.error)
-        }
-      } catch (e) {
-        console.error('Failed to load note content:', e)
+    try {
+      const res = await api.notes.get(note.id)
+      if (res.success && res.data) {
+        setSelectedNote(res.data)
+        setFormContent(res.data.content || '')
+        setFormTitle(res.data.title || '')
+        setFormTags(res.data.tags.join(', '))
+      } else {
+        setError(res.error || 'Failed to load the complete note')
       }
-    } else {
-      setFormContent(note.content || '')
-      setFormTitle(note.title || '')
+    } catch {
+      setError('Failed to load the complete note')
     }
   }
 
@@ -434,10 +432,22 @@ export default function NotesPage() {
   const handleExport = async (format: 'pdf' | 'docx' | 'markdown') => {
     if (!selectedNote) return
     setExportingFormat(format)
+    setError(null)
     try {
-      const url = api.notes.exportUrl(selectedNote.id, format)
-      window.open(url, '_blank')
-    } catch (e) {
+      const result = await api.notes.export(selectedNote.id, format)
+      if (!result.success || !result.data) {
+        setError(result.error || 'Export failed')
+        return
+      }
+      const url = URL.createObjectURL(result.data.blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = result.data.fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
       setError('Export failed')
     } finally {
       setExportingFormat(null)
@@ -783,8 +793,8 @@ export default function NotesPage() {
                         ))}
                       </div>
                       <ScrollArea className="h-[400px]">
-                        <div className="max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans pr-2">
-                          {formContent || 'No content'}
+                        <div className="prose prose-sm max-w-none pr-2 text-foreground prose-headings:font-semibold prose-headings:tracking-normal prose-strong:font-bold prose-em:italic">
+                          {formContent ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{formContent}</ReactMarkdown> : 'No content'}
                         </div>
                       </ScrollArea>
                       <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border text-[10px] text-muted-foreground font-sans">

@@ -32,6 +32,42 @@ export interface MemoryDashboard {
   categories: string[]
 }
 
+export interface FlashcardDeckInfo {
+  id: string
+  name: string
+  description: string
+  cardCount: number
+  dueCount: number
+}
+
+export interface FlashcardInfo {
+  id: string
+  deckId: string
+  front: string
+  back: string
+  tags: string[]
+  easeFactor: number
+  intervalDays: number
+  repetitions: number
+  lapses: number
+  dueAt: string
+  lastReviewedAt?: string
+}
+
+export interface PromptTemplateInfo {
+  id: string
+  name: string
+  description: string
+  category: string
+  tags: string[]
+  currentVersion: number
+  content: string
+  variables: string[]
+  createdAt: string
+  updatedAt: string
+  versions?: Array<{ version: number; content: string; variables: string[]; changeNote: string; createdAt: string }>
+}
+
 /** Retry configuration for network-level failures (cold starts, QUIC errors, etc.). */
 const RETRY_LIMIT = 3
 const RETRY_BASE_MS = 1000
@@ -126,6 +162,35 @@ async function fetchApi<T>(
     success: false,
     error:
       lastError instanceof Error ? lastError.message : 'Network error',
+  }
+}
+
+async function fetchApiFile(endpoint: string): Promise<{
+  success: boolean
+  data?: { blob: Blob; fileName: string }
+  error?: string
+}> {
+  try {
+    const headers: Record<string, string> = {}
+    const token = getAccessToken()
+    if (token) headers.Authorization = `Bearer ${token}`
+
+    const response = await fetchWithTimeout(`${BACKEND_URL}${endpoint}`, { headers })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      return {
+        success: false,
+        error: payload?.error || payload?.detail || `Download failed with status ${response.status}`,
+      }
+    }
+
+    const disposition = response.headers.get('content-disposition') || ''
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1]
+    const fileName = encodedName ? decodeURIComponent(encodedName) : quotedName || 'download'
+    return { success: true, data: { blob: await response.blob(), fileName } }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Download failed' }
   }
 }
 
@@ -441,8 +506,8 @@ export const api = {
       ),
     delete: (id: string) =>
       fetchApi<{ success: boolean }>(`/api/notes/${id}`, { method: 'DELETE' }),
-    exportUrl: (id: string, format: 'pdf' | 'docx' | 'markdown') =>
-      `${BACKEND_URL}/api/notes/${id}/export?format=${format}`,
+    export: (id: string, format: 'pdf' | 'docx' | 'markdown') =>
+      fetchApiFile(`/api/notes/${id}/export?format=${format}`),
   },
 
   knowledge: {
@@ -596,5 +661,38 @@ export const api = {
         '/api/images/generate',
         { method: 'POST', body: JSON.stringify(data) },
       ),
+  },
+
+  flashcards: {
+    decks: () => fetchApi<FlashcardDeckInfo[]>('/api/flashcards/decks'),
+    createDeck: (data: { name: string; description?: string }) =>
+      fetchApi<FlashcardDeckInfo>('/api/flashcards/decks', { method: 'POST', body: JSON.stringify(data) }),
+    deleteDeck: (id: string) => fetchApi<{ deleted: boolean }>(`/api/flashcards/decks/${id}`, { method: 'DELETE' }),
+    cards: (deckId: string) => fetchApi<FlashcardInfo[]>(`/api/flashcards/decks/${deckId}/cards`),
+    due: (deckId?: string) => fetchApi<FlashcardInfo[]>(`/api/flashcards/due${deckId ? `?deck_id=${encodeURIComponent(deckId)}` : ''}`),
+    createCard: (deckId: string, data: { front: string; back: string; tags?: string[] }) =>
+      fetchApi<FlashcardInfo>(`/api/flashcards/decks/${deckId}/cards`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteCard: (id: string) => fetchApi<{ deleted: boolean }>(`/api/flashcards/cards/${id}`, { method: 'DELETE' }),
+    review: (id: string, rating: 'again' | 'hard' | 'good' | 'easy') =>
+      fetchApi<FlashcardInfo>(`/api/flashcards/cards/${id}/review`, { method: 'POST', body: JSON.stringify({ rating }) }),
+    generate: (deckId: string, source: string, count: number) =>
+      fetchApi<{ created: number; cards: FlashcardInfo[] }>('/api/flashcards/generate', { method: 'POST', body: JSON.stringify({ deck_id: deckId, source, count }) }),
+  },
+
+  templates: {
+    list: () => fetchApi<PromptTemplateInfo[]>('/api/templates'),
+    get: (id: string) => fetchApi<PromptTemplateInfo>(`/api/templates/${id}`),
+    create: (data: { name: string; description?: string; category?: string; tags?: string[]; content: string; change_note?: string }) =>
+      fetchApi<PromptTemplateInfo>('/api/templates', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { name?: string; description?: string; category?: string; tags?: string[]; content: string; change_note?: string }) =>
+      fetchApi<PromptTemplateInfo>(`/api/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    restore: (id: string, version: number) => fetchApi<PromptTemplateInfo>(`/api/templates/${id}/restore`, { method: 'POST', body: JSON.stringify({ version }) }),
+    render: (id: string, values: Record<string, string>) => fetchApi<{ content: string; version: number }>(`/api/templates/${id}/render`, { method: 'POST', body: JSON.stringify({ values }) }),
+    delete: (id: string) => fetchApi<{ deleted: boolean }>(`/api/templates/${id}`, { method: 'DELETE' }),
+  },
+
+  reports: {
+    generate: (data: { title: string; content: string; polish?: boolean; workspace_id?: string }) =>
+      fetchApi<{ documentId: string; fileName: string; downloadUrl: string; content: string }>('/api/reports', { method: 'POST', body: JSON.stringify(data) }),
   },
 }
