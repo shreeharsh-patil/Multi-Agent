@@ -18,6 +18,10 @@ class CalendarAgent(BaseAgent):
         from src.services.calendar import calendar_service
 
         token = context.get("google_access_token", "")
+        if not token and context.get("user_id"):
+            from src.adk.tools import find_user_access_token
+            token = await find_user_access_token(context["user_id"])
+
         if not token:
             return AgentResult(success=False, output="Connect Google Calendar in Settings before asking me to manage your schedule.", error="missing_google_calendar_token")
 

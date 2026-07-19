@@ -21,6 +21,10 @@ class DriveAgent(BaseAgent):
 
         access_token = context.get("google_access_token", "")
         refresh_token = context.get("google_refresh_token", "")
+        if not access_token and context.get("user_id"):
+            from src.adk.tools import find_user_access_token
+            access_token = await find_user_access_token(context["user_id"])
+
         if not access_token:
             return AgentResult(
                 success=False,
