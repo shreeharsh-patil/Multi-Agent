@@ -92,7 +92,7 @@ async def get_news(
 ):
     """Fetch latest news headlines from RSS feeds for a given category."""
     cat = category if category in NEWS_FEEDS else "World"
-    articles = await _fetch_news(cat)
+    articles = (await _fetch_news(cat)) or []
     return {
         "success": True,
         "category": cat,

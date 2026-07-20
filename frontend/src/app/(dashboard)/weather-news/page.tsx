@@ -116,7 +116,7 @@ function uvLabel(uv: string | number) {
 // ── Markdown renderer ──────────────────────────────────────────────────────
 
 function MiniMarkdown({ text }: { text: string }) {
-  const lines = text.split('\n')
+  const lines = (text || '').split('\n')
   return (
     <div className="space-y-1.5 text-xs sm:text-sm leading-relaxed">
       {lines.map((line, i) => {
@@ -183,9 +183,13 @@ export default function WeatherNewsPage() {
 
   // Fetch categories on mount
   useEffect(() => {
-    apiFetch<{ categories: string[] }>('/api/weather-news/categories').then(r => {
-      if (r.categories && r.categories.length > 0) setCategories(r.categories)
-    }).catch(() => {})
+    apiFetch<{ categories?: string[] }>('/api/weather-news/categories')
+      .then(r => {
+        if (r && Array.isArray(r.categories) && r.categories.length > 0) {
+          setCategories(r.categories)
+        }
+      })
+      .catch(() => {})
   }, [])
 
   // Fetch weather
@@ -195,7 +199,14 @@ export default function WeatherNewsPage() {
     setWeatherError(null)
     try {
       const data = await apiFetch<WeatherResponse>(`/api/weather-news/weather?city=${encodeURIComponent(c.trim())}`)
-      setWeather(data)
+      if (data) {
+        setWeather({
+          ...data,
+          forecast: Array.isArray(data.forecast)
+            ? data.forecast.map(d => ({ ...d, hourly: Array.isArray(d.hourly) ? d.hourly : [] }))
+            : []
+        })
+      }
     } catch {
       setWeatherError('Failed to fetch weather data. Please try again.')
     } finally {
@@ -209,7 +220,12 @@ export default function WeatherNewsPage() {
     setNewsError(null)
     try {
       const data = await apiFetch<NewsResponse>(`/api/weather-news/news?category=${encodeURIComponent(cat)}`)
-      setNews(data)
+      if (data) {
+        setNews({
+          ...data,
+          articles: Array.isArray(data.articles) ? data.articles : []
+        })
+      }
     } catch {
       setNewsError('Failed to fetch news. Please try again.')
     } finally {
@@ -256,6 +272,8 @@ export default function WeatherNewsPage() {
 
   const cur = weather?.current
   const uv = cur ? uvLabel(cur.uvIndex) : null
+  const articles = news?.articles ?? []
+  const forecast = weather?.forecast ?? []
 
   return (
     <div className="space-y-6">
@@ -410,7 +428,7 @@ export default function WeatherNewsPage() {
               </div>
 
               {/* 3-Day Forecast */}
-              {weather.forecast.length > 0 && (
+              {forecast.length > 0 && (
                 <div className="space-y-3">
                   <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" />
@@ -418,36 +436,39 @@ export default function WeatherNewsPage() {
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {weather.forecast.map((day) => (
-                      <Card key={day.date} className="shadow-xs border-border">
-                        <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-                          <CardTitle className="text-xs sm:text-sm font-semibold">
-                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </CardTitle>
-                          <Badge variant="secondary" className="text-[10px] font-medium gap-1">
-                            🌧 {day.chanceOfRain}%
-                          </Badge>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-1">
-                          <p className="text-xs text-muted-foreground mb-3">{day.description}</p>
-                          <div className="flex items-baseline justify-between pt-2 border-t border-border">
-                            <span className="text-lg font-bold text-foreground">{day.maxTempC}°C</span>
-                            <span className="text-xs text-muted-foreground">Min {day.minTempC}°C</span>
-                          </div>
-
-                          {day.hourly.length > 0 && (
-                            <div className="grid grid-cols-4 gap-1 mt-3 pt-3 border-t border-border/60">
-                              {day.hourly.map((h, hi) => (
-                                <div key={hi} className="text-center">
-                                  <p className="text-[9px] text-muted-foreground">{String(Math.floor(parseInt(h.time) / 100)).padStart(2, '0')}:00</p>
-                                  <p className="text-xs font-semibold text-foreground">{h.tempC}°</p>
-                                </div>
-                              ))}
+                    {forecast.map((day) => {
+                      const hourly = day?.hourly ?? []
+                      return (
+                        <Card key={day.date} className="shadow-xs border-border">
+                          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-xs sm:text-sm font-semibold">
+                              {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                            </CardTitle>
+                            <Badge variant="secondary" className="text-[10px] font-medium gap-1">
+                              🌧 {day.chanceOfRain}%
+                            </Badge>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-1">
+                            <p className="text-xs text-muted-foreground mb-3">{day.description}</p>
+                            <div className="flex items-baseline justify-between pt-2 border-t border-border">
+                              <span className="text-lg font-bold text-foreground">{day.maxTempC}°C</span>
+                              <span className="text-xs text-muted-foreground">Min {day.minTempC}°C</span>
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+
+                            {hourly.length > 0 && (
+                              <div className="grid grid-cols-4 gap-1 mt-3 pt-3 border-t border-border/60">
+                                {hourly.map((h, hi) => (
+                                  <div key={hi} className="text-center">
+                                    <p className="text-[9px] text-muted-foreground">{String(Math.floor(parseInt(h.time || '0') / 100)).padStart(2, '0')}:00</p>
+                                    <p className="text-xs font-semibold text-foreground">{h.tempC}°</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -506,14 +527,14 @@ export default function WeatherNewsPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <Newspaper className="h-4 w-4 text-primary" />
-                  {news.category} Headlines ({news.articles.length})
+                  {news.category || newsCategory} Headlines ({articles.length})
                 </h2>
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3 w-3" /> Updated live
                 </span>
               </div>
 
-              {news.articles.length === 0 ? (
+              {articles.length === 0 ? (
                 <Card>
                   <CardContent className="p-8 text-center text-xs text-muted-foreground">
                     No articles found for this category right now. Try refreshing or selecting another topic.
@@ -521,7 +542,7 @@ export default function WeatherNewsPage() {
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {news.articles.map((article, i) => (
+                  {articles.map((article, i) => (
                     <Card
                       key={i}
                       className="group hover:border-primary/40 hover:shadow-xs transition-all flex flex-col justify-between"
