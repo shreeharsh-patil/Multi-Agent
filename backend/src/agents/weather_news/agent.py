@@ -16,14 +16,35 @@ from src.utils.logger import logger
 WEATHER_URL = "https://wttr.in/{city}?format=j1"
 WTTR_BRIEF_URL = "https://wttr.in/{city}?format=3"   # one-liner fallback
 
-NEWS_FEEDS: dict[str, str] = {
-    "World":       "http://feeds.bbci.co.uk/news/world/rss.xml",
-    "Technology":  "https://feeds.feedburner.com/TechCrunch",
-    "Science":     "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
-    "Business":    "http://feeds.bbci.co.uk/news/business/rss.xml",
-    "Health":      "http://feeds.bbci.co.uk/news/health/rss.xml",
-    "Sports":      "http://feeds.bbci.co.uk/news/sport/rss.xml",
-    "AI/Tech":     "https://hnrss.org/frontpage",
+NEWS_FEEDS: dict[str, list[str]] = {
+    "World": [
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    ],
+    "Technology": [
+        "https://techcrunch.com/feed/",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+    ],
+    "Science": [
+        "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
+        "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+    ],
+    "Business": [
+        "https://feeds.bbci.co.uk/news/business/rss.xml",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+    ],
+    "Health": [
+        "https://feeds.bbci.co.uk/news/health/rss.xml",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Health.xml",
+    ],
+    "Sports": [
+        "https://feeds.bbci.co.uk/sport/rss.xml",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml",
+    ],
+    "AI/Tech": [
+        "https://hnrss.org/frontpage",
+        "https://techcrunch.com/category/artificial-intelligence/feed/",
+    ],
 }
 DEFAULT_CATEGORY = "World"
 MAX_ARTICLES = 10
@@ -35,7 +56,8 @@ HTTP_TIMEOUT = 10.0
 async def _fetch_weather_json(city: str) -> Optional[dict]:
     """Fetch full weather JSON from wttr.in."""
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=headers) as client:
             r = await client.get(WEATHER_URL.format(city=city.replace(" ", "+")))
             r.raise_for_status()
             return r.json()
@@ -47,7 +69,8 @@ async def _fetch_weather_json(city: str) -> Optional[dict]:
 async def _fetch_weather_brief(city: str) -> str:
     """Single-line weather summary as fallback."""
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=headers) as client:
             r = await client.get(WTTR_BRIEF_URL.format(city=city.replace(" ", "+")))
             r.raise_for_status()
             return r.text.strip()
@@ -116,49 +139,55 @@ def _parse_weather(data: dict, city: str) -> str:
 
 
 async def _fetch_news(category: str) -> list[dict]:
-    """Fetch and parse RSS feed for the given category."""
-    url = NEWS_FEEDS.get(category, NEWS_FEEDS[DEFAULT_CATEGORY])
-    try:
-        async with httpx.AsyncClient(
-            timeout=HTTP_TIMEOUT,
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 MultiAgentPlatform/1.0"},
-        ) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            xml_text = r.text
-    except Exception as exc:
-        logger.warning("RSS fetch failed for %s: %s", category, exc)
-        return []
+    """Fetch and parse RSS/Atom feed for the given category with fallback feeds."""
+    urls = NEWS_FEEDS.get(category, NEWS_FEEDS[DEFAULT_CATEGORY])
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    import re
 
-    try:
-        root = ET.fromstring(xml_text)
-        # Strip namespaces for cleaner parsing
-        ns_strip = lambda tag: tag.split("}")[-1] if "}" in tag else tag  # noqa: E731
-        items = root.findall(".//{*}item") or root.findall(".//item")
-        articles = []
-        for item in items[:MAX_ARTICLES]:
-            def txt(tag: str) -> str:
-                el = item.find(f"{{*}}{tag}") or item.find(tag)
-                return (el.text or "").strip() if el is not None else ""
+    for url in urls:
+        try:
+            async with httpx.AsyncClient(
+                timeout=HTTP_TIMEOUT,
+                follow_redirects=True,
+                headers=headers,
+            ) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                xml_text = r.text
 
-            title = txt("title").replace("<![CDATA[", "").replace("]]>", "")
-            link = txt("link")
-            desc = txt("description").replace("<![CDATA[", "").replace("]]>", "")
-            pub_date = txt("pubDate")
-            # Strip HTML from description
-            import re
-            desc = re.sub(r"<[^>]+>", "", desc)[:300]
-            articles.append({
-                "title": title,
-                "link": link,
-                "description": desc,
-                "pubDate": pub_date,
-            })
-        return articles
-    except Exception as exc:
-        logger.warning("RSS parse error for %s: %s", category, exc)
-        return []
+            root = ET.fromstring(xml_text)
+            items = root.findall(".//{*}item") or root.findall(".//item") or root.findall(".//{*}entry") or root.findall(".//entry")
+            articles = []
+            for item in items[:MAX_ARTICLES]:
+                def txt(tag: str) -> str:
+                    el = item.find(f"{{*}}{tag}") or item.find(tag)
+                    if el is None:
+                        return ""
+                    if tag == "link" and el.attrib.get("href"):
+                        return el.attrib.get("href")
+                    return (el.text or "").strip()
+
+                title = txt("title").replace("<![CDATA[", "").replace("]]>", "")
+                link = txt("link")
+                desc = txt("description") or txt("summary") or txt("content")
+                desc = desc.replace("<![CDATA[", "").replace("]]>", "")
+                desc = re.sub(r"<[^>]+>", "", desc).strip()[:300]
+                pub_date = txt("pubDate") or txt("published") or txt("updated")
+
+                if title and link:
+                    articles.append({
+                        "title": title,
+                        "link": link,
+                        "description": desc,
+                        "pubDate": pub_date,
+                    })
+
+            if articles:
+                return articles
+        except Exception as exc:
+            logger.warning("RSS fetch/parse failed for %s at %url: %s", category, url, exc)
+
+    return []
 
 
 def _format_news(articles: list[dict], category: str) -> str:
