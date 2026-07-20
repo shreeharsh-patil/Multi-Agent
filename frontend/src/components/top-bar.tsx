@@ -26,25 +26,34 @@ import {
   X,
   LayoutDashboard,
   Bot,
-  MessageSquare,
   BookOpen,
-  FileText,
+
   HardDrive,
   StickyNote,
   Search,
   Calendar,
+  Workflow,
+  BarChart2,
+  CloudSun,
+  BrainCircuit,
+  GalleryVerticalEnd,
+  LibraryBig,
 } from 'lucide-react'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Agents', href: '/agents', icon: Bot },
-  { name: 'Chat', href: '/chat', icon: MessageSquare },
-  { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
-  { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'Workspace', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Search', href: '/research', icon: Search },
+  { name: 'Library', href: '/documents', icon: BookOpen },
   { name: 'Drive', href: '/drive', icon: HardDrive },
+  { name: 'Agents', href: '/agents', icon: Bot },
+  { name: 'Workflows', href: '/workflows', icon: Workflow },
+  { name: 'Data Analysis', href: '/data-analysis', icon: BarChart2 },
+  { name: 'Weather & News', href: '/weather-news', icon: CloudSun },
   { name: 'Notes', href: '/notes', icon: StickyNote },
-  { name: 'Research', href: '/research', icon: Search },
-  { name: 'Planner', href: '/planner', icon: Calendar },
+  { name: 'Scheduled', href: '/planner', icon: Calendar },
+  { name: 'Memory', href: '/memory', icon: BrainCircuit },
+  { name: 'Flashcards', href: '/flashcards', icon: GalleryVerticalEnd },
+  { name: 'Templates', href: '/templates', icon: LibraryBig },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -56,14 +65,14 @@ export function TopBar() {
   const pathname = usePathname()
 
   return (
-    <header className="flex items-center justify-between gap-4 px-8 py-4 border-b bg-[#faf9f5]/80 backdrop-blur-md border-[#e6dfd8] w-full relative">
+    <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-4 border-b bg-secondary/80 backdrop-blur-md border-border w-full relative">
       {/* Mobile Menu Button */}
-      <div className="md:hidden flex items-center">
+      <div className="lg:hidden flex items-center">
         <Button 
           variant="ghost" 
           size="icon" 
           onClick={() => setMobileMenuOpen(true)}
-          className="text-[#6c6a64] hover:text-[#141413] hover:bg-[#efe9de] h-9 w-9"
+          className="text-muted-foreground hover:text-foreground hover:bg-accent h-9 w-9"
         >
           <Menu className="h-5 w-5 stroke-[1.5]" />
         </Button>
@@ -73,22 +82,22 @@ export function TopBar() {
       {mobileMenuOpen && (
         <>
           <div 
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs md:hidden"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#efe9de] border-r border-[#e6dfd8] p-6 flex flex-col md:hidden animate-in slide-in-from-left duration-200">
+          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#efe9de] border-r border-border p-6 flex flex-col lg:hidden animate-in slide-in-from-left duration-200 shadow-lg">
             <div className="flex items-center justify-between mb-8">
               <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
-                <div className="h-8 w-8 rounded-lg bg-[#faf9f5] border border-[#e6dfd8] flex items-center justify-center shadow-sm">
+                <div className="h-8 w-8 rounded-lg bg-card border border-border flex items-center justify-center shadow-sm">
                   <Image src="/logo.png" alt="Agents Logo" width={20} height={20} className="h-5 w-5 object-contain" />
                 </div>
-                <span className="font-serif font-normal text-lg text-[#141413]">Agents</span>
+                <span className="font-serif font-normal text-lg text-foreground">Agents</span>
               </Link>
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-[#6c6a64] hover:text-[#141413] hover:bg-[#faf9f5]"
+                className="text-muted-foreground hover:text-foreground hover:bg-card"
               >
                 <X className="h-5 w-5 stroke-[1.5]" />
               </Button>
@@ -104,19 +113,19 @@ export function TopBar() {
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       buttonVariants({ variant: 'ghost' }),
-                      'w-full justify-start gap-3 font-normal text-[#6c6a64] hover:text-[#141413] hover:bg-[#faf9f5]/55',
-                      isActive && 'bg-[#faf9f5] border border-[#e6dfd8] text-[#141413] font-medium shadow-xs',
+                      'w-full justify-start gap-3 font-normal text-muted-foreground hover:text-foreground hover:bg-card/55',
+                      isActive && 'bg-card border border-border text-foreground font-medium shadow-xs',
                     )}
                   >
-                    <item.icon className={cn("h-4 w-4 stroke-[1.5]", isActive ? "text-[#cc785c]" : "text-[#6c6a64]")} />
+                    <item.icon className={cn("h-4 w-4 stroke-[1.5]", isActive ? "text-primary" : "text-muted-foreground")} />
                     {item.name}
                   </Link>
                 )
               })}
             </nav>
             
-            <div className="pt-4 border-t border-[#e6dfd8] text-center">
-              <p className="text-xs text-[#6c6a64]">Agents AI Platform v0.1</p>
+            <div className="pt-4 border-t border-border text-center">
+              <p className="text-xs text-muted-foreground">Agents AI Platform v0.1</p>
             </div>
           </div>
         </>
@@ -126,47 +135,47 @@ export function TopBar() {
       <div className="flex items-center gap-3 ml-auto">
         <ThemeToggle />
 
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-[#efe9de] text-[#6c6a64]">
-          <Bell className="h-4.5 w-4.5 stroke-[1.5] text-[#6c6a64]" />
+        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-accent text-muted-foreground">
+          <Bell className="h-4.5 w-4.5 stroke-[1.5] text-muted-foreground" />
           <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-[#5db872]" />
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:opacity-90">
-              <Avatar className="h-8 w-8 border border-[#e6dfd8]">
+              <Avatar className="h-8 w-8 border border-border">
                 <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
-                <AvatarFallback className="bg-[#efe9de] text-xs text-[#6c6a64] font-medium">
+                <AvatarFallback className="bg-accent text-xs text-muted-foreground font-medium">
                   {session?.user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 mt-1 border-[#e6dfd8] bg-[#faf9f5]" align="end">
+          <DropdownMenuContent className="w-56 mt-1 border-border bg-card" align="end">
             <DropdownMenuLabel className="font-normal py-2 px-3">
               <div className="flex flex-col space-y-0.5">
-                <span className="text-sm font-medium text-[#141413]">{session?.user?.name}</span>
-                <span className="text-xs text-[#6c6a64] font-normal truncate">
+                <span className="text-sm font-medium text-foreground">{session?.user?.name}</span>
+                <span className="text-xs text-muted-foreground font-normal truncate">
                   {session?.user?.email}
                 </span>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator className="bg-[#e6dfd8]" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem asChild>
-              <Link href="/settings" className="cursor-pointer flex items-center w-full px-3 py-1.5 text-xs text-[#6c6a64] hover:text-[#141413]">
-                <User className="mr-2 h-4 w-4 stroke-[1.5] text-[#6c6a64]" />
+              <Link href="/settings" className="cursor-pointer flex items-center w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+                <User className="mr-2 h-4 w-4 stroke-[1.5] text-muted-foreground" />
                 Profile Settings
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/settings" className="cursor-pointer flex items-center w-full px-3 py-1.5 text-xs text-[#6c6a64] hover:text-[#141413]">
-                <Settings className="mr-2 h-4 w-4 stroke-[1.5] text-[#6c6a64]" />
+              <Link href="/settings" className="cursor-pointer flex items-center w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+                <Settings className="mr-2 h-4 w-4 stroke-[1.5] text-muted-foreground" />
                 Platform Settings
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-[#e6dfd8]" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem 
-              className="cursor-pointer text-[#c64545] focus:bg-[#c64545]/10 focus:text-[#c64545] flex items-center px-3 py-1.5 text-xs font-medium"
+              className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center px-3 py-1.5 text-xs font-medium"
               onClick={() => signOut({ callbackUrl: '/login' })}
             >
               <LogOut className="mr-2 h-4 w-4 stroke-[1.5]" />
