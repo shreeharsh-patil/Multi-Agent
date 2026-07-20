@@ -722,4 +722,15 @@ export const api = {
     deleteSession: (sessionId: string) =>
       fetchApi<{ success: boolean }>(`/api/data-analysis/session/${sessionId}`, { method: 'DELETE' }),
   },
+
+  workflows: {
+    list: () => fetchApi<Array<{ id: string; name: string; description: string; prompt: string; nodes: unknown[]; edges: unknown[]; createdAt: string; updatedAt: string }>>('/api/workflows'),
+    get: (id: string) => fetchApi<{ id: string; name: string; description: string; prompt: string; nodes: unknown[]; edges: unknown[]; createdAt: string; updatedAt: string }>(`/api/workflows/${id}`),
+    create: (data: { name: string; description?: string; prompt?: string; nodes?: unknown[]; edges?: unknown[] }) =>
+      fetchApi<{ id: string; name: string }>('/api/workflows', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { name: string; description?: string; prompt?: string; nodes?: unknown[]; edges?: unknown[] }) =>
+      fetchApi<{ id: string; name: string }>(`/api/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => fetchApi<{ success: boolean }>(`/api/workflows/${id}`, { method: 'DELETE' }),
+    runs: (id: string) => fetchApi<Array<{ id: string; status: string; prompt: string; nodeCount: number; startedAt: string }>>(`/api/workflows/${id}/runs`),
+  },
 }
