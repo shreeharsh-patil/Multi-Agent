@@ -1369,39 +1369,42 @@ function ChatContent() {
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center select-none bg-background">
-              <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-12">
-                <div className="space-y-4">
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 sm:p-6 text-center select-none bg-background overflow-y-auto scrollbar-thin">
+              <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-6 sm:space-y-8 py-4">
+                <div className="space-y-3">
                   <div className="flex justify-center">
-                    <div className="h-14 w-14 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
-                      <Image src="/logo.png" alt="Agents Logo" width={28} height={28} className="h-7 w-7 object-contain" />
+                    <div className="h-12 w-12 rounded-xl border border-border/80 bg-card flex items-center justify-center shadow-xs transition-transform hover:scale-105 duration-300">
+                      <Image src="/logo.png" alt="Agents Logo" width={26} height={26} className="h-6.5 w-6.5 object-contain" />
                     </div>
                   </div>
-                  <h1 className="text-4xl font-serif font-normal tracking-[-0.01em] text-[#26251e] mb-1">
+                  <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#26251e] font-sans">
                     How can I help you today?
                   </h1>
-                  <p className="text-sm text-[#5a5852]/80 max-w-md mx-auto leading-relaxed font-sans">
+                  <p className="text-xs sm:text-sm text-muted-foreground/80 max-w-md mx-auto leading-relaxed font-sans">
                     Ask anything, analyze documents, or delegate tasks to specialized AI agents in this collaborative workspace.
                   </p>
                 </div>
 
                 {/* Central quick suggestion buttons as premium cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full px-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 w-full px-2">
                   {[
                     { text: 'Research a topic', desc: 'Perform deep search across the web', icon: Globe },
                     { text: 'Analyze a file', desc: 'Upload documents or spreadsheets', icon: FileText },
                     { text: 'Generate code', desc: 'Write, debug or refactor code', icon: CodeIcon },
                     { text: 'Create an image', desc: 'Generate high-fidelity visual assets', icon: ImageIcon },
                     { text: 'Write something', desc: 'Draft articles, copy, or summaries', icon: FileCode },
+                    { text: 'Plan & organize', desc: 'Create study plans and schedule tasks', icon: Sparkles },
                   ].map((card) => (
                     <button
                       key={card.text}
                       onClick={() => handleSuggestionClick(card.text)}
-                      className="group flex flex-col items-start p-5 rounded-[12px] border border-border bg-card text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xs hover:border-primary/25 active:translate-y-0 shadow-2xs cursor-pointer"
+                      className="group flex flex-col items-start p-4 rounded-xl border border-border/70 bg-card text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-primary/40 active:translate-y-0 shadow-2xs cursor-pointer"
                     >
-                      <card.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors stroke-[1.5] mb-3" />
-                      <span className="text-[15px] font-serif font-normal text-[#26251e] mb-1.5">{card.text}</span>
-                      <span className="text-xs text-muted-foreground/85 leading-relaxed font-sans">{card.desc}</span>
+                      <div className="h-8 w-8 rounded-lg border border-border/60 bg-secondary flex items-center justify-center mb-2.5 group-hover:border-primary/30 group-hover:bg-primary/5 transition-colors">
+                        <card.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors stroke-[1.8]" />
+                      </div>
+                      <span className="text-xs font-semibold text-[#26251e] mb-1 font-sans group-hover:text-primary transition-colors">{card.text}</span>
+                      <span className="text-[11px] text-muted-foreground/80 leading-relaxed font-sans line-clamp-2">{card.desc}</span>
                     </button>
                   ))}
                 </div>

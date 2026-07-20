@@ -226,8 +226,8 @@ function MiniMarkdown({ text }: { text: string }) {
 }
 
 const QUICK_QUERIES = [
-  "🌤 What's the weather like in New York?",
-  "🌧 Will it rain in London today?",
+  "🌤 What's the weather like in India today?",
+  "🌧 Will it rain in Mumbai this week?",
   '📰 What are the top world news headlines?',
   '🤖 Latest AI and technology news',
   '💼 Top business and finance stories today',
@@ -238,8 +238,8 @@ const QUICK_QUERIES = [
 
 export default function WeatherNewsPage() {
   // Weather state
-  const [city, setCity] = useState('London')
-  const [cityInput, setCityInput] = useState('London')
+  const [city, setCity] = useState('India')
+  const [cityInput, setCityInput] = useState('India')
   const [weather, setWeather] = useState<WeatherResponse | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState<string | null>(null)
@@ -327,7 +327,7 @@ export default function WeatherNewsPage() {
   }, [])
 
   // Load initial data
-  useEffect(() => { fetchWeather('London') }, [fetchWeather])
+  useEffect(() => { fetchWeather('India') }, [fetchWeather])
   useEffect(() => { fetchNews('World') }, [fetchNews])
 
   // Chat send with fallback AI answer generator
@@ -356,25 +356,69 @@ export default function WeatherNewsPage() {
       }
       throw new Error('Backend fallback')
     } catch {
-      // Local intelligent response synthesis based on current weather/news context
+      // Smart local fallback: answer the user's specific question using current context
       const curW = weather?.current
-      let responseText = `### 🌤 Weather & News Summary for ${city}\n\n`
-      if (curW) {
-        responseText += `• **Condition**: ${curW.description}, ${curW.tempC}°C (Feels like ${curW.feelsLikeC}°C)\n`
-        responseText += `• **Humidity & Wind**: ${curW.humidity}% humidity, ${curW.windKmph} km/h wind (${curW.windDir})\n`
-        responseText += `• **Recommendation**: ${curW.tempC < 15 ? 'Wear warm clothing when heading out.' : 'Great weather for outdoor activities.'}\n\n`
-      }
       const arts = news?.articles ?? []
-      if (arts.length > 0) {
-        responseText += `### 📰 Top ${newsCategory} Headlines\n`
-        arts.slice(0, 3).forEach((a, i) => {
-          responseText += `${i + 1}. **[${a.title}](${a.link})**\n> ${a.description}\n\n`
-        })
+      const lowerQ = query.toLowerCase()
+
+      let responseText = ''
+
+      // Try to answer specific question types intelligently
+      if (lowerQ.includes('umbrella') || lowerQ.includes('rain') || lowerQ.includes('raincoat')) {
+        const chanceRain = weather?.forecast?.[0]?.chanceOfRain ?? 0
+        responseText = chanceRain > 40
+          ? `☔ Yes, **you should carry an umbrella**! There's a ${chanceRain}% chance of rain in ${city} today. Current conditions: ${curW?.description ?? 'unavailable'}.`
+          : `🌤 **No umbrella needed** today in ${city}. Only ${chanceRain}% chance of rain. Enjoy the ${curW?.description?.toLowerCase() ?? 'weather'}!`
+      } else if (lowerQ.includes('wear') || lowerQ.includes('dress') || lowerQ.includes('outfit') || lowerQ.includes('clothes')) {
+        const temp = curW?.tempC ?? 25
+        const desc = curW?.description ?? ''
+        if (temp < 10) responseText = `🧥 It's **cold** (${temp}°C) in ${city}. Wear a heavy coat, warm layers, and close-toed shoes.`
+        else if (temp < 18) responseText = `🧣 It's **cool** (${temp}°C) in ${city}. A light jacket or sweater should be comfortable.`
+        else if (temp < 28) responseText = `👕 It's **pleasant** (${temp}°C) in ${city}. Light clothes work great. Condition: ${desc}.`
+        else responseText = `🌡️ It's **hot** (${temp}°C) in ${city}. Wear light, breathable clothing and stay hydrated.`
+      } else if (lowerQ.includes('temperature') || lowerQ.includes('temp') || lowerQ.includes('how hot') || lowerQ.includes('how cold')) {
+        responseText = curW
+          ? `🌡️ Current temperature in **${city}**: **${curW.tempC}°C** (${curW.tempF}°F). Feels like ${curW.feelsLikeC}°C. Condition: ${curW.description}.`
+          : `Temperature data for ${city} is unavailable right now.`
+      } else if (lowerQ.includes('wind')) {
+        responseText = curW
+          ? `💨 Wind in **${city}**: **${curW.windKmph} km/h** from the ${curW.windDir} direction.`
+          : `Wind data unavailable for ${city}.`
+      } else if (lowerQ.includes('humid')) {
+        responseText = curW
+          ? `💧 Humidity in **${city}**: **${curW.humidity}%**. ${curW.humidity > 70 ? 'It feels quite muggy.' : curW.humidity < 30 ? 'It feels quite dry.' : 'Comfortable humidity levels.'}`
+          : `Humidity data unavailable for ${city}.`
+      } else if (lowerQ.includes('forecast') || lowerQ.includes('week') || lowerQ.includes('tomorrow') || lowerQ.includes('next')) {
+        const fc = weather?.forecast ?? []
+        if (fc.length > 0) {
+          responseText = `### 📅 Forecast for ${city}\n\n`
+          fc.forEach(d => { responseText += `**${d.date}**: ${d.description}, ${d.minTempC}°C – ${d.maxTempC}°C, 🌧 ${d.chanceOfRain}% rain\n` })
+        } else {
+          responseText = `Forecast data for ${city} is not available.`
+        }
+      } else if (lowerQ.includes('headline') || lowerQ.includes('news') || lowerQ.includes('latest') || lowerQ.includes('top stories')) {
+        if (arts.length > 0) {
+          responseText = `### 📰 Top ${newsCategory} Headlines\n\n`
+          arts.slice(0, 5).forEach((a, i) => { responseText += `${i + 1}. **[${a.title}](${a.link})**\n> ${a.description}\n\n` })
+        } else {
+          responseText = 'No news articles available right now.'
+        }
+      } else {
+        // General query — give a concise relevant summary
+        responseText = `### 🌤 ${city} — Current Snapshot\n\n`
+        if (curW) {
+          responseText += `**Weather:** ${curW.description}, **${curW.tempC}°C** (feels like ${curW.feelsLikeC}°C)\n`
+          responseText += `Humidity: ${curW.humidity}% · Wind: ${curW.windKmph} km/h ${curW.windDir}\n\n`
+        }
+        if (arts.length > 0) {
+          responseText += `**📰 Top ${newsCategory} story:** [${arts[0].title}](${arts[0].link})\n> ${arts[0].description}`
+        }
       }
+
       setMessages(prev => [...prev, {
         id: Date.now().toString() + 'r',
         role: 'assistant',
-        content: responseText || 'Information unavailable at the moment.',
+        content: responseText || 'Sorry, I could not find relevant information right now.',
         ts: new Date(),
       }])
     } finally {
