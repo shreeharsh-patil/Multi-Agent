@@ -588,7 +588,7 @@ export default function WorkflowsPage() {
   const selectedAgent = selectedNode ? agentById.get(selectedNode.agentId) : undefined
 
   return (
-    <div className="flex h-full min-h-[680px] flex-col overflow-hidden bg-[#f7f7f4] text-[#26251e]">
+    <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-[#f7f7f4] text-[#26251e] font-sans">
       {/* ── Top Toolbar ──────────────────────────────────────────────── */}
       <header className="z-20 flex shrink-0 items-center gap-3 overflow-x-auto border-b border-[#dcdcd6] bg-white px-3 py-2.5 sm:px-5 scrollbar-thin">
         <div className="flex items-center gap-2 mr-2">
@@ -725,7 +725,7 @@ export default function WorkflowsPage() {
               <circle cx="25" cy="22" r="4" fill={runStatus === 'running' ? '#1f8a65' : '#d8d8d2'}>
                 {runStatus === 'running' && <animate attributeName="r" values="3;5;3" dur="1.2s" repeatCount="indefinite" />}
               </circle>
-              <text x="35" y="27" fontFamily="monospace" fontSize="8" fill="#77756e" fontWeight="bold">
+              <text x="35" y="27" fontFamily="var(--font-mono), monospace" fontSize="8" fill="#77756e" fontWeight="bold">
                 {runStatus === 'running' ? 'RUNNING' : runStatus === 'complete' ? 'COMPLETE' : runStatus === 'error' ? 'ERROR' : 'READY'}
               </text>
             </g>

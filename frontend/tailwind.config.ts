@@ -19,8 +19,9 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['var(--font-sans)', 'var(--font-ibm-plex)', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        serif: ['var(--font-serif)', 'Georgia', 'serif'],
+        mono: ['var(--font-mono)', 'monospace'],
         pixel: ['var(--font-pixel)', 'monospace'],
       },
       colors: {

@@ -66,8 +66,11 @@
   * {
     @apply border-border transition-colors duration-150;
   }
+  body, button, input, optgroup, select, textarea {
+    @apply font-sans;
+  }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-[#f54e00] selection:text-white font-sans;
+    @apply bg-background text-foreground antialiased selection:bg-[#f54e00] selection:text-white;
   }
   /* Dashboard headings */
   h1, h2, h3 {
@@ -75,6 +78,9 @@
   }
   h4, h5, h6 {
     @apply font-sans font-medium text-[#26251e];
+  }
+  svg text {
+    font-family: var(--font-sans), system-ui, sans-serif;
   }
 }
 

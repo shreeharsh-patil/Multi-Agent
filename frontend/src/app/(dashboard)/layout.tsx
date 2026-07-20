@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/session'
 import { SidebarProvider } from '@/context/sidebar-context'
 import { HealthPing } from '@/components/health-ping'
 import { CommandPalette } from '@/components/command-palette'
+import { DashboardContent } from '@/components/dashboard-content'
 
 export default async function DashboardLayout({
   children,
@@ -15,12 +16,12 @@ export default async function DashboardLayout({
     <SidebarProvider>
       <HealthPing />
       <CommandPalette />
-      <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <div className="flex h-screen overflow-hidden bg-background text-foreground font-sans">
         <Sidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 scrollbar-thin bg-background">
+          <DashboardContent>
             {children}
-          </main>
+          </DashboardContent>
         </div>
       </div>
     </SidebarProvider>
