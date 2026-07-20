@@ -1,7 +1,9 @@
 import asyncio
 import json
+import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -22,6 +24,8 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
 # Image extensions used to detect whether an attached file is viewable inline
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+MAX_ATTACHMENT_CONTEXT_CHARS = 30000
+MAX_ATTACHMENT_CHARS = 15000
 
 
 async def _word_chunks(text: str):
@@ -32,58 +36,123 @@ async def _word_chunks(text: str):
         await asyncio.sleep(0.012)
 
 
-async def _build_attachment_context(attachments: list | None, user_id: str | None = None) -> str:
-    """Build a descriptive prefix about attached files for the LLM prompt.
+async def _load_attachment_text(doc: Document) -> str:
+    """Load content for one exact attachment without relying on RAG similarity."""
+    chunks = await DocumentChunk.find(
+        {"document_id": str(doc.id), "user_id": doc.user_id}
+    ).sort("chunk_index").to_list()
+    if chunks:
+        return "\n\n".join(chunk.content for chunk in chunks if chunk.content.strip())
 
-    Looks up each attachment's document metadata from MongoDB so the LLM
-    knows the file name, type, and (for images) the inline download URL.
-    """
+    # Support files uploaded before document chunks were persisted in MongoDB.
+    if doc.file_type not in IMAGE_EXTENSIONS and doc.file_path and os.path.exists(doc.file_path):
+        from src.services.rag.parser import document_parser
+
+        parsed = await asyncio.to_thread(document_parser.parse, doc.file_path, doc.file_type)
+        return parsed.text.strip()
+    return ""
+
+
+async def _build_attachment_context(
+    attachments: list | None,
+    user_id: str | None = None,
+    user_query: str = "",
+) -> str:
+    """Build a prompt prefix containing the actual contents of attached files."""
     if not attachments:
         return ""
 
-    lines: list[str] = []
+    sections: list[str] = []
+    used_chars = 0
     for att in attachments:
         doc_id = att.get("documentId") if isinstance(att, dict) else getattr(att, "documentId", None)
         name = att.get("name") if isinstance(att, dict) else getattr(att, "name", "unknown")
         if not doc_id:
-            lines.append(f"- {name}")
+            sections.append(f"## {name}\nThe upload did not return a document identifier, so its contents are unavailable.")
             continue
 
         try:
             doc = await Document.get(doc_id)
         except Exception:
-            lines.append(f"- {name}")
-            continue
+            doc = None
 
         if not doc:
-            lines.append(f"- {name}")
+            # OpenDocuments returns external IDs instead of local MongoDB IDs.
+            try:
+                from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
+
+                if user_id and await should_use_opendocuments(user_id):
+                    result = await opendocuments_client.query_rag(
+                        user_query or f"Summarize the contents of {name}",
+                        top_k=8,
+                    )
+                    matching = [
+                        item for item in result.get("results", [])
+                        if (item.get("metadata", {}).get("file_name") or "").casefold() == name.casefold()
+                    ]
+                    items = matching or result.get("results", [])
+                    content = "\n\n".join(item.get("content", "") for item in items if item.get("content"))
+                    if content:
+                        excerpt = content[:MAX_ATTACHMENT_CHARS]
+                        sections.append(f"## {name}\n{excerpt}")
+                        used_chars += len(excerpt)
+                        continue
+            except Exception as exc:
+                logger.warning("Could not load OpenDocuments attachment %s: %s", name, exc)
+            sections.append(f"## {name}\nThe uploaded document could not be loaded.")
             continue
 
         if user_id and doc.user_id != user_id:
-            lines.append(f"- {name} (attachment unavailable)")
+            sections.append(f"## {name}\nThis attachment is not available to the current user.")
             continue
 
-        is_img = doc.file_type in IMAGE_EXTENSIONS
-        if is_img:
-            download_url = f"/api/documents/{doc.id}/download"
-            lines.append(f"- {doc.file_name} ({doc.file_type}, image — viewable at `{download_url}`)")
-            analysis = await DocumentChunk.find_one(
-                DocumentChunk.document_id == str(doc.id),
-                DocumentChunk.user_id == doc.user_id,
-                DocumentChunk.section == "Image analysis",
-            )
-            if analysis:
-                lines.append(f"  Image analysis:\n{analysis.content}")
-        else:
-            lines.append(f"- {doc.file_name} ({doc.file_type})")
+        is_image = doc.file_type in IMAGE_EXTENSIONS
+        content = await _load_attachment_text(doc)
+        if not content and is_image and doc.file_type != "svg" and doc.file_path and os.path.exists(doc.file_path):
+            # Retry vision at question time if upload-time analysis was unavailable.
+            from src.services.rag.ocr import analyze_image
 
-    if not lines:
+            mime_type = "image/jpeg" if doc.file_type in {"jpg", "jpeg"} else f"image/{doc.file_type}"
+            try:
+                image_bytes = await asyncio.to_thread(Path(doc.file_path).read_bytes)
+                content = (await analyze_image(image_bytes, mime_type, doc.file_name)).strip()
+                if content:
+                    await DocumentChunk(
+                        document_id=str(doc.id),
+                        user_id=doc.user_id,
+                        content=content,
+                        chunk_index=0,
+                        section="Image analysis",
+                        metadata={"file_name": doc.file_name, "kind": "vision_ocr"},
+                    ).insert()
+            except Exception as exc:
+                logger.warning("Vision analysis retry failed for %s: %s", doc.file_name, exc)
+
+        if content:
+            remaining = MAX_ATTACHMENT_CONTEXT_CHARS - used_chars
+            excerpt = content[: min(MAX_ATTACHMENT_CHARS, remaining)]
+            sections.append(f"## {doc.file_name} ({doc.file_type})\n{excerpt}")
+            used_chars += len(excerpt)
+            if len(content) > len(excerpt):
+                sections[-1] += "\n[Content truncated to fit the chat context.]"
+        else:
+            kind = "image" if is_image else "document"
+            sections.append(
+                f"## {doc.file_name} ({doc.file_type})\n"
+                f"No readable {kind} content was extracted. Do not claim to know what is inside it."
+            )
+
+        if used_chars >= MAX_ATTACHMENT_CONTEXT_CHARS:
+            break
+
+    if not sections:
         return ""
 
     return (
-        "📎 The user attached the following file(s) for reference:\n"
-        + "\n".join(lines)
-        + "\n\n"
+        "The user attached the following files. Their extracted contents are provided below. "
+        "Answer from this content and identify the file when multiple files are present.\n\n"
+        + "\n\n".join(sections)
+        + "\n\nUser's request:\n"
     )
 
 
@@ -327,7 +396,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
         from src.services.memory.service import memory_service
         memory_context = await memory_service.build_context(user_id, body.message)
-        attachment_context = await _build_attachment_context(body.attachments, user_id)
+        attachment_context = await _build_attachment_context(body.attachments, user_id, body.message)
         augmented_message = memory_context + attachment_context + body.message
         if body.conversation_id:
             existing = await Conversation.get(body.conversation_id)
@@ -446,7 +515,7 @@ async def chat_stream(
             from src.services.memory.service import memory_service
             memory_context, attachment_context = await asyncio.gather(
                 memory_service.build_context(user_id, body.message),
-                _build_attachment_context(body.attachments, user_id),
+                _build_attachment_context(body.attachments, user_id, body.message),
             )
             augmented_message = memory_context + attachment_context + body.message
 

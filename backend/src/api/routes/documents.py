@@ -238,6 +238,19 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 for c in chunks
             ]
 
+            # Preserve exact attachment text for chat. Similarity search can
+            # miss vague prompts such as "what is in this PDF?".
+            for chunk in chunks:
+                await DocumentChunk(
+                    document_id=str(doc.id),
+                    user_id=resolved_user_id,
+                    content=chunk.content,
+                    chunk_index=chunk.chunk_index,
+                    page_number=chunk.page_number,
+                    section=chunk.section,
+                    metadata={"file_name": file.filename, "kind": "document_text"},
+                ).insert()
+
             retriever = get_retriever()
             await retriever.store_document_chunks(
                 chunks=chunk_data,
