@@ -420,7 +420,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 user_id,
                 body.team_agents,
                 conv_id,
-                context={"google_access_token": google_access_token},
+                context={"google_access_token": google_access_token, "google_refresh_token": google_refresh_token},
             )
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
@@ -557,7 +557,7 @@ async def chat_stream(
                     user_id,
                     body.team_agents,
                     conv_id,
-                    context={"google_access_token": http_request.headers.get("X-Google-Access-Token", "")},
+                    context={"google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")},
                 )
                 for stage in team_result["stages"]:
                     yield f"event: agent\ndata: {json.dumps({'agent_id': stage['agent_id']})}\n\n"

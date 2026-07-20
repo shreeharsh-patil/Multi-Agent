@@ -316,6 +316,9 @@ function ChatContent() {
 
   const toggleVoiceInput = useCallback(async () => {
     if (isListening) {
+      if ((window as any).__speechRecognitionInstance) {
+        (window as any).__speechRecognitionInstance.stop()
+      }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop()
       }
@@ -323,7 +326,49 @@ function ChatContent() {
       return
     }
 
-    if (typeof window === 'undefined' || !navigator.mediaDevices) return
+    if (typeof window === 'undefined') return
+
+    // Try Web Speech API SpeechRecognition first for instant real-time transcription
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition()
+        recognition.continuous = true
+        recognition.interimResults = true
+        recognition.lang = 'en-US'
+
+        recognition.onresult = (event: any) => {
+          let transcript = ''
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript
+          }
+          if (transcript) {
+            setInput((prev) => {
+              const base = prev.trim()
+              return base ? `${base} ${transcript.trim()}` : transcript.trim()
+            })
+          }
+        }
+
+        recognition.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error)
+          setIsListening(false)
+        }
+
+        recognition.onend = () => {
+          setIsListening(false)
+        }
+
+        (window as any).__speechRecognitionInstance = recognition
+        recognition.start()
+        setIsListening(true)
+        return
+      } catch (err) {
+        console.warn('SpeechRecognition failed, falling back to MediaRecorder:', err)
+      }
+    }
+
+    if (!navigator.mediaDevices) return
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -338,9 +383,7 @@ function ChatContent() {
       }
 
       recorder.onstop = async () => {
-        // Stop all audio track elements
         stream.getTracks().forEach((track) => track.stop())
-
         const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
         if (audioBlob.size === 0) return
 
@@ -359,15 +402,10 @@ function ChatContent() {
 
           if (response.ok) {
             const data = await response.json()
-            if (data.success && data.data?.transcript) {
-              const transcript = data.data.transcript
-              setInput((current) => `${current}${current ? ' ' : ''}${transcript}`)
-            } else if (data.transcript) {
-              const transcript = data.transcript
+            const transcript = data.data?.transcript || data.transcript
+            if (transcript) {
               setInput((current) => `${current}${current ? ' ' : ''}${transcript}`)
             }
-          } else {
-            console.error('Failed to transcribe audio:', response.statusText)
           }
         } catch (err) {
           console.error('Error uploading/transcribing audio:', err)
