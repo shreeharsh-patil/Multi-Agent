@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +63,7 @@ export function TopBar() {
   const { data: session } = useSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
 
   return (
     <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-4 border-b bg-secondary/80 backdrop-blur-md border-border w-full relative">
@@ -85,25 +86,29 @@ export function TopBar() {
             className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#efe9de] border-r border-border p-6 flex flex-col lg:hidden animate-in slide-in-from-left duration-200 shadow-lg">
-            <div className="flex items-center justify-between mb-8">
-              <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
-                <div className="h-8 w-8 rounded-lg bg-card border border-border flex items-center justify-center shadow-sm">
-                  <Image src="/logo.png" alt="Agents Logo" width={20} height={20} className="h-5 w-5 object-contain" />
-                </div>
-                <span className="font-serif font-normal text-lg text-foreground">Agents</span>
-              </Link>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-muted-foreground hover:text-foreground hover:bg-card"
-              >
-                <X className="h-5 w-5 stroke-[1.5]" />
-              </Button>
+          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-secondary border-r border-border flex flex-col lg:hidden animate-in slide-in-from-left duration-200 shadow-lg">
+            {/* Header */}
+            <div className="p-4 flex flex-col gap-4 border-b border-border shrink-0">
+              <div className="flex items-center justify-between h-9">
+                <Link href="/dashboard" className="flex items-center gap-2.5 group" onClick={() => setMobileMenuOpen(false)}>
+                  <div className="h-9 w-9 rounded-lg border border-border bg-card flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-xs shrink-0">
+                    <Image src="/logo.png" alt="Agents Logo" width={24} height={24} className="h-6 w-6 object-contain" />
+                  </div>
+                  <span className="font-sans font-normal text-lg tracking-[-0.03em] text-foreground">Agents</span>
+                </Link>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-muted-foreground hover:text-foreground hover:bg-card h-9 w-9"
+                >
+                  <X className="h-5 w-5 stroke-[1.5]" />
+                </Button>
+              </div>
             </div>
-            
-            <nav className="flex-1 space-y-1.5 overflow-y-auto scrollbar-thin pr-1">
+
+            {/* Navigation */}
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
               {navigation.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                 return (
@@ -112,20 +117,44 @@ export function TopBar() {
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      buttonVariants({ variant: 'ghost' }),
-                      'w-full justify-start gap-3 font-normal text-muted-foreground hover:text-foreground hover:bg-card/55',
-                      isActive && 'bg-card border border-border text-foreground font-medium shadow-xs',
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200",
+                      isActive
+                        ? "bg-card text-foreground border border-border shadow-xs"
+                        : "text-muted-foreground hover:text-foreground hover:bg-card/50"
                     )}
                   >
-                    <item.icon className={cn("h-4 w-4 stroke-[1.5]", isActive ? "text-primary" : "text-muted-foreground")} />
-                    {item.name}
+                    <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                    <span className="truncate">{item.name}</span>
                   </Link>
                 )
               })}
             </nav>
-            
-            <div className="pt-4 border-t border-border text-center">
-              <p className="text-xs text-muted-foreground">Agents AI Platform v0.1</p>
+
+            {/* User Profile Footer */}
+            <div className="p-4 border-t border-border bg-secondary/85 shrink-0">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-9 w-9 border border-border shrink-0 cursor-pointer" onClick={() => { setMobileMenuOpen(false); router.push('/settings') }}>
+                  <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
+                  <AvatarFallback className="bg-card text-xs text-muted-foreground font-semibold uppercase">
+                    {session?.user?.name?.charAt(0) ?? 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 flex items-center justify-between min-w-0">
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
+                        {session?.user?.name}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-[4px] bg-primary text-primary-foreground text-[9px] font-bold tracking-wider uppercase select-none shrink-0">
+                        Pro
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground truncate">
+                      {session?.user?.email}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </>
