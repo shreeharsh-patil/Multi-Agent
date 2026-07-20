@@ -150,6 +150,10 @@ function ChatContent() {
     if (agentParam && agents.concat(customAgents).some(a => a.id === agentParam)) {
       setSelectedAgent(agentParam)
     }
+    const convParam = searchParams?.get('c') || searchParams?.get('conversation_id') || searchParams?.get('conversation')
+    if (convParam) {
+      setConversationId(convParam)
+    }
   }, [searchParams, customAgents])
   const [, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState('all')
@@ -467,6 +471,39 @@ function ChatContent() {
   }>>([])
   const [, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
+  // Fetch conversation messages when conversationId is set/changed
+  useEffect(() => {
+    if (!conversationId) return
+    let isCancelled = false
+    setLoadingHistory(true)
+    api.chat.getConversation(conversationId)
+      .then((res) => {
+        if (isCancelled) return
+        if (res.success && res.data) {
+          const conv = res.data
+          setChatTitle(conv.title || '')
+          if (conv.agentId) setSelectedAgent(conv.agentId)
+          if (Array.isArray(conv.messages)) {
+            setMessages(
+              conv.messages.map((m: any, idx: number) => ({
+                id: m.id || `msg_${idx}`,
+                role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+                content: m.content || '',
+                agentId: m.agentId,
+              }))
+            )
+          }
+        }
+      })
+      .catch((err) => console.error('Failed to load chat history:', err))
+      .finally(() => {
+        if (!isCancelled) setLoadingHistory(false)
+      })
+
+    return () => { isCancelled = true }
+  }, [conversationId])
 
   // Persist unsent composer text per-conversation so it survives navigation
   // and refreshes. Keyed by conversation id ("new" for a fresh chat).
@@ -696,6 +733,7 @@ function ChatContent() {
     setMessages([])
     setAttachments([])
     setShareUrl(null)
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', '/chat')
   }, [])
 
   useEffect(() => {

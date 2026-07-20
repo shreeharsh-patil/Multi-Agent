@@ -447,10 +447,7 @@ export function Sidebar() {
       </div>
 
       {/* Main Navigation Links */}
-      <div className={cn(
-        "flex-1 px-3 py-4 space-y-6",
-        isCollapsed ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden scrollbar-thin"
-      )}>
+      <div className="flex-1 px-3 py-4 space-y-6 overflow-y-auto overflow-x-hidden scrollbar-thin">
         <div className="space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional, Literal
-from beanie import Document as BeanieDocument
+from beanie import Document as BeanieDocument, Indexed
 from pydantic import BaseModel, Field
 
 
@@ -37,8 +37,8 @@ class Message(BaseModel):
 
 
 class Conversation(BeanieDocument):
-    user_id: str
-    workspace_id: Optional[str] = None
+    user_id: Indexed(str)
+    workspace_id: Optional[Indexed(str)] = None
     title: str = "New Conversation"
     agent_id: Optional[str] = None
     messages: list[Message] = Field(default_factory=list)

@@ -164,7 +164,7 @@ interface NodeProps {
   onDelete: (e: React.MouseEvent) => void
 }
 
-function DAGNode({
+const DAGNode = React.memo(function DAGNode({
   node, agentInfo, accentIndex, selected, runStatus, pendingSource,
   onPointerDown, onClick, onOutputPortClick, onInputPortClick, onDelete,
 }: NodeProps) {
@@ -238,7 +238,7 @@ function DAGNode({
       />
     </g>
   )
-}
+})
 
 // ── Main component ─────────────────────────────────────────────────────────
 
@@ -273,9 +273,12 @@ export default function WorkflowsPage() {
   const [pendingSourceId, setPendingSourceId] = useState<string | null>(null)  // drawing edge from output port
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
 
-  // drag
+  // drag & animation frame refs
   const dragRef = useRef<{ nodeId: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
   const panRef = useRef<{ startX: number; startY: number; origPanX: number; origPanY: number } | null>(null)
+  const rafRef = useRef<number | null>(null)
+  const pendingSourceIdRef = useRef<string | null>(null)
+  pendingSourceIdRef.current = pendingSourceId
 
   // run
   const [runStatus, setRunStatus] = useState<RunStatus>('idle')
@@ -316,29 +319,42 @@ export default function WorkflowsPage() {
   // ── SVG mouse tracking ─────────────────────────────────────────────────
 
   const onSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    const pt = svgPoint(e.clientX, e.clientY)
-    setMousePos(pt)
+    if (pendingSourceIdRef.current) {
+      const pt = svgPoint(e.clientX, e.clientY)
+      setMousePos(pt)
+    }
 
     if (dragRef.current) {
       const { nodeId, startX, startY, origX, origY } = dragRef.current
       const dx = (e.clientX - startX) / zoom
       const dy = (e.clientY - startY) / zoom
-      setWorkflow(prev => ({
-        ...prev,
-        nodes: prev.nodes.map(n => n.id === nodeId
-          ? { ...n, x: snapToGrid(origX + dx), y: snapToGrid(origY + dy) }
-          : n),
-      }))
+      const newX = snapToGrid(origX + dx)
+      const newY = snapToGrid(origY + dy)
+
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => {
+        setWorkflow(prev => ({
+          ...prev,
+          nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, x: newX, y: newY } : n),
+        }))
+      })
     }
 
     if (panRef.current) {
       const dx = e.clientX - panRef.current.startX
       const dy = e.clientY - panRef.current.startY
-      setPan({ x: panRef.current.origPanX + dx, y: panRef.current.origPanY + dy })
+      const newPanX = panRef.current.origPanX + dx
+      const newPanY = panRef.current.origPanY + dy
+
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => {
+        setPan({ x: newPanX, y: newPanY })
+      })
     }
   }, [svgPoint, zoom])
 
   const onSvgMouseUp = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
     dragRef.current = null
     panRef.current = null
   }, [])
@@ -714,7 +730,7 @@ export default function WorkflowsPage() {
               </text>
             </g>
 
-            <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+            <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`} style={{ willChange: 'transform' }}>
 
               {/* Edges */}
               {workflow.edges.map(edge => {

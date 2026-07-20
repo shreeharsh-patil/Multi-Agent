@@ -304,9 +304,9 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
 
-    owned = await Conversation.find(Conversation.user_id == resolved_user_id).to_list()
+    owned = await Conversation.find(Conversation.user_id == resolved_user_id).project({"messages": {"$slice": -1}}).to_list()
     workspace_ids = [str(w.id) for w in await Workspace.find({"member_ids": resolved_user_id}).to_list()]
-    shared = await Conversation.find({"workspace_id": {"$in": workspace_ids}}).to_list() if workspace_ids else []
+    shared = await Conversation.find({"workspace_id": {"$in": workspace_ids}}).project({"messages": {"$slice": -1}}).to_list() if workspace_ids else []
     convs = sorted({str(c.id): c for c in owned + shared}.values(), key=lambda c: c.updated_at, reverse=True)
 
     return [
