@@ -410,8 +410,9 @@ export default function WeatherNewsPage() {
           responseText += `**Weather:** ${curW.description}, **${curW.tempC}°C** (feels like ${curW.feelsLikeC}°C)\n`
           responseText += `Humidity: ${curW.humidity}% · Wind: ${curW.windKmph} km/h ${curW.windDir}\n\n`
         }
-        if (arts.length > 0) {
-          responseText += `**📰 Top ${newsCategory} story:** [${arts[0].title}](${arts[0].link})\n> ${arts[0].description}`
+        const topStory = arts[0]
+        if (topStory) {
+          responseText += `**📰 Top ${newsCategory} story:** [${topStory.title}](${topStory.link})\n> ${topStory.description ?? ''}`
         }
       }
 
