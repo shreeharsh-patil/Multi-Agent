@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { getAccessToken } from '@/lib/auth-store'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -112,18 +113,39 @@ function pendingEdgePath(sx: number, sy: number, mx: number, my: number): string
   return `M${sx},${sy} C${sx + dx},${sy} ${mx - dx},${my} ${mx},${my}`
 }
 
+function wouldCreateCycle(nodes: WFNode[], edges: WFEdge[], source: string, target: string): boolean {
+  const adjacency = new Map(nodes.map(node => [node.id, [] as string[]]))
+  for (const edge of edges) adjacency.get(edge.source)?.push(edge.target)
+  adjacency.get(source)?.push(target)
+
+  const stack = [target]
+  const visited = new Set<string>()
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (current === source) return true
+    if (visited.has(current)) continue
+    visited.add(current)
+    stack.push(...(adjacency.get(current) || []))
+  }
+  return false
+}
+
 // ── API helpers ────────────────────────────────────────────────────────────
 
 function getToken() {
-  try { return typeof window !== 'undefined' ? localStorage.getItem('access_token') : null } catch { return null }
+  return getAccessToken()
 }
 
-async function wfFetch(endpoint: string, opts: RequestInit = {}) {
+async function wfFetch<T>(endpoint: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers.Authorization = `Bearer ${token}`
   const res = await fetch(`${BACKEND_URL}${endpoint}`, { ...opts, headers: { ...headers, ...(opts.headers as Record<string, string> | undefined) } })
-  return res.json()
+  const payload = await res.json()
+  if (!res.ok || payload.success === false) {
+    throw new Error(payload.error || payload.detail || `Workflow request failed (${res.status})`)
+  }
+  return (payload.data ?? payload) as T
 }
 
 // ── Workflow node component ────────────────────────────────────────────────
@@ -229,7 +251,7 @@ const EMPTY_WF: Workflow = {
 }
 
 export default function WorkflowsPage() {
-  useSession()
+  const { data: session } = useSession()
 
   // workflow state
   const [workflow, setWorkflow] = useState<Workflow>(EMPTY_WF)
@@ -262,6 +284,7 @@ export default function WorkflowsPage() {
   const [runError, setRunError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
 
   // selected agent info for inspector
   const selectedNode = workflow.nodes.find(n => n.id === selectedNodeId)
@@ -274,15 +297,13 @@ export default function WorkflowsPage() {
 
   // Load saved workflows list
   const loadList = useCallback(() => {
-    wfFetch('/api/workflows').then(data => {
-      if (Array.isArray(data)) setSavedWorkflows(data)
-    })
+    wfFetch<Workflow[]>('/api/workflows').then(setSavedWorkflows).catch(() => setSavedWorkflows([]))
   }, [])
   useEffect(() => { loadList() }, [loadList])
 
   // ── Canvas coordinate conversion ──────────────────────────────────────
 
-  function svgPoint(clientX: number, clientY: number) {
+  const svgPoint = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current
     if (!svg) return { x: 0, y: 0 }
     const rect = svg.getBoundingClientRect()
@@ -290,7 +311,7 @@ export default function WorkflowsPage() {
       x: (clientX - rect.left - pan.x) / zoom,
       y: (clientY - rect.top - pan.y) / zoom,
     }
-  }
+  }, [pan.x, pan.y, zoom])
 
   // ── SVG mouse tracking ─────────────────────────────────────────────────
 
@@ -315,7 +336,7 @@ export default function WorkflowsPage() {
       const dy = e.clientY - panRef.current.startY
       setPan({ x: panRef.current.origPanX + dx, y: panRef.current.origPanY + dy })
     }
-  }, [zoom, pan])
+  }, [svgPoint, zoom])
 
   const onSvgMouseUp = useCallback(() => {
     dragRef.current = null
@@ -361,7 +382,9 @@ export default function WorkflowsPage() {
     if (!pendingSourceId || pendingSourceId === nodeId) { setPendingSourceId(null); return }
     // Avoid duplicates
     const exists = workflow.edges.some(edge => edge.source === pendingSourceId && edge.target === nodeId)
-    if (!exists) {
+    if (wouldCreateCycle(workflow.nodes, workflow.edges, pendingSourceId, nodeId)) {
+      setRunError('That connection would create a cycle. Workflows must remain acyclic.')
+    } else if (!exists) {
       const newEdge: WFEdge = { id: `e_${Date.now()}`, source: pendingSourceId, target: nodeId }
       setWorkflow(prev => ({ ...prev, edges: [...prev.edges, newEdge] }))
     }
@@ -389,8 +412,8 @@ export default function WorkflowsPage() {
     setSelectedNodeId(id)
   }
 
-  function deleteNode(nodeId: string, e: React.MouseEvent) {
-    e.stopPropagation()
+  function deleteNode(nodeId: string, e?: { stopPropagation: () => void }) {
+    e?.stopPropagation()
     setWorkflow(prev => ({
       ...prev,
       nodes: prev.nodes.filter(n => n.id !== nodeId),
@@ -401,7 +424,7 @@ export default function WorkflowsPage() {
 
   // ── Save ───────────────────────────────────────────────────────────────
 
-  const saveWorkflow = useCallback(async () => {
+  const persistWorkflow = useCallback(async (): Promise<string | null> => {
     setSaving(true)
     setSaveMsg('')
     try {
@@ -414,54 +437,71 @@ export default function WorkflowsPage() {
       }
       let result: Workflow & { id?: string }
       if (savedId) {
-        result = await wfFetch(`/api/workflows/${savedId}`, { method: 'PUT', body: JSON.stringify(payload) })
+        result = await wfFetch<Workflow & { id?: string }>(`/api/workflows/${savedId}`, { method: 'PUT', body: JSON.stringify(payload) })
       } else {
-        result = await wfFetch('/api/workflows', { method: 'POST', body: JSON.stringify(payload) })
-        if (result.id) setSavedId(result.id)
+        result = await wfFetch<Workflow & { id?: string }>('/api/workflows', { method: 'POST', body: JSON.stringify(payload) })
       }
+      const nextId = result.id || savedId || null
+      if (nextId && nextId !== savedId) setSavedId(nextId)
       setSaveMsg('Saved ✓')
       loadList()
-    } catch {
+      return nextId
+    } catch (error) {
       setSaveMsg('Save failed')
+      setRunError(error instanceof Error ? error.message : 'Save failed')
+      return null
     } finally {
       setSaving(false)
       setTimeout(() => setSaveMsg(''), 2000)
     }
   }, [workflow, savedId, loadList])
 
+  const saveWorkflow = useCallback(async () => {
+    await persistWorkflow()
+  }, [persistWorkflow])
+
   // ── Run ────────────────────────────────────────────────────────────────
 
   const runWorkflow = useCallback(async () => {
-    if (!savedId) {
-      // Auto-save first
-      await saveWorkflow()
-      return
-    }
     if (workflow.nodes.length === 0) return
+    const workflowId = await persistWorkflow()
+    if (!workflowId) return
     setRunStatus('running')
     setRunOutput('')
     setRunError(null)
     setNodeStatuses({})
+    const controller = new AbortController()
+    abortRef.current = controller
 
     const token = getToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) headers.Authorization = `Bearer ${token}`
+    const googleAccessToken = (session as { accessToken?: string } | null)?.accessToken
+    if (googleAccessToken) headers['X-Google-Access-Token'] = googleAccessToken
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/workflows/${savedId}/run`, {
+      const res = await fetch(`${BACKEND_URL}/api/workflows/${workflowId}/run`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ prompt: workflow.prompt }),
+        signal: controller.signal,
       })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(payload?.error || payload?.detail || `Execution failed (${res.status})`)
+      }
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       if (!reader) throw new Error('No response body')
 
+      let buffer = ''
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const text = decoder.decode(value)
-        for (const line of text.split('\n')) {
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           try {
             const evt = JSON.parse(line.slice(6))
@@ -472,20 +512,28 @@ export default function WorkflowsPage() {
               setRunOutput(evt.output ?? '')
             } else if (evt.event === 'node_error') {
               setNodeStatuses(prev => ({ ...prev, [evt.nodeId]: 'error' }))
+              setRunError(evt.error || 'A workflow stage failed')
             } else if (evt.event === 'complete') {
               setRunOutput(evt.output ?? '')
-              setRunStatus('complete')
+              setRunStatus(evt.status === 'error' ? 'error' : 'complete')
             }
           } catch { /* ignore partial JSON */ }
         }
       }
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : 'Execution failed')
-      setRunStatus('error')
+      if (controller.signal.aborted) {
+        setRunStatus('idle')
+      } else {
+        setRunError(err instanceof Error ? err.message : 'Execution failed')
+        setRunStatus('error')
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
     }
-  }, [savedId, workflow, saveWorkflow])
+  }, [persistWorkflow, session, workflow])
 
   const stopRun = useCallback(() => {
+    abortRef.current?.abort()
     setRunStatus('idle')
   }, [])
 
@@ -522,9 +570,9 @@ export default function WorkflowsPage() {
   const selectedAgent = selectedNode ? agentById.get(selectedNode.agentId) : undefined
 
   return (
-    <div className="flex flex-col h-screen bg-[#f7f7f4] text-[#26251e] overflow-hidden">
+    <div className="flex h-full min-h-[680px] flex-col overflow-hidden bg-[#f7f7f4] text-[#26251e]">
       {/* ── Top Toolbar ──────────────────────────────────────────────── */}
-      <header className="flex items-center gap-3 px-5 py-2.5 border-b border-[#dcdcd6] bg-white z-20 shrink-0">
+      <header className="z-20 flex shrink-0 items-center gap-3 overflow-x-auto border-b border-[#dcdcd6] bg-white px-3 py-2.5 sm:px-5 scrollbar-thin">
         <div className="flex items-center gap-2 mr-2">
           <Workflow className="w-4 h-4 text-[#1877a8]" />
           <span className="font-mono text-[10px] font-bold uppercase text-[#1877a8] tracking-widest">Workflow Studio</span>
@@ -594,7 +642,7 @@ export default function WorkflowsPage() {
       {/* ── Main layout ───────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* ── Agent Palette ──────────────────────────────────────────── */}
-        <aside className="w-52 shrink-0 border-r border-[#d8d8d2] bg-[#fbfbf8] flex flex-col overflow-hidden z-10">
+        <aside className="z-10 flex w-40 shrink-0 flex-col overflow-hidden border-r border-[#d8d8d2] bg-[#fbfbf8] sm:w-52">
           <div className="p-3 border-b border-[#e5e5df]">
             <p className="font-mono text-[9px] font-bold uppercase tracking-widest text-[#77756e] mb-2">Agent Library</p>
             <div className="relative">
@@ -740,7 +788,7 @@ export default function WorkflowsPage() {
         </main>
 
         {/* ── Inspector + Prompt ─────────────────────────────────────── */}
-        <aside className="w-64 shrink-0 border-l border-[#d8d8d2] bg-white flex flex-col overflow-hidden z-10">
+        <aside className="z-10 hidden w-64 shrink-0 flex-col overflow-hidden border-l border-[#d8d8d2] bg-white xl:flex">
           <div className="px-4 py-3 border-b border-[#e5e5df]">
             <p className="font-mono text-[9px] font-bold uppercase tracking-widest text-[#77756e]">Inspector</p>
           </div>
@@ -766,7 +814,7 @@ export default function WorkflowsPage() {
                 ))}
               </div>
               <button
-                onClick={() => deleteNode(selectedNode.id, new MouseEvent('click') as unknown as React.MouseEvent)}
+                onClick={() => deleteNode(selectedNode.id)}
                 className="mt-3 flex items-center gap-1.5 text-[11px] text-[#b53d3d] hover:text-[#8e2727] transition-colors"
               >
                 <Trash2 className="w-3 h-3" /> Remove node
