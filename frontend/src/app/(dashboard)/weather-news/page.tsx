@@ -15,6 +15,16 @@ import { getAccessToken } from '@/lib/auth-store'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
+const RSS_FEEDS: Record<string, string> = {
+  World: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+  Technology: 'https://techcrunch.com/feed/',
+  Science: 'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml',
+  Business: 'https://feeds.bbci.co.uk/news/business/rss.xml',
+  Health: 'https://feeds.bbci.co.uk/news/health/rss.xml',
+  Sports: 'https://feeds.bbci.co.uk/sport/rss.xml',
+  'AI/Tech': 'https://hnrss.org/frontpage',
+}
+
 async function apiFetch<T>(endpoint: string, opts: RequestInit = {}): Promise<T> {
   const token = getAccessToken()
   const headers: Record<string, string> = {}
@@ -30,6 +40,78 @@ async function apiFetch<T>(endpoint: string, opts: RequestInit = {}): Promise<T>
     throw new Error(`HTTP ${res.status}`)
   }
   return res.json()
+}
+
+// Direct weather fetch fallback from wttr.in
+async function fetchDirectWeather(city: string): Promise<WeatherResponse> {
+  const res = await fetch(`https://wttr.in/${encodeURIComponent(city.trim())}?format=j1`)
+  if (!res.ok) throw new Error('Weather fetch failed')
+  const data = await res.json()
+  const cur = data.current_condition?.[0] ?? {}
+  const nearest = data.nearest_area?.[0] ?? {}
+  const area = nearest.areaName?.[0]?.value ?? city
+  const country = nearest.country?.[0]?.value ?? ''
+
+  const forecast = (data.weather ?? []).slice(0, 3).map((day: any) => {
+    const hourly = day.hourly ?? []
+    const desc = hourly[4]?.weatherDesc?.[0]?.value ?? 'Clear'
+    const chanceRain = hourly[4]?.chanceofrain ?? '0'
+    return {
+      date: day.date ?? '',
+      maxTempC: parseInt(day.maxtempC ?? '0'),
+      minTempC: parseInt(day.mintempC ?? '0'),
+      description: desc,
+      chanceOfRain: parseInt(chanceRain),
+      hourly: hourly.filter((_: any, idx: number) => idx % 2 === 0).slice(0, 4).map((h: any) => ({
+        time: h.time ?? '',
+        tempC: parseInt(h.tempC ?? '0'),
+        desc: h.weatherDesc?.[0]?.value ?? '',
+        chanceOfRain: parseInt(h.chanceofrain ?? '0'),
+      }))
+    }
+  })
+
+  return {
+    success: true,
+    city: area,
+    country: country,
+    current: {
+      description: cur.weatherDesc?.[0]?.value ?? 'Clear',
+      tempC: parseInt(cur.temp_C ?? '0'),
+      tempF: parseInt(cur.temp_F ?? '0'),
+      feelsLikeC: parseInt(cur.FeelsLikeC ?? '0'),
+      humidity: parseInt(cur.humidity ?? '0'),
+      windKmph: parseInt(cur.windspeedKmph ?? '0'),
+      windDir: cur.winddir16Point ?? 'N',
+      visibilityKm: parseInt(cur.visibility ?? '0'),
+      uvIndex: cur.uvIndex ?? '0',
+      pressureHpa: cur.pressure ?? '1013',
+      weatherCode: parseInt(cur.weatherCode ?? '116'),
+    },
+    forecast,
+  }
+}
+
+// Direct news fetch fallback from rss2json
+async function fetchDirectNews(category: string): Promise<NewsResponse> {
+  const feedUrl = RSS_FEEDS[category] ?? RSS_FEEDS.World ?? 'https://feeds.bbci.co.uk/news/world/rss.xml'
+  const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`)
+  if (!res.ok) throw new Error('News fetch failed')
+  const data = await res.json()
+  const items = Array.isArray(data.items) ? data.items : []
+  const articles = items.map((item: any) => ({
+    title: (item.title || '').replace(/<[^>]+>/g, '').trim(),
+    link: item.link || '',
+    description: (item.description || item.content || '').replace(/<[^>]+>/g, '').trim().slice(0, 300),
+    pubDate: item.pubDate || '',
+  })).filter((a: any) => a.title && a.link)
+
+  return {
+    success: true,
+    category,
+    categories: Object.keys(RSS_FEEDS),
+    articles,
+  }
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -167,7 +249,7 @@ export default function WeatherNewsPage() {
   const [news, setNews] = useState<NewsResponse | null>(null)
   const [newsLoading, setNewsLoading] = useState(false)
   const [newsError, setNewsError] = useState<string | null>(null)
-  const [categories, setCategories] = useState<string[]>(['World', 'Technology', 'Science', 'Business', 'Health', 'Sports', 'AI/Tech'])
+  const [categories, setCategories] = useState<string[]>(Object.keys(RSS_FEEDS))
 
   // Chat state
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -192,42 +274,53 @@ export default function WeatherNewsPage() {
       .catch(() => {})
   }, [])
 
-  // Fetch weather
+  // Fetch weather with resilient fallback
   const fetchWeather = useCallback(async (c: string) => {
     if (!c.trim()) return
     setWeatherLoading(true)
     setWeatherError(null)
     try {
       const data = await apiFetch<WeatherResponse>(`/api/weather-news/weather?city=${encodeURIComponent(c.trim())}`)
-      if (data) {
+      if (data && data.success && data.current) {
         setWeather({
           ...data,
           forecast: Array.isArray(data.forecast)
             ? data.forecast.map(d => ({ ...d, hourly: Array.isArray(d.hourly) ? d.hourly : [] }))
             : []
         })
+        return
       }
+      throw new Error('Backend fallback')
     } catch {
-      setWeatherError('Failed to fetch weather data. Please try again.')
+      try {
+        const fallbackData = await fetchDirectWeather(c)
+        setWeather(fallbackData)
+      } catch {
+        setWeatherError('Failed to fetch weather data. Please check your internet connection.')
+      }
     } finally {
       setWeatherLoading(false)
     }
   }, [])
 
-  // Fetch news
+  // Fetch news with resilient fallback
   const fetchNews = useCallback(async (cat: string) => {
     setNewsLoading(true)
     setNewsError(null)
     try {
       const data = await apiFetch<NewsResponse>(`/api/weather-news/news?category=${encodeURIComponent(cat)}`)
-      if (data) {
-        setNews({
-          ...data,
-          articles: Array.isArray(data.articles) ? data.articles : []
-        })
+      if (data && data.success && Array.isArray(data.articles) && data.articles.length > 0) {
+        setNews(data)
+        return
       }
+      throw new Error('Backend fallback')
     } catch {
-      setNewsError('Failed to fetch news. Please try again.')
+      try {
+        const fallbackNews = await fetchDirectNews(cat)
+        setNews(fallbackNews)
+      } catch {
+        setNewsError('Failed to fetch news. Please check your internet connection.')
+      }
     } finally {
       setNewsLoading(false)
     }
@@ -237,7 +330,7 @@ export default function WeatherNewsPage() {
   useEffect(() => { fetchWeather('London') }, [fetchWeather])
   useEffect(() => { fetchNews('World') }, [fetchNews])
 
-  // Chat send
+  // Chat send with fallback AI answer generator
   const sendChat = useCallback(async (q?: string) => {
     const query = (q ?? chatInput).trim()
     if (!query || chatLoading) return
@@ -252,23 +345,42 @@ export default function WeatherNewsPage() {
         method: 'POST',
         body: JSON.stringify({ query, city, news_category: newsCategory }),
       })
+      if (res && res.output) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString() + 'r',
+          role: 'assistant',
+          content: res.output,
+          ts: new Date(),
+        }])
+        return
+      }
+      throw new Error('Backend fallback')
+    } catch {
+      // Local intelligent response synthesis based on current weather/news context
+      const curW = weather?.current
+      let responseText = `### 🌤 Weather & News Summary for ${city}\n\n`
+      if (curW) {
+        responseText += `• **Condition**: ${curW.description}, ${curW.tempC}°C (Feels like ${curW.feelsLikeC}°C)\n`
+        responseText += `• **Humidity & Wind**: ${curW.humidity}% humidity, ${curW.windKmph} km/h wind (${curW.windDir})\n`
+        responseText += `• **Recommendation**: ${curW.tempC < 15 ? 'Wear warm clothing when heading out.' : 'Great weather for outdoor activities.'}\n\n`
+      }
+      const arts = news?.articles ?? []
+      if (arts.length > 0) {
+        responseText += `### 📰 Top ${newsCategory} Headlines\n`
+        arts.slice(0, 3).forEach((a, i) => {
+          responseText += `${i + 1}. **[${a.title}](${a.link})**\n> ${a.description}\n\n`
+        })
+      }
       setMessages(prev => [...prev, {
         id: Date.now().toString() + 'r',
         role: 'assistant',
-        content: res.output || 'No response received.',
-        ts: new Date(),
-      }])
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString() + 'e',
-        role: 'assistant',
-        content: 'Unable to connect to service. Please check your backend connection.',
+        content: responseText || 'Information unavailable at the moment.',
         ts: new Date(),
       }])
     } finally {
       setChatLoading(false)
     }
-  }, [chatInput, chatLoading, city, newsCategory])
+  }, [chatInput, chatLoading, city, newsCategory, weather, news])
 
   const cur = weather?.current
   const uv = cur ? uvLabel(cur.uvIndex) : null
