@@ -13,11 +13,14 @@ class AgentRouter:
             (r"(?i)\b(drive|google drive|upload|download|sync|folder|file)\b.*\b(document|file|folder|upload|download)\b", "drive"),
             (r"(?i)\b(note|notes|flashcards?|revision|study note|anki)\b", "notes"),
             (r"(?i)\b(quiz|mcq|multiple choice|exam|practice question|test)\b", "quiz"),
-            (r"(?i)\b(plan|schedule|deadline|task|todo|remind)\b", "planner"),
+            (r"(?i)\b(google\s+task|google\s+tasks|tasks|to-do list|checklist)\b", "tasks"),
+            (r"(?i)\b(plan|schedule|deadline|remind)\b", "planner"),
             (r"(?i)\b(research|search\s+(the\s+)?internet|web\s+search|find\s+online|report\s+on|investigate)\b", "research"),
             (r"(?i)\b(write code|code|program|debug|function|class|algorithm|implement)\b", "coding"),
             (r"(?i)\b(remember|memory|recall|what did i|my name|my preference)\b", "memory"),
-            (r"(?i)\b(calculate|math|calculator|gmail|email|api|integration)\b", "tool"),
+            (r"(?i)\b(gmail|email|inbox|mail|message|messages)\b", "gmail"),
+            (r"(?i)\b(youtube|video|videos|yt)\b", "youtube"),
+            (r"(?i)\b(calculate|math|calculator|api|integration)\b", "tool"),
         ]
 
     def route(self, user_input: str) -> Optional[str]:

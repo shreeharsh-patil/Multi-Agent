@@ -18,6 +18,9 @@ def initialize_agents() -> None:
     from src.agents.calendar.agent import CalendarAgent
     from src.agents.data_analysis.agent import DataAnalysisAgent
     from src.agents.weather_news.agent import WeatherNewsAgent
+    from src.agents.gmail.agent import GmailAgent
+    from src.agents.tasks.agent import TasksAgent
+    from src.agents.youtube.agent import YouTubeAgent
 
     AgentRegistry.register(KnowledgeAgent())
     AgentRegistry.register(DriveAgent())
@@ -31,6 +34,9 @@ def initialize_agents() -> None:
     AgentRegistry.register(CalendarAgent())
     AgentRegistry.register(DataAnalysisAgent())
     AgentRegistry.register(WeatherNewsAgent())
+    AgentRegistry.register(GmailAgent())
+    AgentRegistry.register(TasksAgent())
+    AgentRegistry.register(YouTubeAgent())
 
     AgentRegistry.initialize()
     logger.info(f"Initialized {len(AgentRegistry.get_all_agents())} agents")

@@ -433,6 +433,24 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
             agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
+        elif routed_agent_id == "gmail":
+            gmail_agent = get_orchestrator().registry.get_agent("gmail")
+            if not gmail_agent:
+                raise HTTPException(status_code=503, detail="Gmail Agent is not initialized")
+            agent_result = await gmail_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "gmail", "event_type": "GmailAction", "has_content": bool(agent_result.output)}], "events_count": 1}
+        elif routed_agent_id == "tasks":
+            tasks_agent = get_orchestrator().registry.get_agent("tasks")
+            if not tasks_agent:
+                raise HTTPException(status_code=503, detail="Tasks Agent is not initialized")
+            agent_result = await tasks_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "tasks", "event_type": "TasksAction", "has_content": bool(agent_result.output)}], "events_count": 1}
+        elif routed_agent_id == "youtube":
+            youtube_agent = get_orchestrator().registry.get_agent("youtube")
+            if not youtube_agent:
+                raise HTTPException(status_code=503, detail="YouTube Agent is not initialized")
+            agent_result = await youtube_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "youtube", "event_type": "YouTubeAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "drive":
             drive_agent = get_orchestrator().registry.get_agent("drive")
             if not drive_agent:
@@ -581,6 +599,45 @@ async def chat_stream(
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
                 await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new, workspace_id=body.workspace_id)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if routed_agent_id == "gmail":
+                gmail_agent = get_orchestrator().registry.get_agent("gmail")
+                if not gmail_agent:
+                    raise HTTPException(status_code=503, detail="Gmail Agent is not initialized")
+                agent_result = await gmail_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'gmail'})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="gmail", is_new=is_new, workspace_id=body.workspace_id)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if routed_agent_id == "tasks":
+                tasks_agent = get_orchestrator().registry.get_agent("tasks")
+                if not tasks_agent:
+                    raise HTTPException(status_code=503, detail="Tasks Agent is not initialized")
+                agent_result = await tasks_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'tasks'})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="tasks", is_new=is_new, workspace_id=body.workspace_id)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if routed_agent_id == "youtube":
+                youtube_agent = get_orchestrator().registry.get_agent("youtube")
+                if not youtube_agent:
+                    raise HTTPException(status_code=503, detail="YouTube Agent is not initialized")
+                agent_result = await youtube_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                yield f"event: agent\ndata: {json.dumps({'agent_id': 'youtube'})}\n\n"
+                async for word in _word_chunks(agent_result.output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
+                accumulated_output = agent_result.output
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="youtube", is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 

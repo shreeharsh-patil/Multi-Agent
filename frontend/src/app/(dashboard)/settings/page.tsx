@@ -10,7 +10,10 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { api } from '@/lib/api'
 import { clearAccessToken } from '@/lib/auth-store'
-import { User, Bell, HardDrive, CalendarDays, BookOpen, LogOut, Loader2, CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
+import { 
+  LogOut, Moon, Sun, Monitor, HardDrive, Cpu, Database, 
+  Search, Shield, CheckCircle2, XCircle, ExternalLink, CalendarDays, Key, Trash2, Mail, CheckSquare, Youtube, User, Bell, BookOpen, Loader2
+} from 'lucide-react'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -243,6 +246,92 @@ export default function SettingsPage() {
               <p className="text-[10px] text-muted-foreground leading-relaxed">
                 After connecting, ask the Calendar Agent in Chat to list events, create meetings, check availability, or reschedule.
               </p>
+            </CardContent>
+          </Card>
+          {/* Gmail */}
+          <Card>
+            <CardHeader className="p-5 pb-0">
+              <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-sm">
+                <Mail className="h-4 w-4 text-primary" />
+                Gmail
+              </CardTitle>
+              <CardDescription className="text-xs">Let the Gmail Agent read and draft emails</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-center gap-3 p-3 rounded-[8px] border bg-secondary/50">
+                <Mail className="h-8 w-8 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-foreground">Gmail access</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {accessToken ? 'Available to the Gmail Agent' : 'Reconnect Google to grant email access'}
+                  </p>
+                </div>
+                <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full shrink-0">
+                  {accessToken ? 'Connected' : 'Not connected'}
+                </Badge>
+              </div>
+              <Button variant="outline" className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
+                <Mail className="h-4 w-4 text-primary" />
+                {accessToken ? 'Reconnect Gmail' : 'Connect Gmail'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Google Tasks */}
+          <Card>
+            <CardHeader className="p-5 pb-0">
+              <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-sm">
+                <CheckSquare className="h-4 w-4 text-primary" />
+                Google Tasks
+              </CardTitle>
+              <CardDescription className="text-xs">Manage your daily to-do lists</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-center gap-3 p-3 rounded-[8px] border bg-secondary/50">
+                <CheckSquare className="h-8 w-8 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-foreground">Tasks access</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {accessToken ? 'Available to the Tasks Agent' : 'Reconnect Google to grant tasks access'}
+                  </p>
+                </div>
+                <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full shrink-0">
+                  {accessToken ? 'Connected' : 'Not connected'}
+                </Badge>
+              </div>
+              <Button variant="outline" className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
+                <CheckSquare className="h-4 w-4 text-primary" />
+                {accessToken ? 'Reconnect Tasks' : 'Connect Tasks'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* YouTube */}
+          <Card>
+            <CardHeader className="p-5 pb-0">
+              <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-sm">
+                <Youtube className="h-4 w-4 text-primary" />
+                YouTube
+              </CardTitle>
+              <CardDescription className="text-xs">Search videos and read transcripts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-center gap-3 p-3 rounded-[8px] border bg-secondary/50">
+                <Youtube className="h-8 w-8 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-foreground">YouTube access</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {accessToken ? 'Available to the YouTube Agent' : 'Reconnect Google to grant YouTube access'}
+                  </p>
+                </div>
+                <Badge variant={accessToken ? 'default' : 'secondary'} className="px-2 py-0.5 text-[9px] uppercase tracking-wider rounded-full shrink-0">
+                  {accessToken ? 'Connected' : 'Not connected'}
+                </Badge>
+              </div>
+              <Button variant="outline" className="w-full gap-2" onClick={() => signIn('google', { callbackUrl: '/chat' })}>
+                <Youtube className="h-4 w-4 text-primary" />
+                {accessToken ? 'Reconnect YouTube' : 'Connect YouTube'}
+              </Button>
             </CardContent>
           </Card>
         </div>

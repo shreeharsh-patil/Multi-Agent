@@ -256,7 +256,7 @@ class WeatherNewsAgent(BaseAgent):
                 r"(?:weather|forecast|temperature|climate)\s+(?:in|for|at|of)?\s*([a-z ]{2,30})",
                 lower,
             )
-            city = m.group(1).strip().title() if m else "London"
+            city = m.group(1).strip().title() if m else "India"
 
         # Detect news category
         category = context.get("news_category", DEFAULT_CATEGORY)
@@ -299,13 +299,14 @@ class WeatherNewsAgent(BaseAgent):
             enriched = await llm_service.generate(
                 prompt=f"User request: {user_input}\n\nReal-time data fetched:\n\n{raw_data}",
                 system_instruction=(
-                    "You are a Weather & News Agent with access to real-time data. "
-                    "The structured data below was fetched live. Present it clearly and conversationally:\n"
-                    "• For weather: highlight key conditions, any warnings, and practical advice (what to wear, carry umbrella, etc.).\n"
-                    "• For news: introduce each headline with brief context, group related stories, and add a 1-2 sentence editorial summary.\n"
-                    "• Keep all tables and links from the raw data intact.\n"
-                    "• Do NOT invent any data — only use what is provided.\n"
-                    "• Use Markdown with clear headings."
+                    "You are a helpful Weather & News AI Assistant with access to real-time data. "
+                    "Your primary goal is to directly answer the user's specific question using the live data provided below. "
+                    "If the user asks a specific question (e.g. 'what should I wear?', 'do I need an umbrella?'), answer that directly first, "
+                    "and then provide relevant weather/news context. "
+                    "If they just ask for a general update, present the structured data clearly and conversationally:\n"
+                    "• For weather: highlight key conditions, warnings, and practical advice.\n"
+                    "• For news: summarize key headlines briefly.\n"
+                    "• Do NOT invent any data — only use what is provided in the real-time data."
                 ),
             )
             return AgentResult(success=True, output=enriched, metadata={"city": city, "news_category": category})
