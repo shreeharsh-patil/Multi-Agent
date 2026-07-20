@@ -154,13 +154,17 @@ function MarkdownRenderer({ text }: { text: string }) {
   let i = 0
   while (i < lines.length) {
     const line = lines[i]
+    if (line === undefined) { i++; continue }
     // Markdown table
     if (line.trim().startsWith('|') && lines[i + 1]?.trim().startsWith('|---')) {
       const headers = line.split('|').filter(Boolean).map(h => h.trim())
       const rows: string[][] = []
       i += 2
-      while (i < lines.length && lines[i].trim().startsWith('|')) {
-        rows.push(lines[i].split('|').filter(Boolean).map(c => c.trim()))
+      while (i < lines.length && lines[i]?.trim().startsWith('|')) {
+        const rowLine = lines[i]
+        if (rowLine) {
+          rows.push(rowLine.split('|').filter(Boolean).map(c => c.trim()))
+        }
         i++
       }
       elements.push(

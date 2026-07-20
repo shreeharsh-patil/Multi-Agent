@@ -156,8 +156,8 @@ const CAT_COLORS: Record<string, string> = {
 }
 
 const QUICK_QUERIES = [
-  '🌤 What's the weather like in New York?',
-  '🌧 Will it rain in Mumbai today?',
+  "🌤 What's the weather like in New York?",
+  "🌧 Will it rain in Mumbai today?",
   '📰 What are the top world news headlines?',
   '🤖 Latest AI and technology news',
   '💼 Top business and finance stories today',

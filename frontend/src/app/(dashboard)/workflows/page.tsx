@@ -148,10 +148,6 @@ function DAGNode({
 }: NodeProps) {
   const accent = ACCENT_COLORS[accentIndex % ACCENT_COLORS.length]
 
-  const statusBg =
-    runStatus === 'running' ? '#1877a8' :
-    runStatus === 'complete' ? '#1f8a65' :
-    runStatus === 'error' ? '#cf2d56' : 'transparent'
 
   return (
     <g>
@@ -233,7 +229,7 @@ const EMPTY_WF: Workflow = {
 }
 
 export default function WorkflowsPage() {
-  const { data: session } = useSession()
+  useSession()
 
   // workflow state
   const [workflow, setWorkflow] = useState<Workflow>(EMPTY_WF)
@@ -319,7 +315,6 @@ export default function WorkflowsPage() {
       const dy = e.clientY - panRef.current.startY
       setPan({ x: panRef.current.origPanX + dx, y: panRef.current.origPanY + dy })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom, pan])
 
   const onSvgMouseUp = useCallback(() => {
@@ -338,7 +333,6 @@ export default function WorkflowsPage() {
     if ((e.target as SVGElement).tagName === 'svg' || (e.target as SVGElement).classList.contains('canvas-bg')) {
       panRef.current = { startX: e.clientX, startY: e.clientY, origPanX: pan.x, origPanY: pan.y }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pan])
 
   const onWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
