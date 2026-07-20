@@ -17,6 +17,7 @@ def initialize_agents() -> None:
     from src.agents.tool.agent import ToolAgent
     from src.agents.calendar.agent import CalendarAgent
     from src.agents.data_analysis.agent import DataAnalysisAgent
+    from src.agents.weather_news.agent import WeatherNewsAgent
 
     AgentRegistry.register(KnowledgeAgent())
     AgentRegistry.register(DriveAgent())
@@ -29,6 +30,7 @@ def initialize_agents() -> None:
     AgentRegistry.register(ToolAgent())
     AgentRegistry.register(CalendarAgent())
     AgentRegistry.register(DataAnalysisAgent())
+    AgentRegistry.register(WeatherNewsAgent())
 
     AgentRegistry.initialize()
     logger.info(f"Initialized {len(AgentRegistry.get_all_agents())} agents")

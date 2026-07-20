@@ -42,6 +42,7 @@ AGENT_METADATA = [
     {"id": "memory", "name": "Memory Agent", "description": "Long-term memory, conversation history, user preferences, and recall.", "icon": "Brain", "capabilities": ["long_term_memory", "conversation_history", "user_preferences"]},
     {"id": "tool", "name": "Tool Agent", "description": "Calculator, web search, and external API tool execution.", "icon": "Puzzle", "capabilities": ["calculator", "web_search", "api_integration"]},
     {"id": "data_analysis", "name": "Data Analysis Agent", "description": "Upload CSV/Excel files, generate charts, tables, and statistical insights from your data.", "icon": "BarChart2", "capabilities": ["csv_analysis", "excel_analysis", "statistical_summary", "chart_generation", "data_insights"]},
+    {"id": "weather_news", "name": "Weather & News Agent", "description": "Real-time weather forecasts and live news headlines from global sources — no API key required.", "icon": "CloudSun", "capabilities": ["real_time_weather", "3_day_forecast", "live_news_headlines", "category_news", "ai_weather_insights"]},
 ]
 
 

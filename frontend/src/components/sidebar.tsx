@@ -31,6 +31,7 @@ import {
   GalleryVerticalEnd,
   LibraryBig,
   BarChart2,
+  CloudSun,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { openCommandPalette } from '@/components/command-palette'
@@ -44,6 +45,7 @@ const navigation = [
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Workflows', href: '/workflows', icon: Workflow },
   { name: 'Data Analysis', href: '/data-analysis', icon: BarChart2 },
+  { name: 'Weather & News', href: '/weather-news', icon: CloudSun },
   { name: 'Notes', href: '/notes', icon: StickyNote },
   { name: 'Scheduled', href: '/planner', icon: Calendar },
   { name: 'Memory', href: '/memory', icon: BrainCircuit },
