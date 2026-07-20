@@ -409,6 +409,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         routed_agent_id = body.agent_id or AgentRouter().route(body.message)
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
+        google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
         custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
         if routed_agent_id == "image":
             output = await _generate_image_message(body.message, user_id, body.workspace_id)
@@ -430,7 +431,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             calendar_agent = get_orchestrator().registry.get_agent("calendar")
             if not calendar_agent:
                 raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-            agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token})
+            agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "drive":
             drive_agent = get_orchestrator().registry.get_agent("drive")
@@ -574,7 +575,7 @@ async def chat_stream(
                 calendar_agent = get_orchestrator().registry.get_agent("calendar")
                 if not calendar_agent:
                     raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-                agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")})
+                agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"

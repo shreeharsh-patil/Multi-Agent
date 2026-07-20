@@ -476,8 +476,10 @@ export default function WorkflowsPage() {
     const token = getToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) headers.Authorization = `Bearer ${token}`
-    const googleAccessToken = (session as { accessToken?: string } | null)?.accessToken
+    const googleAccessToken = (session as { accessToken?: string; refreshToken?: string } | null)?.accessToken
+    const googleRefreshToken = (session as { accessToken?: string; refreshToken?: string } | null)?.refreshToken
     if (googleAccessToken) headers['X-Google-Access-Token'] = googleAccessToken
+    if (googleRefreshToken) headers['X-Google-Refresh-Token'] = googleRefreshToken
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/workflows/${workflowId}/run`, {

@@ -332,19 +332,25 @@ export const api = {
       }),
   },
   chat: {
-    send: (data: ChatRequest, googleAccessToken?: string) =>
+    send: (data: ChatRequest, googleAccessToken?: string, googleRefreshToken?: string) =>
       fetchApi<ChatResponse>('/api/chat', {
         method: 'POST',
         body: JSON.stringify(data),
-        headers: googleAccessToken ? { 'X-Google-Access-Token': googleAccessToken } : undefined,
+        headers: googleAccessToken
+          ? {
+              'X-Google-Access-Token': googleAccessToken,
+              ...(googleRefreshToken ? { 'X-Google-Refresh-Token': googleRefreshToken } : {}),
+            }
+          : undefined,
       }),
-    stream: (data: ChatRequest, googleAccessToken?: string, signal?: AbortSignal) => {
+    stream: (data: ChatRequest, googleAccessToken?: string, signal?: AbortSignal, googleRefreshToken?: string) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       const token = getAccessToken()
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
       }
       if (googleAccessToken) headers['X-Google-Access-Token'] = googleAccessToken
+      if (googleRefreshToken) headers['X-Google-Refresh-Token'] = googleRefreshToken
       return fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
         headers,

@@ -89,6 +89,7 @@ interface PanelTab {
 function ChatContent() {
   const { data: session } = useSession()
   const googleAccessToken = (session as any)?.accessToken as string | undefined
+  const googleRefreshToken = (session as any)?.refreshToken as string | undefined
   const [messages, setMessages] = useState<Array<{
     id: string
     role: 'user' | 'assistant'
@@ -765,7 +766,7 @@ function ChatContent() {
         team_agents: teamMode ? teamAgents as AgentId[] : undefined,
         workspace_id: currentWorkspace,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-      }, googleAccessToken, abortController.signal)
+      }, googleAccessToken, abortController.signal, googleRefreshToken)
 
       if (!streamResponse.ok) {
         throw new Error(`HTTP ${streamResponse.status}`)
@@ -903,7 +904,7 @@ function ChatContent() {
             team_agents: teamMode ? teamAgents as AgentId[] : undefined,
             workspace_id: currentWorkspace,
             attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-          }, googleAccessToken)
+          }, googleAccessToken, googleRefreshToken)
           if (res.success && res.data) {
             setConversationId(res.data.conversation_id)
             setMessages((prev) =>

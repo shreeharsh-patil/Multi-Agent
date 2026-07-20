@@ -59,6 +59,7 @@ class CalendarAgent(BaseAgent):
         from src.services.calendar import calendar_service
 
         token = context.get("google_access_token", "")
+        refresh_token = context.get("google_refresh_token", "")
         if not token and context.get("user_id"):
             from src.adk.tools import find_user_access_token
             token = await find_user_access_token(context["user_id"])
@@ -94,6 +95,7 @@ class CalendarAgent(BaseAgent):
                     command.get("time_max"),
                     limit=10,
                     query=query or None,
+                    refresh_token=refresh_token,
                 )
                 if not events:
                     message = f'I could not find a calendar event matching "{query}".' if query else "You have no events in that time range."
@@ -104,13 +106,13 @@ class CalendarAgent(BaseAgent):
                     output=heading + "\n\n" + "\n\n".join(self._format_event(event) for event in events),
                 )
             if action == "create":
-                event = await calendar_service.create_event(token, command["summary"], command["start"], command["end"], command.get("description", ""), command.get("location", ""), command.get("attendees"))
+                event = await calendar_service.create_event(token, command["summary"], command["start"], command["end"], command.get("description", ""), command.get("location", ""), command.get("attendees"), refresh_token=refresh_token)
                 return AgentResult(success=True, output=f"Created “{event['summary']}” from {event['start']} to {event['end']}.\n{event.get('link', '')}")
             if action == "reschedule":
-                event = await calendar_service.reschedule_event(token, command["event_id"], command["start"], command["end"])
+                event = await calendar_service.reschedule_event(token, command["event_id"], command["start"], command["end"], refresh_token=refresh_token)
                 return AgentResult(success=True, output=f"Rescheduled “{event['summary']}” to {event['start']}–{event['end']}.\n{event.get('link', '')}")
             if action == "availability":
-                availability = await calendar_service.find_availability(token, command["time_min"], command["time_max"])
+                availability = await calendar_service.find_availability(token, command["time_min"], command["time_max"], refresh_token=refresh_token)
                 return AgentResult(success=True, output="That window is available." if availability["available"] else f"You already have {len(availability['busy'])} busy block(s) in that window.")
             return AgentResult(success=False, output="I can list, create, reschedule, or check availability for calendar events.", error="unsupported_calendar_action")
         except Exception as exc:

@@ -3,16 +3,37 @@ from datetime import datetime, timezone
 from typing import Optional
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from src.config import settings
 from src.utils.logger import logger
 
 
 class CalendarService:
     SCOPES = ["https://www.googleapis.com/auth/calendar"]
+    TOKEN_URI = "https://oauth2.googleapis.com/token"
 
-    async def _get_service(self, access_token: str):
+    async def _get_service(self, access_token: str, refresh_token: str = ""):
+        """Build a Google Calendar service authenticated with the given access token.
+
+        When *refresh_token* is provided together with the OAuth client credentials
+        the credentials can auto-refresh after expiry, avoiding 401 → crash cycles.
+        """
         if not access_token:
             raise ValueError("Google Calendar is not connected. Reconnect Google with Calendar access enabled.")
-        credentials = Credentials(token=access_token)
+        kwargs: dict = {"token": access_token}
+        if refresh_token and settings.google_client_id and settings.google_client_secret:
+            kwargs.update(
+                refresh_token=refresh_token,
+                token_uri=self.TOKEN_URI,
+                client_id=settings.google_client_id,
+                client_secret=settings.google_client_secret,
+            )
+        elif refresh_token and not (settings.google_client_id and settings.google_client_secret):
+            logger.warning(
+                "Refresh token provided but GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not configured. "
+                "The Calendar access token will not be refreshed when it expires. "
+                "Set these environment variables to enable automatic token refresh."
+            )
+        credentials = Credentials(**kwargs)
         return await asyncio.to_thread(build, "calendar", "v3", credentials=credentials, cache_discovery=False)
 
     async def list_events(
@@ -22,8 +43,9 @@ class CalendarService:
         time_max: Optional[str] = None,
         limit: int = 10,
         query: Optional[str] = None,
+        refresh_token: str = "",
     ) -> list[dict]:
-        service = await self._get_service(access_token)
+        service = await self._get_service(access_token, refresh_token)
         now = datetime.now(timezone.utc)
         calendar_request = service.calendarList().list(maxResults=250, showHidden=False)
         calendar_result = await asyncio.to_thread(calendar_request.execute)
@@ -93,8 +115,8 @@ class CalendarService:
         events.sort(key=lambda event: event.get("start") or "9999-12-31")
         return events[:limit]
 
-    async def create_event(self, access_token: str, summary: str, start: str, end: str, description: str = "", location: str = "", attendees: Optional[list[str]] = None) -> dict:
-        service = await self._get_service(access_token)
+    async def create_event(self, access_token: str, summary: str, start: str, end: str, description: str = "", location: str = "", attendees: Optional[list[str]] = None, refresh_token: str = "") -> dict:
+        service = await self._get_service(access_token, refresh_token)
         body = {
             "summary": summary,
             "description": description,
@@ -108,16 +130,16 @@ class CalendarService:
         event = await asyncio.to_thread(request.execute)
         return {"id": event.get("id"), "summary": event.get("summary"), "start": start, "end": end, "link": event.get("htmlLink")}
 
-    async def reschedule_event(self, access_token: str, event_id: str, start: str, end: str) -> dict:
-        service = await self._get_service(access_token)
+    async def reschedule_event(self, access_token: str, event_id: str, start: str, end: str, refresh_token: str = "") -> dict:
+        service = await self._get_service(access_token, refresh_token)
         existing = await asyncio.to_thread(lambda: service.events().get(calendarId="primary", eventId=event_id).execute())
         existing["start"] = {"dateTime": start, "timeZone": "UTC"}
         existing["end"] = {"dateTime": end, "timeZone": "UTC"}
         updated = await asyncio.to_thread(lambda: service.events().update(calendarId="primary", eventId=event_id, body=existing, sendUpdates="all").execute())
         return {"id": updated.get("id"), "summary": updated.get("summary"), "start": start, "end": end, "link": updated.get("htmlLink")}
 
-    async def find_availability(self, access_token: str, time_min: str, time_max: str) -> dict:
-        service = await self._get_service(access_token)
+    async def find_availability(self, access_token: str, time_min: str, time_max: str, refresh_token: str = "") -> dict:
+        service = await self._get_service(access_token, refresh_token)
         request = service.freebusy().query(body={"timeMin": time_min, "timeMax": time_max, "items": [{"id": "primary"}]})
         result = await asyncio.to_thread(request.execute)
         busy = result.get("calendars", {}).get("primary", {}).get("busy", [])
