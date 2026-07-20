@@ -65,3 +65,5 @@ next-env.d.ts
 
 # Windows artifact (reserved name collision)
 nul
+
+.vercel
