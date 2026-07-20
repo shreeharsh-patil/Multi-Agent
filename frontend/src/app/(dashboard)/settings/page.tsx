@@ -11,8 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { api } from '@/lib/api'
 import { clearAccessToken } from '@/lib/auth-store'
 import { 
-  LogOut, Moon, Sun, Monitor, HardDrive, Cpu, Database, 
-  Search, Shield, CheckCircle2, XCircle, ExternalLink, CalendarDays, Key, Trash2, Mail, CheckSquare, Youtube, User, Bell, BookOpen, Loader2
+  LogOut, HardDrive, CheckCircle2, XCircle, ExternalLink, CalendarDays, Mail, CheckSquare, Youtube, User, Loader2, BookOpen, Bell
 } from 'lucide-react'
 
 export default function SettingsPage() {

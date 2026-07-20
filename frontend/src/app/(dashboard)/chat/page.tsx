@@ -471,7 +471,7 @@ function ChatContent() {
   }>>([])
   const [, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [, setLoadingHistory] = useState(false)
 
   // Fetch conversation messages when conversationId is set/changed
   useEffect(() => {
@@ -1028,7 +1028,7 @@ function ChatContent() {
       // Refresh side-panel document list on send completion
       window.dispatchEvent(new Event('refresh-documents-list'))
     }
-  }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken])
+  }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, googleRefreshToken])
 
   // Stop an in-flight streaming generation.
   const handleStop = useCallback(() => {
