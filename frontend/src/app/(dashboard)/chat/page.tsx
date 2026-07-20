@@ -1200,7 +1200,7 @@ function ChatContent() {
     <style>{typingKeyframes}</style>
     <div
       ref={containerRef}
-      className={`flex h-screen gap-0 -m-3 sm:-m-6 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
+      className={`flex h-full w-full gap-0 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
     >
       {/* Explorer panel is merged into the main application sidebar */}
 
