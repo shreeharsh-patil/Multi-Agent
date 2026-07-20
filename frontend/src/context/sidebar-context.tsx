@@ -6,12 +6,15 @@ interface SidebarContextType {
   isCollapsed: boolean
   toggle: () => void
   setCollapsed: (val: boolean) => void
+  mobileMenuOpen: boolean
+  setMobileMenuOpen: (val: boolean) => void
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsedState] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
@@ -30,7 +33,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, toggle, setCollapsed }}>
+    <SidebarContext.Provider value={{ isCollapsed, toggle, setCollapsed, mobileMenuOpen, setMobileMenuOpen }}>
       {children}
     </SidebarContext.Provider>
   )

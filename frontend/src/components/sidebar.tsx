@@ -32,6 +32,7 @@ import {
   LibraryBig,
   BarChart2,
   CloudSun,
+  X,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { openCommandPalette } from '@/components/command-palette'
@@ -64,7 +65,8 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
-  const { isCollapsed, toggle } = useSidebar()
+  const { isCollapsed, toggle, mobileMenuOpen, setMobileMenuOpen } = useSidebar()
+  const collapsed = isCollapsed && !mobileMenuOpen
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [conversationSearch, setConversationSearch] = useState('')
@@ -205,9 +207,11 @@ export function Sidebar() {
     if (isChatRoute) {
       window.dispatchEvent(new Event('start-new-chat'))
       router.replace('/chat')
+      setMobileMenuOpen(false)
       return
     }
     router.push('/chat')
+    setMobileMenuOpen(false)
   }
 
   const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
@@ -267,7 +271,7 @@ export function Sidebar() {
             return (
               <div
                 key={conv.id}
-                onClick={() => { if (!isRenaming) router.push(`/chat?id=${conv.id}`) }}
+                onClick={() => { if (!isRenaming) { router.push(`/chat?id=${conv.id}`); setMobileMenuOpen(false); } }}
                 className={cn(
                   "group relative flex items-center justify-between px-3 py-2 rounded-[8px] text-sm cursor-pointer transition-all duration-150",
                   isActive
@@ -323,16 +327,25 @@ export function Sidebar() {
   }
 
   return (
-    <aside 
-      className={cn(
-        "hidden lg:flex flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out relative shrink-0 overflow-hidden overflow-x-hidden",
-        isCollapsed ? "w-[68px]" : "w-[280px]"
+    <>
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
       )}
-    >
+      <aside 
+        className={cn(
+          "flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out shrink-0 overflow-hidden overflow-x-hidden",
+          "hidden lg:flex relative z-40",
+          collapsed ? "lg:w-[68px]" : "lg:w-[280px]",
+          mobileMenuOpen ? "!flex fixed inset-y-0 left-0 z-50 w-[280px] animate-in slide-in-from-left duration-200 shadow-lg" : ""
+        )}
+      >
       {/* Top Header Section */}
       <div className="p-4 flex flex-col gap-4 border-b border-border shrink-0">
         <div className="flex items-center justify-between h-9">
-          {isCollapsed ? (
+          {collapsed ? (
             <button
               onClick={toggle}
               className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all hover:bg-secondary/40 duration-200 shadow-xs shrink-0 mx-auto cursor-pointer"
@@ -351,11 +364,15 @@ export function Sidebar() {
                 </span>
               </Link>
               <button
-                onClick={toggle}
+                onClick={mobileMenuOpen ? () => setMobileMenuOpen(false) : toggle}
                 className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                title="Collapse sidebar (Ctrl+B)"
+                title={mobileMenuOpen ? "Close menu" : "Collapse sidebar (Ctrl+B)"}
               >
-                <PanelLeftClose className="h-4.5 w-4.5 stroke-[1.5]" />
+                {mobileMenuOpen ? (
+                  <X className="h-4.5 w-4.5 stroke-[1.5]" />
+                ) : (
+                  <PanelLeftClose className="h-4.5 w-4.5 stroke-[1.5]" />
+                )}
               </button>
             </>
           )}
@@ -364,7 +381,7 @@ export function Sidebar() {
         {/* Workspace Selector */}
         <div className={cn(
           "transition-all duration-300 ease-in-out overflow-hidden",
-          isCollapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-9"
+          collapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-9"
         )}>
           <div className="relative">
             <button
@@ -415,13 +432,13 @@ export function Sidebar() {
           onClick={openCommandPalette}
           className={cn(
             'flex h-9 items-center rounded-[8px] border border-border bg-card text-muted-foreground shadow-xs transition-colors hover:bg-secondary/40 hover:text-foreground',
-            isCollapsed ? 'w-9 justify-center self-center' : 'w-full gap-2.5 px-3',
+            collapsed ? 'w-9 justify-center self-center' : 'w-full gap-2.5 px-3',
           )}
           title="Search workspace (Ctrl+K)"
           aria-label="Search workspace"
         >
           <Search className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-          {!isCollapsed ? (
+          {!collapsed ? (
             <>
               <span className="flex-1 text-left text-xs">Search workspace</span>
               <kbd className="rounded-[4px] border border-border bg-secondary px-1.5 py-0.5 text-[9px] text-muted-foreground">Ctrl K</kbd>
@@ -443,7 +460,7 @@ export function Sidebar() {
           <Plus className="h-4 w-4 stroke-[1.5]" />
           <span className={cn(
             "transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden",
-            isCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+            collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
           )}>
             New Chat
           </span>
@@ -459,9 +476,10 @@ export function Sidebar() {
               <div key={item.name} className="relative group/tooltip">
                 <Link
                   href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center rounded-[8px] font-semibold text-sm transition-all duration-200 relative h-10",
-                    isCollapsed 
+                    collapsed 
                       ? "justify-center h-10 w-10 mx-auto gap-0 px-0" 
                       : "w-full px-3 py-2 gap-3",
                     isActive 
@@ -472,14 +490,14 @@ export function Sidebar() {
                   <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
                   <span className={cn(
                     "transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden truncate",
-                    isCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+                    collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
                   )}>
                     {item.name}
                   </span>
                 </Link>
 
                 {/* Collapsed Tooltip */}
-                {isCollapsed && (
+                {collapsed && (
                   <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 rounded-[6px] bg-card border border-border text-xs font-semibold text-foreground whitespace-nowrap opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50 shadow-xs">
                     {item.name}
                   </div>
@@ -490,7 +508,7 @@ export function Sidebar() {
         </div>
 
         {/* Documents Explorer Section (Only on Chat route and when not collapsed) */}
-        {isChatRoute && !isCollapsed && (
+        {isChatRoute && !collapsed && (
           <div className="space-y-2 pt-4 border-t border-border">
             <div className="px-3 flex items-center justify-between">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider select-none">
@@ -537,7 +555,7 @@ export function Sidebar() {
         {/* History / Conversations Section (Hidden when collapsed) */}
         <div className={cn(
           "transition-all duration-300 ease-in-out overflow-hidden",
-          isCollapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-auto pt-4 border-t border-border"
+          collapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-auto pt-4 border-t border-border"
         )}>
           {conversations.length > 0 && (
             <>
@@ -564,8 +582,8 @@ export function Sidebar() {
       </div>
 
       {/* Footer Profile Section */}
-      <div className={cn("p-4 border-t border-border bg-secondary/85 shrink-0", isCollapsed ? "px-2" : "px-4")}>
-        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
+      <div className={cn("p-4 border-t border-border bg-secondary/85 shrink-0", collapsed ? "px-2" : "px-4")}>
+        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
           <div className="relative group/tooltip">
             <Avatar className="h-9 w-9 border border-border cursor-pointer shrink-0" onClick={() => router.push('/settings')}>
               <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
@@ -575,7 +593,7 @@ export function Sidebar() {
             </Avatar>
 
             {/* Collapsed profile tooltip */}
-            {isCollapsed && (
+            {collapsed && (
               <div className="absolute left-full bottom-0 ml-3 p-3 rounded-[8px] bg-card border border-border shadow-xs z-50 flex flex-col gap-1.5 pointer-events-none opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
                 <span className="text-xs font-semibold text-[#26251e] whitespace-nowrap">{session?.user?.name}</span>
                 <span className="text-[10px] text-muted-foreground whitespace-nowrap">{session?.user?.email}</span>
@@ -586,7 +604,7 @@ export function Sidebar() {
             )}
           </div>
 
-          {!isCollapsed && (
+          {!collapsed && (
             <div className="flex-1 flex items-center justify-between transition-all duration-300 ease-in-out min-w-0">
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -614,5 +632,6 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   )
 }
