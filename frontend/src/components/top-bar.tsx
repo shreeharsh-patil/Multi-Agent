@@ -1,12 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { usePathname, useRouter } from 'next/navigation'
 import { useSidebar } from '@/context/sidebar-context'
 import Link from 'next/link'
-import Image from 'next/image'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -24,47 +20,11 @@ import {
   Settings,
   Bell,
   Menu,
-  X,
-  LayoutDashboard,
-  Bot,
-  BookOpen,
-
-  HardDrive,
-  StickyNote,
-  Search,
-  Calendar,
-  Workflow,
-  BarChart2,
-  CloudSun,
-  BrainCircuit,
-  GalleryVerticalEnd,
-  LibraryBig,
 } from 'lucide-react'
-
-const navigation = [
-  { name: 'Workspace', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Search', href: '/research', icon: Search },
-  { name: 'Library', href: '/documents', icon: BookOpen },
-  { name: 'Drive', href: '/drive', icon: HardDrive },
-  { name: 'Agents', href: '/agents', icon: Bot },
-  { name: 'Workflows', href: '/workflows', icon: Workflow },
-  { name: 'Data Analysis', href: '/data-analysis', icon: BarChart2 },
-  { name: 'Weather & News', href: '/weather-news', icon: CloudSun },
-  { name: 'Notes', href: '/notes', icon: StickyNote },
-  { name: 'Scheduled', href: '/planner', icon: Calendar },
-  { name: 'Memory', href: '/memory', icon: BrainCircuit },
-  { name: 'Flashcards', href: '/flashcards', icon: GalleryVerticalEnd },
-  { name: 'Templates', href: '/templates', icon: LibraryBig },
-  { name: 'Settings', href: '/settings', icon: Settings },
-]
-
-
 
 export function TopBar() {
   const { data: session } = useSession()
   const { setMobileMenuOpen } = useSidebar()
-  const pathname = usePathname()
-  const router = useRouter()
 
   return (
     <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-4 border-b bg-secondary/80 backdrop-blur-md border-border w-full relative">
