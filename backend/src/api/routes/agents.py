@@ -41,6 +41,7 @@ AGENT_METADATA = [
     {"id": "coding", "name": "Coding Agent", "description": "Code writing, explanation, debugging, and documentation generation.", "icon": "FileCode", "capabilities": ["code_generation", "code_explanation", "debugging"]},
     {"id": "memory", "name": "Memory Agent", "description": "Long-term memory, conversation history, user preferences, and recall.", "icon": "Brain", "capabilities": ["long_term_memory", "conversation_history", "user_preferences"]},
     {"id": "tool", "name": "Tool Agent", "description": "Calculator, web search, and external API tool execution.", "icon": "Puzzle", "capabilities": ["calculator", "web_search", "api_integration"]},
+    {"id": "data_analysis", "name": "Data Analysis Agent", "description": "Upload CSV/Excel files, generate charts, tables, and statistical insights from your data.", "icon": "BarChart2", "capabilities": ["csv_analysis", "excel_analysis", "statistical_summary", "chart_generation", "data_insights"]},
 ]
 
 

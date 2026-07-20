@@ -20,6 +20,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Workflow,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import Link from 'next/link'
@@ -198,9 +199,14 @@ export default function AgentsPage() {
             <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Agent Hub</h1>
             <p className="text-sm text-muted-foreground mt-1">{agents.length} agents available · build your own specialist</p>
           </div>
-          <Button onClick={() => setBuilderOpen((open) => !open)} className="gap-2 shadow-sm">
-            <Plus className="h-4 w-4" /> Create agent
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/workflows" className={buttonVariants({ variant: 'outline', size: 'default' })}>
+              <Workflow className="mr-2 h-4 w-4" /> Build workflow
+            </Link>
+            <Button onClick={() => setBuilderOpen((open) => !open)} className="gap-2 shadow-sm">
+              <Plus className="h-4 w-4" /> Create agent
+            </Button>
+          </div>
         </div>
       </div>
 

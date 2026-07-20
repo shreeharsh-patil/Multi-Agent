@@ -695,4 +695,31 @@ export const api = {
     generate: (data: { title: string; content: string; polish?: boolean; workspace_id?: string }) =>
       fetchApi<{ documentId: string; fileName: string; downloadUrl: string; content: string }>('/api/reports', { method: 'POST', body: JSON.stringify(data) }),
   },
+
+  dataAnalysis: {
+    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('user_id', userId)
+      return xhrUploadWithRetry<{
+        success: boolean
+        session_id: string
+        filename: string
+        row_count: number
+        column_count: number
+        headers: string[]
+        preview: string[][]
+        stats: Record<string, { count: number; nulls: number; numeric: boolean; min?: number; max?: number; mean?: number; sum?: number }>
+      }>(`${BACKEND_URL}/api/data-analysis/upload`, formData, onProgress)
+    },
+    analyse: (data: { session_id: string; question: string; user_id?: string }) =>
+      fetchApi<{ success: boolean; answer: string; session_id: string }>('/api/data-analysis/analyse', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getSession: (sessionId: string) =>
+      fetchApi<{ success: boolean; session_id: string; filename: string; headers: string[]; row_count: number; column_count: number; created_at: string }>(`/api/data-analysis/session/${sessionId}`),
+    deleteSession: (sessionId: string) =>
+      fetchApi<{ success: boolean }>(`/api/data-analysis/session/${sessionId}`, { method: 'DELETE' }),
+  },
 }
