@@ -10,8 +10,49 @@ class CalendarAgent(BaseAgent):
             name="Calendar Agent",
             description="Lists, creates, reschedules, and checks Google Calendar availability",
             icon="CalendarDays",
-            capabilities=["list_events", "create_events", "availability", "reschedule"],
+            capabilities=["list_events", "event_details", "create_events", "availability", "reschedule"],
         )
+
+    @staticmethod
+    def _format_event(event: dict) -> str:
+        lines = [
+            f"### {event.get('summary') or 'Untitled event'}",
+            f"- **When:** {event.get('start') or 'Unknown'} to {event.get('end') or 'Unknown'}",
+        ]
+        if event.get("event_type") == "birthday":
+            lines.append("- **Type:** Birthday")
+        if event.get("calendar_name"):
+            lines.append(f"- **Calendar:** {event['calendar_name']}")
+        if event.get("location"):
+            lines.append(f"- **Location:** {event['location']}")
+        if event.get("description"):
+            lines.append(f"- **Description:** {event['description']}")
+
+        organizer = event.get("organizer") or {}
+        organizer_label = organizer.get("name") or organizer.get("email")
+        if organizer_label and not organizer.get("self"):
+            lines.append(f"- **Organizer:** {organizer_label}")
+
+        attendees = []
+        for attendee in event.get("attendees") or []:
+            if isinstance(attendee, str):
+                attendees.append(attendee)
+                continue
+            if attendee.get("self"):
+                continue
+            label = attendee.get("name") or attendee.get("email")
+            if label:
+                response = (attendee.get("response") or "needsAction").replace("needsAction", "awaiting response")
+                attendees.append(f"{label} ({response})")
+        if attendees:
+            lines.append(f"- **Attendees:** {', '.join(attendees)}")
+
+        meeting_link = event.get("meeting_link")
+        if meeting_link:
+            lines.append(f"- **Meeting:** {meeting_link}")
+        if event.get("link"):
+            lines.append(f"- **Open event:** {event['link']}")
+        return "\n".join(lines)
 
     async def execute(self, user_input: str, context: dict) -> AgentResult:
         from src.services.llm import llm_service
@@ -28,10 +69,13 @@ class CalendarAgent(BaseAgent):
         extraction = await llm_service.generate(
             prompt=user_input,
             system_instruction=(
-                "You are a calendar command parser. Return ONLY valid JSON with keys: action, summary, "
+                "You are a calendar command parser. Return ONLY valid JSON with keys: action, query, summary, "
                 "start, end, event_id, description, location, attendees, time_min, time_max. "
-                "action must be one of list, create, availability, reschedule. Use ISO 8601 UTC date-times. "
-                "For list, use the requested range; if absent, use the next 7 days. Infer end as one hour after start when needed."
+                "action must be one of list, details, create, availability, reschedule. Use details when the "
+                "user asks about one named event and put its title or identifying words in query. Use ISO 8601 "
+                "UTC date-times. Calendar listings include primary, birthday, holiday, shared, and subscribed "
+                "calendars. For list or details, use the requested range; when absent, leave time_min and time_max "
+                "null. Infer end as one hour after start when needed."
             ),
         )
         try:
@@ -42,12 +86,23 @@ class CalendarAgent(BaseAgent):
 
         action = command.get("action", "list")
         try:
-            if action == "list":
-                events = await calendar_service.list_events(token, command.get("time_min"), command.get("time_max"))
+            if action in {"list", "details"}:
+                query = (command.get("query") or "").strip() if action == "details" else None
+                events = await calendar_service.list_events(
+                    token,
+                    command.get("time_min"),
+                    command.get("time_max"),
+                    limit=10,
+                    query=query or None,
+                )
                 if not events:
-                    return AgentResult(success=True, output="You have no events in that time range.")
-                lines = [f"• {e['summary']} — {e['start']} to {e['end']}" for e in events]
-                return AgentResult(success=True, output="Upcoming calendar events:\n" + "\n".join(lines))
+                    message = f'I could not find a calendar event matching "{query}".' if query else "You have no events in that time range."
+                    return AgentResult(success=True, output=message)
+                heading = "Matching event details:" if action == "details" else "Upcoming calendar events:"
+                return AgentResult(
+                    success=True,
+                    output=heading + "\n\n" + "\n\n".join(self._format_event(event) for event in events),
+                )
             if action == "create":
                 event = await calendar_service.create_event(token, command["summary"], command["start"], command["end"], command.get("description", ""), command.get("location", ""), command.get("attendees"))
                 return AgentResult(success=True, output=f"Created “{event['summary']}” from {event['start']} to {event['end']}.\n{event.get('link', '')}")
