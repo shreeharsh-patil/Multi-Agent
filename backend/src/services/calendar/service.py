@@ -115,7 +115,7 @@ class CalendarService:
         events.sort(key=lambda event: event.get("start") or "9999-12-31")
         return events[:limit]
 
-    async def create_event(self, access_token: str, summary: str, start: str, end: str, description: str = "", location: str = "", attendees: Optional[list[str]] = None, refresh_token: str = "") -> dict:
+    async def create_event(self, access_token: str, summary: str, start: str, end: str, description: str = "", location: str = "", attendees: Optional[list[str]] = None, generate_meet_link: bool = False, refresh_token: str = "") -> dict:
         service = await self._get_service(access_token, refresh_token)
         body = {
             "summary": summary,
@@ -126,17 +126,46 @@ class CalendarService:
         }
         if attendees:
             body["attendees"] = [{"email": email} for email in attendees]
-        request = service.events().insert(calendarId="primary", body=body, sendUpdates="all")
+            
+        if generate_meet_link:
+            import uuid
+            body["conferenceData"] = {
+                "createRequest": {
+                    "requestId": str(uuid.uuid4()),
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"}
+                }
+            }
+            request = service.events().insert(calendarId="primary", body=body, sendUpdates="all", conferenceDataVersion=1)
+        else:
+            request = service.events().insert(calendarId="primary", body=body, sendUpdates="all")
+            
         event = await asyncio.to_thread(request.execute)
-        return {"id": event.get("id"), "summary": event.get("summary"), "start": start, "end": end, "link": event.get("htmlLink")}
+        return {"id": event.get("id"), "summary": event.get("summary"), "start": start, "end": end, "link": event.get("htmlLink"), "meeting_link": event.get("hangoutLink", "")}
 
-    async def reschedule_event(self, access_token: str, event_id: str, start: str, end: str, refresh_token: str = "") -> dict:
+    async def update_event(self, access_token: str, event_id: str, summary: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, description: Optional[str] = None, location: Optional[str] = None, attendees: Optional[list[str]] = None, refresh_token: str = "") -> dict:
         service = await self._get_service(access_token, refresh_token)
         existing = await asyncio.to_thread(lambda: service.events().get(calendarId="primary", eventId=event_id).execute())
-        existing["start"] = {"dateTime": start, "timeZone": "UTC"}
-        existing["end"] = {"dateTime": end, "timeZone": "UTC"}
+        
+        if summary is not None:
+            existing["summary"] = summary
+        if start is not None:
+            existing["start"] = {"dateTime": start, "timeZone": "UTC"}
+        if end is not None:
+            existing["end"] = {"dateTime": end, "timeZone": "UTC"}
+        if description is not None:
+            existing["description"] = description
+        if location is not None:
+            existing["location"] = location
+        if attendees is not None:
+            existing["attendees"] = [{"email": email} for email in attendees]
+            
         updated = await asyncio.to_thread(lambda: service.events().update(calendarId="primary", eventId=event_id, body=existing, sendUpdates="all").execute())
-        return {"id": updated.get("id"), "summary": updated.get("summary"), "start": start, "end": end, "link": updated.get("htmlLink")}
+        return {"id": updated.get("id"), "summary": updated.get("summary"), "start": updated.get("start", {}).get("dateTime"), "end": updated.get("end", {}).get("dateTime"), "link": updated.get("htmlLink")}
+
+    async def delete_event(self, access_token: str, event_id: str, refresh_token: str = "") -> bool:
+        service = await self._get_service(access_token, refresh_token)
+        await asyncio.to_thread(lambda: service.events().delete(calendarId="primary", eventId=event_id, sendUpdates="all").execute())
+        return True
 
     async def find_availability(self, access_token: str, time_min: str, time_max: str, refresh_token: str = "") -> dict:
         service = await self._get_service(access_token, refresh_token)
