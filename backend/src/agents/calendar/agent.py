@@ -65,19 +65,47 @@ class CalendarAgent(BaseAgent):
             token = await find_user_access_token(context["user_id"])
 
         if not token:
-            return AgentResult(success=False, output="Connect Google Calendar in Settings before asking me to manage your schedule.", error="missing_google_calendar_token")
+            return AgentResult(
+                success=False,
+                output=(
+                    "🔗 **Google Calendar not connected.**\n\n"
+                    "To manage your calendar, please go to **Settings → Integrations** and connect your Google account. "
+                    "Once connected, I can list events, create meetings, check availability, schedule calls, and more."
+                ),
+                error="missing_google_calendar_token"
+            )
+
+        now = context.get("current_datetime", "")
+        history = context.get("conversation_history", "")
+
+        context_prefix = ""
+        if now:
+            context_prefix += f"Current date and time: {now}\n"
+        if history:
+            context_prefix += f"\nRecent conversation:\n{history}\n"
+        context_prefix += "\nUser request: "
 
         extraction = await llm_service.generate(
-            prompt=user_input,
+            prompt=context_prefix + user_input,
             system_instruction=(
-                "You are a calendar command parser. Return ONLY valid JSON with keys: action, query, summary, "
-                "start, end, event_id, description, location, attendees, time_min, time_max, generate_meet_link. "
-                "action must be one of list, details, create, availability, update, delete. Use details when the "
-                "user asks about one named event and put its title or identifying words in query. Use update to reschedule, "
-                "change title, description, or location. Use delete to cancel an event. Use ISO 8601 "
-                "UTC date-times. Calendar listings include primary, birthday, holiday, shared, and subscribed "
-                "calendars. For list or details, use the requested range; when absent, leave time_min and time_max "
-                "null. Infer end as one hour after start when needed. Set generate_meet_link to true if the user asks for a video or meet link."
+                "You are a calendar command parser. The current date/time and recent conversation history are provided above — "
+                "use them to resolve relative references like 'tomorrow', 'next Monday', 'in 2 hours', 'next week', and "
+                "follow-up references like 'cancel that', 'reschedule it', 'the meeting I just mentioned'. "
+                "Return ONLY valid JSON with these keys: action, query, summary, start, end, event_id, description, "
+                "location, attendees, time_min, time_max, generate_meet_link. "
+                "action must be one of: list, details, create, availability, update, delete. "
+                "Rules:\n"
+                "- Use 'list' for browsing events (e.g. 'show my events', 'what's on my calendar this week').\n"
+                "- Use 'details' when asking about a specific named event; put the name in 'query'.\n"
+                "- Use 'create' to add a new event; always include summary, start, and end.\n"
+                "- Use 'update' to reschedule or modify an existing event; include event_id if known.\n"
+                "- Use 'delete' to cancel/remove an event; include event_id if known.\n"
+                "- Use 'availability' to check if a time slot is free.\n"
+                "- Always use ISO 8601 UTC for start/end/time_min/time_max.\n"
+                "- If no time range is given for 'list', set time_min to now and time_max to 7 days from now.\n"
+                "- Infer end as 1 hour after start when not specified.\n"
+                "- Set generate_meet_link to true if user asks for a video/meet/zoom link.\n"
+                "Return only the JSON object, no explanation."
             ),
         )
         try:

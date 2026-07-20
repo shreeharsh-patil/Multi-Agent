@@ -233,7 +233,8 @@ class WeatherNewsAgent(BaseAgent):
 
         lower = user_input.lower()
 
-        wants_weather = any(w in lower for w in [
+        # Detect weather vs news intent
+        explicit_weather = any(w in lower for w in [
             "weather", "temperature", "forecast", "rain", "humidity", "wind",
             "climate", "sunny", "cloudy", "storm", "snow", "hot", "cold",
         ])
@@ -242,16 +243,14 @@ class WeatherNewsAgent(BaseAgent):
             "today", "breaking", "report", "story",
         ])
 
-        # Default: if neither keyword, fetch both
+        wants_weather = explicit_weather
         if not wants_weather and not wants_news:
-            wants_weather = True
             wants_news = True
 
         # Detect city for weather
         city = context.get("city", "")
         if not city:
             import re
-            # Try "weather in <city>" / "weather for <city>" / "forecast <city>"
             m = re.search(
                 r"(?:weather|forecast|temperature|climate)\s+(?:in|for|at|of)?\s*([a-z ]{2,30})",
                 lower,
@@ -289,24 +288,21 @@ class WeatherNewsAgent(BaseAgent):
                 brief = await _fetch_weather_brief(city)
                 sections.append(f"## 🌤 Weather — {city}\n\n{brief}")
 
-        if wants_news:
+        if wants_news and news_articles:
             sections.append(_format_news(news_articles, category))
 
-        raw_data = "\n\n---\n\n".join(sections)
+        raw_data = "\n\n---\n\n".join(sections) if sections else "No live feeds fetched."
 
         # LLM enrichment — summarize & add insights
         try:
             enriched = await llm_service.generate(
-                prompt=f"User request: {user_input}\n\nReal-time data fetched:\n\n{raw_data}",
+                prompt=f"User request: {user_input}\n\nLive context:\n\n{raw_data}",
                 system_instruction=(
-                    "You are a helpful Weather & News AI Assistant with access to real-time data. "
-                    "Your primary goal is to directly answer the user's specific question using the live data provided below. "
-                    "If the user asks a specific question (e.g. 'what should I wear?', 'do I need an umbrella?'), answer that directly first, "
-                    "and then provide relevant weather/news context. "
-                    "If they just ask for a general update, present the structured data clearly and conversationally:\n"
-                    "• For weather: highlight key conditions, warnings, and practical advice.\n"
-                    "• For news: summarize key headlines briefly.\n"
-                    "• Do NOT invent any data — only use what is provided in the real-time data."
+                    "You are an intelligent, helpful Weather, News, and Knowledge AI Assistant. "
+                    "Your top priority is to directly, accurately, and thoroughly answer the user's specific question "
+                    "(e.g., if asked 'what is E20 fuel?', explain E20 fuel, its 20% ethanol blend, engine compatibility, and benefits in detail). "
+                    "Use the live weather/news data provided below if relevant to the query. "
+                    "Do NOT output unrelated weather forecasts if the user's question is about a different topic (such as fuel, automobiles, technology, science, etc.)."
                 ),
             )
             return AgentResult(success=True, output=enriched, metadata={"city": city, "news_category": category})

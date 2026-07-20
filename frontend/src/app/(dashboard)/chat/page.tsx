@@ -150,7 +150,7 @@ function ChatContent() {
     if (agentParam && agents.concat(customAgents).some(a => a.id === agentParam)) {
       setSelectedAgent(agentParam)
     }
-    const convParam = searchParams?.get('c') || searchParams?.get('conversation_id') || searchParams?.get('conversation')
+    const convParam = searchParams?.get('id') || searchParams?.get('c') || searchParams?.get('conversation_id') || searchParams?.get('conversation')
     if (convParam) {
       setConversationId(convParam)
     }
@@ -461,6 +461,9 @@ function ChatContent() {
   }, [])
 
   const [conversationId, setConversationId] = useState<string>()
+  // Track which conversationIds we created locally this session so we don't
+  // re-fetch and overwrite in-progress streaming messages.
+  const locallyCreatedIds = useRef<Set<string>>(new Set())
   const [, setConversations] = useState<Array<{
     id: string
     title: string
@@ -473,9 +476,24 @@ function ChatContent() {
   const [chatTitle, setChatTitle] = useState('')
   const [, setLoadingHistory] = useState(false)
 
-  // Fetch conversation messages when conversationId is set/changed
+  // Sync conversationId to the URL so refresh/back-nav restores the chat
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (conversationId) {
+      const url = new URL(window.location.href)
+      url.searchParams.set('id', conversationId)
+      window.history.replaceState(null, '', url.toString())
+    } else {
+      window.history.replaceState(null, '', '/chat')
+    }
+  }, [conversationId])
+
+  // Fetch conversation messages when conversationId is set/changed,
+  // but skip if we just created this id locally (already have the messages)
   useEffect(() => {
     if (!conversationId) return
+    // Don't re-fetch a conversation we just created — messages are already in state
+    if (locallyCreatedIds.current.has(conversationId)) return
     let isCancelled = false
     setLoadingHistory(true)
     api.chat.getConversation(conversationId)
@@ -920,6 +938,8 @@ function ChatContent() {
                 )
             } else if (currentEvent === 'complete' && data.conversation_id) {
                 newConvId = data.conversation_id
+                // Mark this id as locally created so we don't refetch it
+                locallyCreatedIds.current.add(data.conversation_id)
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 accumulatedContent = data.output || accumulatedContent
                 setConversationId(data.conversation_id)
@@ -982,6 +1002,8 @@ function ChatContent() {
             attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
           }, googleAccessToken, googleRefreshToken)
           if (res.success && res.data) {
+            // Mark as locally created to prevent refetch overriding messages
+            locallyCreatedIds.current.add(res.data.conversation_id)
             setConversationId(res.data.conversation_id)
             setMessages((prev) =>
               prev.map((msg) =>
@@ -1025,8 +1047,9 @@ function ChatContent() {
       sendingRef.current = false
       setSending(false)
       abortControllerRef.current = null
-      // Refresh side-panel document list on send completion
+      // Refresh side-panel document list and sidebar conversation history on send completion
       window.dispatchEvent(new Event('refresh-documents-list'))
+      window.dispatchEvent(new Event('refresh-conversations-list'))
     }
   }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, googleRefreshToken])
 

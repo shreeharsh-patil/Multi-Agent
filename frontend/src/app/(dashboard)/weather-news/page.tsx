@@ -403,16 +403,21 @@ export default function WeatherNewsPage() {
         } else {
           responseText = 'No news articles available right now.'
         }
+      } else if (lowerQ.includes('e20') || lowerQ.includes('ethanol') || lowerQ.includes('fuel') || lowerQ.includes('petrol')) {
+        responseText = `### ⛽ E20 Fuel Information\n\n` +
+          `**E20 Fuel** is a blend of **20% anhydrous ethanol** and **80% motor gasoline (petrol)**.\n\n` +
+          `• **Goal**: Reduces carbon emissions, lowers crude oil imports, and boosts biofuel adoption.\n` +
+          `• **Vehicle Compatibility**: Designed for E20-compliant vehicles. Most modern vehicles built after 2023 in India support E20.\n` +
+          `• **Efficiency**: Ethanol has lower energy density than pure petrol, resulting in a minor (~2-3%) impact on mileage, but offers higher octane rating (better anti-knock performance).`
       } else {
-        // General query — give a concise relevant summary
-        responseText = `### 🌤 ${city} — Current Snapshot\n\n`
-        if (curW) {
-          responseText += `**Weather:** ${curW.description}, **${curW.tempC}°C** (feels like ${curW.feelsLikeC}°C)\n`
-          responseText += `Humidity: ${curW.humidity}% · Wind: ${curW.windKmph} km/h ${curW.windDir}\n\n`
-        }
-        const topStory = arts[0]
-        if (topStory) {
-          responseText += `**📰 Top ${newsCategory} story:** [${topStory.title}](${topStory.link})\n> ${topStory.description ?? ''}`
+        responseText = `### ℹ️ Answer for: "${query}"\n\n`
+        if (arts.length > 0) {
+          responseText += `**Related News Headlines:**\n`
+          arts.slice(0, 3).forEach((a, i) => {
+            responseText += `${i + 1}. **[${a.title}](${a.link})**\n`
+          })
+        } else if (curW) {
+          responseText += `Current weather in **${city}**: ${curW.description}, ${curW.tempC}°C.`
         }
       }
 

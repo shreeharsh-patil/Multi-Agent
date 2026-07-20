@@ -244,8 +244,14 @@ async def _save_messages(
             agent_id=agent_id,
         )
 
-        if is_new:
-            # Create a new conversation with auto-title
+        conv = await Conversation.get(conv_id)
+        if conv:
+            conv.messages.extend([user_msg, assistant_msg])
+            conv.updated_at = now
+            if workspace_id:
+                conv.workspace_id = workspace_id
+            await conv.save()
+        else:
             title = user_message[:80] + ("..." if len(user_message) > 80 else "")
             conv = Conversation(
                 id=conv_id,
@@ -258,29 +264,6 @@ async def _save_messages(
                 updated_at=now,
             )
             await conv.insert()
-        else:
-            # Use atomic $push to prevent race conditions from concurrent requests.
-            # Fetch-modify-save would silently drop messages from parallel writes.
-            update: dict[str, object] = {
-                "$push": {
-                    "messages": {"$each": [
-                        user_msg.model_dump(),
-                        assistant_msg.model_dump(),
-                    ]}
-                },
-                "$set": {
-                    "updated_at": now,
-                },
-            }
-            if workspace_id:
-                update["$set"]["workspace_id"] = workspace_id  # type: ignore[index]
-            # Use PydanticObjectId so the string _id is correctly matched
-            # against the ObjectId stored in MongoDB.
-            from beanie import PydanticObjectId
-            await Conversation.get_motor_collection().update_one(
-                {"_id": PydanticObjectId(conv_id)},
-                update,
-            )
 
         # Extraction is intentionally best-effort and runs after persistence so
         # chat latency and reliability do not depend on the profiling model call.
@@ -411,6 +394,25 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
         custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
+
+        # Build shared agent context with datetime + recent conversation history
+        now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
+        history_snippet = ""
+        if body.conversation_id:
+            hist_conv = await Conversation.get(body.conversation_id)
+            if hist_conv and hist_conv.messages:
+                recent = hist_conv.messages[-6:]  # last 3 exchanges
+                history_snippet = "\n".join(
+                    f"{m.role.upper()}: {m.content[:300]}" for m in recent
+                )
+        google_agent_context = {
+            "user_id": user_id,
+            "google_access_token": google_access_token,
+            "google_refresh_token": google_refresh_token,
+            "current_datetime": now_str,
+            "conversation_history": history_snippet,
+        }
+
         if routed_agent_id == "image":
             output = await _generate_image_message(body.message, user_id, body.workspace_id)
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
@@ -431,25 +433,25 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             calendar_agent = get_orchestrator().registry.get_agent("calendar")
             if not calendar_agent:
                 raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-            agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            agent_result = await calendar_agent.execute(augmented_message, google_agent_context)
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "gmail":
             gmail_agent = get_orchestrator().registry.get_agent("gmail")
             if not gmail_agent:
                 raise HTTPException(status_code=503, detail="Gmail Agent is not initialized")
-            agent_result = await gmail_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            agent_result = await gmail_agent.execute(augmented_message, google_agent_context)
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "gmail", "event_type": "GmailAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "tasks":
             tasks_agent = get_orchestrator().registry.get_agent("tasks")
             if not tasks_agent:
                 raise HTTPException(status_code=503, detail="Tasks Agent is not initialized")
-            agent_result = await tasks_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            agent_result = await tasks_agent.execute(augmented_message, google_agent_context)
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "tasks", "event_type": "TasksAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "youtube":
             youtube_agent = get_orchestrator().registry.get_agent("youtube")
             if not youtube_agent:
                 raise HTTPException(status_code=503, detail="YouTube Agent is not initialized")
-            agent_result = await youtube_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token, "google_refresh_token": google_refresh_token})
+            agent_result = await youtube_agent.execute(augmented_message, google_agent_context)
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "youtube", "event_type": "YouTubeAction", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif routed_agent_id == "drive":
             drive_agent = get_orchestrator().registry.get_agent("drive")
@@ -538,6 +540,24 @@ async def chat_stream(
             )
             augmented_message = memory_context + attachment_context + body.message
 
+            # Build shared agent context with current datetime + conversation history
+            now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
+            history_snippet = ""
+            if body.conversation_id:
+                hist_conv = await Conversation.get(body.conversation_id)
+                if hist_conv and hist_conv.messages:
+                    recent = hist_conv.messages[-6:]
+                    history_snippet = "\n".join(
+                        f"{m.role.upper()}: {m.content[:300]}" for m in recent
+                    )
+            stream_google_context = {
+                "user_id": user_id,
+                "google_access_token": http_request.headers.get("X-Google-Access-Token", ""),
+                "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", ""),
+                "current_datetime": now_str,
+                "conversation_history": history_snippet,
+            }
+
             if routed_agent_id == "image":
                 accumulated_output = await _generate_image_message(body.message, user_id, body.workspace_id)
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'image'})}\n\n"
@@ -593,7 +613,7 @@ async def chat_stream(
                 calendar_agent = get_orchestrator().registry.get_agent("calendar")
                 if not calendar_agent:
                     raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-                agent_result = await calendar_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                agent_result = await calendar_agent.execute(augmented_message, stream_google_context)
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
@@ -606,7 +626,7 @@ async def chat_stream(
                 gmail_agent = get_orchestrator().registry.get_agent("gmail")
                 if not gmail_agent:
                     raise HTTPException(status_code=503, detail="Gmail Agent is not initialized")
-                agent_result = await gmail_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                agent_result = await gmail_agent.execute(augmented_message, stream_google_context)
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'gmail'})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
@@ -619,7 +639,7 @@ async def chat_stream(
                 tasks_agent = get_orchestrator().registry.get_agent("tasks")
                 if not tasks_agent:
                     raise HTTPException(status_code=503, detail="Tasks Agent is not initialized")
-                agent_result = await tasks_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                agent_result = await tasks_agent.execute(augmented_message, stream_google_context)
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'tasks'})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
@@ -632,7 +652,7 @@ async def chat_stream(
                 youtube_agent = get_orchestrator().registry.get_agent("youtube")
                 if not youtube_agent:
                     raise HTTPException(status_code=503, detail="YouTube Agent is not initialized")
-                agent_result = await youtube_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")})
+                agent_result = await youtube_agent.execute(augmented_message, stream_google_context)
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'youtube'})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"

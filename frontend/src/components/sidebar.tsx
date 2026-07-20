@@ -119,21 +119,25 @@ export function Sidebar() {
   }, [])
 
   // Fetch recent conversations for history section
+  const loadSidebarHistory = useCallback(() => {
+    api.chat.listConversations()
+      .then((res) => {
+        if (res.success && res.data) {
+          setConversations(res.data.map(c => ({
+            id: c.id,
+            title: c.title,
+            createdAt: c.createdAt
+          })))
+        }
+      })
+      .catch(err => console.error("Error loading sidebar history", err))
+  }, [])
+
   useEffect(() => {
-    if (session) {
-      api.chat.listConversations()
-        .then((res) => {
-          if (res.success && res.data) {
-            setConversations(res.data.map(c => ({
-              id: c.id,
-              title: c.title,
-              createdAt: c.createdAt
-            })))
-          }
-        })
-        .catch(err => console.error("Error loading sidebar history", err))
-    }
-  }, [session, pathname])
+    loadSidebarHistory()
+    window.addEventListener('refresh-conversations-list', loadSidebarHistory)
+    return () => window.removeEventListener('refresh-conversations-list', loadSidebarHistory)
+  }, [pathname, loadSidebarHistory])
 
   // Fetch the user's real workspaces for the selector
   useEffect(() => {
