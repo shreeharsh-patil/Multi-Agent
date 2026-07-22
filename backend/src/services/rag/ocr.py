@@ -67,9 +67,36 @@ async def analyze_image(image_bytes: bytes, mime_type: str, file_name: str) -> s
         "questions about the image. Return concise plain text with 'Extracted text' and "
         "'Visual analysis' sections. Do not mention the OCR process."
     )
-    return await llm_service.generate_multimodal(
-        prompt,
-        image_bytes,
-        mime_type,
-        max_output_tokens=4096,
-    )
+    try:
+        res = await llm_service.generate_multimodal(
+            prompt,
+            image_bytes,
+            mime_type,
+            max_output_tokens=4096,
+        )
+        if res and res.strip():
+            return res.strip()
+    except Exception as exc:
+        logger.warning(f"generate_multimodal vision analysis failed for {file_name}: {exc}")
+
+    # Fallback: try PIL & PyTesseract OCR if available
+    try:
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes))
+        width, height = img.size
+        mode = img.mode
+
+        ocr_text = ""
+        try:
+            import pytesseract
+            ocr_text = pytesseract.image_to_string(img).strip()
+        except Exception:
+            pass
+
+        if ocr_text:
+            return f"Extracted Text from Image ({file_name}):\n{ocr_text}"
+        return f"Image attachment '{file_name}' ({width}x{height} pixels, format {mode})."
+    except Exception as err:
+        logger.warning(f"PIL fallback failed for {file_name}: {err}")
+        return f"Image attachment '{file_name}'."

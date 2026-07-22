@@ -115,21 +115,30 @@ class CalendarAgent(BaseAgent):
             return AgentResult(success=False, output="I couldn't understand that calendar request. Try asking to list, create, or reschedule an event.", error=str(exc))
 
         action = command.get("action", "list")
+        query = (command.get("query") or command.get("summary") or "").strip()
+
+        # Fallback check if user input asks about a specific event or topic
+        if not query and any(w in user_input.lower() for w in ["meeting", "appointment", "call", "with", "event"]):
+            # Try to extract search topic from user input
+            topic_match = re.search(r"(?:meeting|appointment|call|event|with)\s+([a-zA-Z0-9_\- ]+)", user_input, re.IGNORECASE)
+            if topic_match:
+                query = topic_match.group(1).strip()
+
         try:
             if action in {"list", "details"}:
-                query = (command.get("query") or "").strip() if action == "details" else None
+                list_kwargs = {"limit": 10, "query": query or None}
+                if refresh_token:
+                    list_kwargs["refresh_token"] = refresh_token
                 events = await calendar_service.list_events(
                     token,
                     command.get("time_min"),
                     command.get("time_max"),
-                    limit=10,
-                    query=query or None,
-                    refresh_token=refresh_token,
+                    **list_kwargs,
                 )
                 if not events:
                     message = f'I could not find a calendar event matching "{query}".' if query else "You have no events in that time range."
                     return AgentResult(success=True, output=message)
-                heading = "Matching event details:" if action == "details" else "Upcoming calendar events:"
+                heading = f'Matching event details for "{query}":' if (action == "details" or query) else "Upcoming calendar events:"
                 return AgentResult(
                     success=True,
                     output=heading + "\n\n" + "\n\n".join(self._format_event(event) for event in events),

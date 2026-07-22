@@ -32,24 +32,34 @@ async def _word_chunks(text: str):
     """Yield display-friendly chunks for agents without native streaming."""
     for word in re.findall(r"\S+\s*|\s+", text):
         yield word
-        # Give the response transport a chance to flush each visible word.
-        await asyncio.sleep(0.012)
+        await asyncio.sleep(0)
 
 
 async def _load_attachment_text(doc: Document) -> str:
     """Load content for one exact attachment without relying on RAG similarity."""
-    chunks = await DocumentChunk.find(
-        {"document_id": str(doc.id), "user_id": doc.user_id}
-    ).sort("chunk_index").to_list()
+    chunks = await DocumentChunk.find({"document_id": str(doc.id)}).sort("chunk_index").to_list()
     if chunks:
-        return "\n\n".join(chunk.content for chunk in chunks if chunk.content.strip())
+        extracted = "\n\n".join(chunk.content for chunk in chunks if chunk.content.strip())
+        if extracted.strip():
+            return extracted.strip()
 
-    # Support files uploaded before document chunks were persisted in MongoDB.
-    if doc.file_type not in IMAGE_EXTENSIONS and doc.file_path and os.path.exists(doc.file_path):
-        from src.services.rag.parser import document_parser
+    # Fallback: parse document directly from file_path if available
+    if doc.file_path and os.path.exists(doc.file_path):
+        ext = (doc.file_type or "").lstrip(".").lower()
+        if ext not in IMAGE_EXTENSIONS:
+            from src.services.rag.parser import document_parser
+            try:
+                parsed = await asyncio.to_thread(document_parser.parse, doc.file_path, ext)
+                if parsed and parsed.text.strip():
+                    return parsed.text.strip()
+            except Exception as exc:
+                logger.warning(f"Direct parse failed for attachment {doc.file_name}: {exc}")
 
-        parsed = await asyncio.to_thread(document_parser.parse, doc.file_path, doc.file_type)
-        return parsed.text.strip()
+            try:
+                with open(doc.file_path, "r", encoding="utf-8", errors="replace") as f:
+                    return f.read().strip()
+            except Exception:
+                pass
     return ""
 
 
@@ -57,14 +67,42 @@ async def _build_attachment_context(
     attachments: list | None,
     user_id: str | None = None,
     user_query: str = "",
+    conv_id: str | None = None,
 ) -> str:
-    """Build a prompt prefix containing the actual contents of attached files."""
-    if not attachments:
+    """Build a prompt prefix containing the actual contents of attached files (current & previous turns)."""
+    target_attachments: list = []
+    seen_doc_ids: set = set()
+
+    if attachments:
+        for att in attachments:
+            doc_id = att.get("documentId") if isinstance(att, dict) else getattr(att, "documentId", None)
+            if doc_id:
+                seen_doc_ids.add(doc_id)
+            target_attachments.append(att)
+
+    # Search previous turns in the conversation for uploaded attachments
+    if conv_id:
+        try:
+            conv = await Conversation.get(conv_id)
+            if conv and conv.messages:
+                for m in conv.messages:
+                    if m.metadata and isinstance(m.metadata, dict):
+                        prev_atts = m.metadata.get("attachments")
+                        if prev_atts and isinstance(prev_atts, list):
+                            for pa in prev_atts:
+                                d_id = pa.get("documentId") if isinstance(pa, dict) else getattr(pa, "documentId", None)
+                                if d_id and d_id not in seen_doc_ids:
+                                    seen_doc_ids.add(d_id)
+                                    target_attachments.append(pa)
+        except Exception as e:
+            logger.warning(f"Could not load previous attachments for conversation {conv_id}: {e}")
+
+    if not target_attachments:
         return ""
 
     sections: list[str] = []
     used_chars = 0
-    for att in attachments:
+    for att in target_attachments:
         doc_id = att.get("documentId") if isinstance(att, dict) else getattr(att, "documentId", None)
         name = att.get("name") if isinstance(att, dict) else getattr(att, "name", "unknown")
         if not doc_id:
@@ -102,11 +140,11 @@ async def _build_attachment_context(
             sections.append(f"## {name}\nThe uploaded document could not be loaded.")
             continue
 
-        if user_id and doc.user_id != user_id:
-            sections.append(f"## {name}\nThis attachment is not available to the current user.")
+        if doc and user_id and doc.user_id != user_id and doc.user_id != "default":
+            sections.append(f"## {name}\nThe uploaded document is not available to the current user.")
             continue
 
-        is_image = doc.file_type in IMAGE_EXTENSIONS
+        is_image = doc.file_type in IMAGE_EXTENSIONS if doc else False
         content = await _load_attachment_text(doc)
         if not content and is_image and doc.file_type != "svg" and doc.file_path and os.path.exists(doc.file_path):
             # Retry vision at question time if upload-time analysis was unavailable.
@@ -149,7 +187,7 @@ async def _build_attachment_context(
         return ""
 
     return (
-        "The user attached the following files. Their extracted contents are provided below. "
+        "The user attached or referenced the following files in this conversation. Their extracted contents are provided below. "
         "Answer from this content and identify the file when multiple files are present.\n\n"
         + "\n\n".join(sections)
         + "\n\nUser's request:\n"
@@ -368,6 +406,42 @@ async def rename_conversation(
 
 
 
+async def _build_full_conversation_history(conv_id: Optional[str], max_messages: int = 50, max_chars: int = 30000) -> str:
+    """Format recent conversation history from MongoDB without truncating message contents to tiny snippets."""
+    if not conv_id:
+        return ""
+    try:
+        conv = await Conversation.get(conv_id)
+        if not conv or not conv.messages:
+            return ""
+
+        recent = conv.messages[-max_messages:]
+        lines = []
+        for m in recent:
+            role = "USER" if m.role == "user" else f"ASSISTANT ({m.agent_id or 'Agent'})"
+            content = (m.content or "").strip()
+            if content:
+                lines.append(f"{role}: {content}")
+            if m.metadata and isinstance(m.metadata, dict):
+                atts = m.metadata.get("attachments")
+                if atts and isinstance(atts, list):
+                    for a in atts:
+                        name = a.get("name") if isinstance(a, dict) else getattr(a, "name", None)
+                        if name:
+                            lines.append(f"   [Attached file: {name}]")
+
+        if not lines:
+            return ""
+
+        history_str = "\n".join(lines)
+        if len(history_str) > max_chars:
+            history_str = "... (earlier conversation history omitted)\n" + history_str[-max_chars:]
+        return history_str
+    except Exception as e:
+        logger.warning(f"Could not load conversation history for {conv_id}: {e}")
+        return ""
+
+
 @router.post("")
 async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
     try:
@@ -378,9 +452,15 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         auth_user = getattr(http_request.state, "user", None)
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
         from src.services.memory.service import memory_service
-        memory_context = await memory_service.build_context(user_id, body.message)
-        attachment_context = await _build_attachment_context(body.attachments, user_id, body.message)
-        augmented_message = memory_context + attachment_context + body.message
+        memory_context, attachment_context, history_snippet = await asyncio.gather(
+            memory_service.build_context(user_id, body.message),
+            _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
+            _build_full_conversation_history(body.conversation_id),
+        )
+
+        history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
+        augmented_message = history_prefix + memory_context + attachment_context + body.message
+
         if body.conversation_id:
             existing = await Conversation.get(body.conversation_id)
             if not existing or not await can_access_conversation(existing, user_id):
@@ -395,16 +475,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
         custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
-        # Build shared agent context with datetime + recent conversation history
         now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
-        history_snippet = ""
-        if body.conversation_id:
-            hist_conv = await Conversation.get(body.conversation_id)
-            if hist_conv and hist_conv.messages:
-                recent = hist_conv.messages[-6:]  # last 3 exchanges
-                history_snippet = "\n".join(
-                    f"{m.role.upper()}: {m.content[:300]}" for m in recent
-                )
         google_agent_context = {
             "user_id": user_id,
             "google_access_token": google_access_token,
@@ -412,6 +483,8 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             "current_datetime": now_str,
             "conversation_history": history_snippet,
         }
+
+        registry_agent = get_orchestrator().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
 
         if routed_agent_id == "image":
             output = await _generate_image_message(body.message, user_id, body.workspace_id)
@@ -422,49 +495,27 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 user_id,
                 body.team_agents,
                 conv_id,
-                context={"google_access_token": google_access_token, "google_refresh_token": google_refresh_token},
+                context={"google_access_token": google_access_token, "google_refresh_token": google_refresh_token, "conversation_history": history_snippet},
             )
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
             get_orchestrator().registry.register(custom_agent)
-            agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id})
+            agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
-        elif routed_agent_id == "calendar":
-            calendar_agent = get_orchestrator().registry.get_agent("calendar")
-            if not calendar_agent:
-                raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-            agent_result = await calendar_agent.execute(augmented_message, google_agent_context)
-            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "calendar", "event_type": "CalendarAction", "has_content": bool(agent_result.output)}], "events_count": 1}
-        elif routed_agent_id == "gmail":
-            gmail_agent = get_orchestrator().registry.get_agent("gmail")
-            if not gmail_agent:
-                raise HTTPException(status_code=503, detail="Gmail Agent is not initialized")
-            agent_result = await gmail_agent.execute(augmented_message, google_agent_context)
-            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "gmail", "event_type": "GmailAction", "has_content": bool(agent_result.output)}], "events_count": 1}
-        elif routed_agent_id == "tasks":
-            tasks_agent = get_orchestrator().registry.get_agent("tasks")
-            if not tasks_agent:
-                raise HTTPException(status_code=503, detail="Tasks Agent is not initialized")
-            agent_result = await tasks_agent.execute(augmented_message, google_agent_context)
-            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "tasks", "event_type": "TasksAction", "has_content": bool(agent_result.output)}], "events_count": 1}
-        elif routed_agent_id == "youtube":
-            youtube_agent = get_orchestrator().registry.get_agent("youtube")
-            if not youtube_agent:
-                raise HTTPException(status_code=503, detail="YouTube Agent is not initialized")
-            agent_result = await youtube_agent.execute(augmented_message, google_agent_context)
-            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "youtube", "event_type": "YouTubeAction", "has_content": bool(agent_result.output)}], "events_count": 1}
-        elif routed_agent_id == "drive":
-            drive_agent = get_orchestrator().registry.get_agent("drive")
-            if not drive_agent:
-                raise HTTPException(status_code=503, detail="Drive Agent is not initialized")
-            agent_result = await drive_agent.execute(augmented_message, {"user_id": user_id, "google_access_token": google_access_token})
-            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": "drive", "event_type": "DriveAction", "has_content": bool(agent_result.output)}], "events_count": 1}
+        elif registry_agent:
+            agent_result = await registry_agent.execute(augmented_message, google_agent_context)
+            result = {
+                "output": agent_result.output,
+                "citations": getattr(agent_result, "citations", []),
+                "agent_traces": [{"agent_id": routed_agent_id, "event_type": f"{routed_agent_id.title()}Action", "has_content": bool(agent_result.output)}],
+                "events_count": 1,
+            }
         elif body.workspace_id:
             knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
             if not knowledge_agent:
                 raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
             agent_result = await knowledge_agent.execute(
-                augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
+                augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id, "conversation_history": history_snippet}
             )
             result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
         else:
@@ -534,22 +585,15 @@ async def chat_stream(
             # the client is already showing the active assistant state.
             yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
             from src.services.memory.service import memory_service
-            memory_context, attachment_context = await asyncio.gather(
+            memory_context, attachment_context, history_snippet = await asyncio.gather(
                 memory_service.build_context(user_id, body.message),
-                _build_attachment_context(body.attachments, user_id, body.message),
+                _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
+                _build_full_conversation_history(body.conversation_id),
             )
-            augmented_message = memory_context + attachment_context + body.message
+            history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
+            augmented_message = history_prefix + memory_context + attachment_context + body.message
 
-            # Build shared agent context with current datetime + conversation history
             now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
-            history_snippet = ""
-            if body.conversation_id:
-                hist_conv = await Conversation.get(body.conversation_id)
-                if hist_conv and hist_conv.messages:
-                    recent = hist_conv.messages[-6:]
-                    history_snippet = "\n".join(
-                        f"{m.role.upper()}: {m.content[:300]}" for m in recent
-                    )
             stream_google_context = {
                 "user_id": user_id,
                 "google_access_token": http_request.headers.get("X-Google-Access-Token", ""),
@@ -577,7 +621,7 @@ async def chat_stream(
                     user_id,
                     body.team_agents,
                     conv_id,
-                    context={"google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", "")},
+                    context={"google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", ""), "conversation_history": history_snippet},
                 )
                 for stage in team_result["stages"]:
                     yield f"event: agent\ndata: {json.dumps({'agent_id': stage['agent_id']})}\n\n"
@@ -599,7 +643,7 @@ async def chat_stream(
             if custom_config:
                 custom_agent = CustomAgent(custom_config)
                 get_orchestrator().registry.register(custom_agent)
-                agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id})
+                agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
@@ -609,71 +653,15 @@ async def chat_stream(
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
-            if routed_agent_id == "calendar":
-                calendar_agent = get_orchestrator().registry.get_agent("calendar")
-                if not calendar_agent:
-                    raise HTTPException(status_code=503, detail="Calendar Agent is not initialized")
-                agent_result = await calendar_agent.execute(augmented_message, stream_google_context)
-                yield f"event: agent\ndata: {json.dumps({'agent_id': 'calendar'})}\n\n"
-                async for word in _word_chunks(agent_result.output):
-                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
-                accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="calendar", is_new=is_new, workspace_id=body.workspace_id)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
-                return
+            registry_agent = get_orchestrator().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
 
-            if routed_agent_id == "gmail":
-                gmail_agent = get_orchestrator().registry.get_agent("gmail")
-                if not gmail_agent:
-                    raise HTTPException(status_code=503, detail="Gmail Agent is not initialized")
-                agent_result = await gmail_agent.execute(augmented_message, stream_google_context)
-                yield f"event: agent\ndata: {json.dumps({'agent_id': 'gmail'})}\n\n"
+            if registry_agent:
+                agent_result = await registry_agent.execute(augmented_message, stream_google_context)
+                yield f"event: agent\ndata: {json.dumps({'agent_id': routed_agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="gmail", is_new=is_new, workspace_id=body.workspace_id)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
-                return
-
-            if routed_agent_id == "tasks":
-                tasks_agent = get_orchestrator().registry.get_agent("tasks")
-                if not tasks_agent:
-                    raise HTTPException(status_code=503, detail="Tasks Agent is not initialized")
-                agent_result = await tasks_agent.execute(augmented_message, stream_google_context)
-                yield f"event: agent\ndata: {json.dumps({'agent_id': 'tasks'})}\n\n"
-                async for word in _word_chunks(agent_result.output):
-                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
-                accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="tasks", is_new=is_new, workspace_id=body.workspace_id)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
-                return
-
-            if routed_agent_id == "youtube":
-                youtube_agent = get_orchestrator().registry.get_agent("youtube")
-                if not youtube_agent:
-                    raise HTTPException(status_code=503, detail="YouTube Agent is not initialized")
-                agent_result = await youtube_agent.execute(augmented_message, stream_google_context)
-                yield f"event: agent\ndata: {json.dumps({'agent_id': 'youtube'})}\n\n"
-                async for word in _word_chunks(agent_result.output):
-                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
-                accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="youtube", is_new=is_new, workspace_id=body.workspace_id)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
-                return
-
-            if routed_agent_id == "drive":
-                drive_agent = get_orchestrator().registry.get_agent("drive")
-                if not drive_agent:
-                    raise HTTPException(status_code=503, detail="Drive Agent is not initialized")
-                agent_result = await drive_agent.execute(
-                    augmented_message,
-                    {"user_id": user_id, "google_access_token": http_request.headers.get("X-Google-Access-Token", "")},
-                )
-                yield f"event: agent\ndata: {json.dumps({'agent_id': 'drive'})}\n\n"
-                async for word in _word_chunks(agent_result.output):
-                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
-                accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="drive", is_new=is_new, workspace_id=body.workspace_id)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=routed_agent_id, is_new=is_new, workspace_id=body.workspace_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
@@ -682,7 +670,7 @@ async def chat_stream(
                 if not knowledge_agent:
                     raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
                 agent_result = await knowledge_agent.execute(
-                    augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id}
+                    augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id, "conversation_history": history_snippet}
                 )
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
                 async for word in _word_chunks(agent_result.output):

@@ -111,7 +111,23 @@ class DriveService:
         refresh_token: str = "",
     ) -> bytes:
         service = await self._get_service(access_token, refresh_token)
-        request = service.files().get_media(fileId=file_id)
+        try:
+            info = await self.get_file_info(access_token, file_id, refresh_token)
+            mime_type = info.get("mimeType", "")
+        except Exception:
+            mime_type = ""
+
+        if mime_type.startswith("application/vnd.google-apps."):
+            if "spreadsheet" in mime_type:
+                export_mime = "text/csv"
+            elif "presentation" in mime_type:
+                export_mime = "text/plain"
+            else:
+                export_mime = "text/plain"
+            request = service.files().export_media(fileId=file_id, mimeType=export_mime)
+        else:
+            request = service.files().get_media(fileId=file_id)
+
         file_bytes = io.BytesIO()
         downloader = MediaIoBaseDownload(file_bytes, request)
 
@@ -124,6 +140,59 @@ class DriveService:
         result = await asyncio.to_thread(_download)
         logger.info(f"Downloaded file: {file_id}")
         return result.getvalue()
+
+    async def read_and_parse_file_content(
+        self,
+        access_token: str,
+        file_id: str,
+        refresh_token: str = "",
+    ) -> tuple[str, dict]:
+        """Download file bytes from Drive and extract plain text content."""
+        import tempfile
+        import os
+        from src.services.rag.parser import document_parser
+
+        info = await self.get_file_info(access_token, file_id, refresh_token)
+        file_name = info.get("name", "untitled")
+        mime_type = info.get("mimeType", "")
+        file_bytes = await self.download_file(access_token, file_id, refresh_token)
+
+        ext = os.path.splitext(file_name)[1].lower()
+        if not ext:
+            if "pdf" in mime_type:
+                ext = ".pdf"
+            elif "word" in mime_type or "document" in mime_type:
+                ext = ".docx"
+            elif "presentation" in mime_type:
+                ext = ".pptx"
+            elif "csv" in mime_type:
+                ext = ".csv"
+            else:
+                ext = ".txt"
+
+        clean_ext = ext.lstrip(".")
+        text = ""
+        if clean_ext in {"pdf", "docx", "pptx", "txt", "md"}:
+            tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+            tmp_path = tmp.name
+            try:
+                tmp.write(file_bytes)
+                tmp.close()  # Close handle so document_parser can open file on Windows
+                parsed = document_parser.parse(tmp_path, clean_ext)
+                text = parsed.text
+            except Exception as e:
+                logger.warning(f"DocumentParser failed for {file_name} ({ext}): {e}")
+                text = file_bytes.decode("utf-8", errors="replace")
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+        else:
+            text = file_bytes.decode("utf-8", errors="replace")
+
+        return text, info
 
     async def delete_file(
         self,

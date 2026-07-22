@@ -21,6 +21,7 @@ def initialize_agents() -> None:
     from src.agents.gmail.agent import GmailAgent
     from src.agents.tasks.agent import TasksAgent
     from src.agents.youtube.agent import YouTubeAgent
+    from src.agents.contacts.agent import ContactsAgent
 
     AgentRegistry.register(KnowledgeAgent())
     AgentRegistry.register(DriveAgent())
@@ -37,6 +38,7 @@ def initialize_agents() -> None:
     AgentRegistry.register(GmailAgent())
     AgentRegistry.register(TasksAgent())
     AgentRegistry.register(YouTubeAgent())
+    AgentRegistry.register(ContactsAgent())
 
     AgentRegistry.initialize()
     logger.info(f"Initialized {len(AgentRegistry.get_all_agents())} agents")

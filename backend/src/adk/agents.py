@@ -19,9 +19,85 @@ from src.adk.tools import (
     web_search_tool,
     scrape_page_tool,
     drive_list_tool,
+    drive_read_tool,
     drive_upload_tool,
     drive_delete_tool,
+    contacts_list_tool,
 )
+
+
+def create_contacts_agent() -> LlmAgent:
+    return LlmAgent(
+        name="contacts",
+        model=MODEL,
+        instruction=(
+            "You are the Contacts Agent. You help users list and search their Google Contacts.\n"
+            "Capabilities:\n"
+            "1. contacts_list - List or search Google Contacts (names, email addresses, phone numbers)\n\n"
+            "To list or search contacts: call contacts_list with the user's ID and optional search query."
+        ),
+        tools=[contacts_list_tool],
+        description="Lists and searches Google Contacts for email addresses and phone numbers.",
+    )
+
+
+def create_orchestrator_agent() -> LlmAgent:
+    """Create the root orchestrator agent with all sub-agents.
+
+    The orchestrator uses TransferToAgentTool to route requests
+    to the appropriate specialized agent based on the user's intent.
+    """
+    knowledge = create_knowledge_agent()
+    drive = create_drive_agent()
+    notes = create_notes_agent()
+    quiz = create_quiz_agent()
+    planner = create_planner_agent()
+    research = create_research_agent()
+    coding = create_coding_agent()
+    memory = create_memory_agent()
+    tool_agent = create_tool_agent()
+    contacts = create_contacts_agent()
+
+    sub_agents = [
+        knowledge,
+        drive,
+        notes,
+        quiz,
+        planner,
+        research,
+        coding,
+        memory,
+        tool_agent,
+        contacts,
+    ]
+
+    return LlmAgent(
+        name="orchestrator",
+        model=MODEL,
+        instruction=(
+            "You are the Orchestrator Agent — the central coordinator. "
+            "Your job is to understand what the user needs and transfer them "
+            "to the most appropriate specialized agent.\n\n"
+
+            "Available agents:\n"
+            "- knowledge: RAG-based document search, summaries, citations\n"
+            "- drive: Google Drive file management\n"
+            "- notes: Note-taking, flashcards, revision notes\n"
+            "- quiz: MCQ generation, practice exams\n"
+            "- planner: Study planning, task management, schedules\n"
+            "- research: Internet research, report generation\n"
+            "- coding: Code writing, debugging, documentation\n"
+            "- memory: Long-term memory, preferences, recall\n"
+            "- tool: Calculator, web search, API tools\n"
+            "- contacts: Google Contacts search, emails, phone numbers\n\n"
+
+            "Analyze the user's request and transfer to the best agent. "
+            "If the request spans multiple domains, handle it step by step. "
+            "Always respond in the user's language."
+        ),
+        sub_agents=sub_agents,
+        description="Central orchestrator that routes requests to specialized agents.",
+    )
 
 MODEL = settings.gemini_model
 
@@ -48,19 +124,23 @@ def create_drive_agent() -> LlmAgent:
         name="drive",
         model=MODEL,
         instruction=(
-            "You are the Drive Agent. You help users manage their Google Drive files. "
-            "You have the following capabilities:\n"
+            "You are the Drive Agent. You help users manage and inspect their Google Drive files.\n"
+            "Capabilities:\n"
             "1. drive_list - List files in the user's Google Drive\n"
-            "2. drive_upload - Upload text content as a file to Drive\n"
-            "3. drive_delete - Delete a file from Drive\n\n"
+            "2. drive_read_file - Read/view the contents of a file in Drive to answer questions or summarize it\n"
+            "3. drive_upload - Upload text content as a file to Drive\n"
+            "4. drive_delete - Delete a file from Drive\n\n"
             "To list files: call drive_list with the user's email/ID.\n"
+            "To read/summarize a file: call drive_read_file with the user's ID and file_id_or_name.\n"
             "To upload: call drive_upload with the user's ID, file name, and content.\n"
             "To delete: call drive_delete with the user's ID and file ID.\n\n"
+            "When the user asks what is inside a file or asks to summarize a Drive document, "
+            "use drive_read_file to get the document content and then provide a thorough, helpful response.\n\n"
             "If the user hasn't connected their Google Drive, guide them to "
             "Settings > Google Drive to sign in and grant access."
         ),
-        tools=[drive_list_tool, drive_upload_tool, drive_delete_tool],
-        description="Manages Google Drive files, uploads, downloads, and folder organization.",
+        tools=[drive_list_tool, drive_read_tool, drive_upload_tool, drive_delete_tool],
+        description="Manages Google Drive files: listing, reading file content, summarizing documents, uploading, and deleting.",
     )
 
 

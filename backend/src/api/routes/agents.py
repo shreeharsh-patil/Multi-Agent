@@ -32,7 +32,7 @@ def serialize_custom(agent: AgentConfig) -> dict:
 AGENT_METADATA = [
     {"id": "image", "name": "Image Generation Agent", "description": "Creates downloadable images and visual assets from natural-language prompts.", "icon": "Image", "capabilities": ["image_generation", "text_to_image", "visual_assets"]},
     {"id": "knowledge", "name": "Knowledge Agent", "description": "RAG-based document search, summaries, and citations using the knowledge base.", "icon": "BookOpen", "capabilities": ["rag", "document_search", "citations", "summaries"]},
-    {"id": "drive", "name": "Drive Agent", "description": "Google Drive file management, uploads, downloads, and folder organization.", "icon": "HardDrive", "capabilities": ["drive_list", "drive_upload", "drive_download", "folder_management"]},
+    {"id": "drive", "name": "Drive Agent", "description": "Google Drive file management, document reading, summarization, uploads, and downloads.", "icon": "HardDrive", "capabilities": ["drive_list", "drive_read", "drive_summarize", "drive_upload", "drive_download", "folder_management"]},
     {"id": "notes", "name": "Notes Agent", "description": "Structured notes, summaries, flashcards, and revision materials.", "icon": "StickyNote", "capabilities": ["note_taking", "summaries", "flashcards", "revision_notes"]},
     {"id": "quiz", "name": "Quiz Agent", "description": "MCQs, exams, and practice questions with answer keys and explanations.", "icon": "GraduationCap", "capabilities": ["mcq", "exam_generation", "practice_questions"]},
     {"id": "planner", "name": "Planner Agent", "description": "Study planning, task management, scheduling, and deadline tracking.", "icon": "Calendar", "capabilities": ["study_planning", "task_management", "scheduling"]},
@@ -43,6 +43,7 @@ AGENT_METADATA = [
     {"id": "tool", "name": "Tool Agent", "description": "Calculator, web search, and external API tool execution.", "icon": "Puzzle", "capabilities": ["calculator", "web_search", "api_integration"]},
     {"id": "data_analysis", "name": "Data Analysis Agent", "description": "Upload CSV/Excel files, generate charts, tables, and statistical insights from your data.", "icon": "BarChart2", "capabilities": ["csv_analysis", "excel_analysis", "statistical_summary", "chart_generation", "data_insights"]},
     {"id": "weather_news", "name": "Weather & News Agent", "description": "Real-time weather forecasts and live news headlines from global sources — no API key required.", "icon": "CloudSun", "capabilities": ["real_time_weather", "3_day_forecast", "live_news_headlines", "category_news", "ai_weather_insights"]},
+    {"id": "contacts", "name": "Contacts Agent", "description": "Lists, searches, and fetches Google Contacts details including emails and phone numbers.", "icon": "Users", "capabilities": ["list_contacts", "search_contacts", "contact_details"]},
 ]
 
 

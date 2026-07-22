@@ -44,9 +44,6 @@ export function TopBar() {
 
       {/* Right Side Header Items */}
       <div className="flex items-center gap-3 ml-auto">
-        <div className="hidden lg:block">
-          <ThemeToggle />
-        </div>
 
         <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-accent text-muted-foreground">
           <Bell className="h-4.5 w-4.5 stroke-[1.5] text-muted-foreground" />

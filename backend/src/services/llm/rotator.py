@@ -101,9 +101,6 @@ class RotatingProvider(BaseLLMProvider):
         Applies exponential backoff (1s, 2s, 4s) on 429/rate-limit errors
         and uses a token-bucket rate limiter to stay within free-tier limits.
         """
-        # Wait for a rate-limit token before making the call
-        await self._limiter.acquire()
-
         attempts = len(self.providers)
 
         async with self._lock:
@@ -140,15 +137,8 @@ class RotatingProvider(BaseLLMProvider):
                 logger.warning(
                     f"Provider rotation: {name} {kind} for '{method}'. "
                     f"Error: {err_msg}. "
-                    f"Trying next provider ({i + 1}/{attempts})..."
+                    f"Trying next provider immediately ({i + 1}/{attempts})..."
                 )
-
-                # Exponential backoff on rate-limit errors before
-                # trying the next provider, so free-tier APIs can recover.
-                if is_rate_limit:
-                    backoff = 2 ** i  # 1s, 2s, 4s, 8s...
-                    logger.info(f"Backing off {backoff}s before next provider...")
-                    await asyncio.sleep(backoff)
 
         logger.error(
             f"All {attempts} provider(s) failed for '{method}'. "
@@ -157,13 +147,7 @@ class RotatingProvider(BaseLLMProvider):
         raise last_error  # type: ignore[misc]
 
     async def _try_all_stream(self, method: str, **kwargs) -> AsyncGenerator[str, None]:
-        """Try each provider in order until one succeeds, yielding chunks.
-
-        Applies the same rate-limiter and backoff as _try_all, but yields
-        from the streaming generator of the successful provider.
-        """
-        await self._limiter.acquire()
-
+        """Try each provider in order until one succeeds, yielding chunks instantly."""
         attempts = len(self.providers)
 
         async with self._lock:
@@ -202,13 +186,8 @@ class RotatingProvider(BaseLLMProvider):
                 logger.warning(
                     f"Provider rotation: {name} {kind} for '{method}'. "
                     f"Error: {err_msg}. "
-                    f"Trying next provider ({i + 1}/{attempts})..."
+                    f"Trying next provider immediately ({i + 1}/{attempts})..."
                 )
-
-                if is_rate_limit:
-                    backoff = 2 ** i
-                    logger.info(f"Backing off {backoff}s before next provider...")
-                    await asyncio.sleep(backoff)
 
         logger.error(
             f"All {attempts} provider(s) failed for '{method}'. "

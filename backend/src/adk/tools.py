@@ -515,6 +515,122 @@ async def drive_delete(user_id: str, file_id: str) -> str:
         return f"Failed to delete Drive file: {e}"
 
 
+async def drive_read_file(user_id: str = "default", file_id_or_name: str = "") -> str:
+    """Read the full content of a Google Drive file by ID or name to inspect, analyze, or summarize it.
+
+    Args:
+        user_id: The user ID or email
+        file_id_or_name: The file ID, file name, or search keyword for the file in Drive
+
+    Returns:
+        Extracted text content of the file or message
+    """
+    from src.services.drive.service import drive_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return (
+                "You need to connect Google Drive first. "
+                "Please ask the user to go to Settings > Integrations > Google Drive "
+                "and sign in with Google to grant Drive access."
+            )
+
+        files = await drive_service.list_files(access_token=access_token, page_size=100)
+        if not files:
+            return "Your Google Drive is empty."
+
+        target_file = None
+        clean_target = (file_id_or_name or "").strip()
+
+        # 1. Exact ID match
+        for f in files:
+            if f.get("id") == clean_target:
+                target_file = f
+                break
+
+        # 2. Exact name match
+        if not target_file and clean_target:
+            for f in files:
+                if (f.get("name") or "").casefold() == clean_target.casefold():
+                    target_file = f
+                    break
+
+        # 3. Substring name match
+        if not target_file and clean_target:
+            for f in files:
+                if clean_target.casefold() in (f.get("name") or "").casefold():
+                    target_file = f
+                    break
+
+        if not target_file:
+            file_names = [f"• {f.get('name')} (ID: {f.get('id')})" for f in files[:20]]
+            return (
+                f"Could not find file matching '{file_id_or_name}' in Google Drive.\n"
+                f"Available files in Drive:\n" + "\n".join(file_names)
+            )
+
+        file_id = target_file.get("id")
+        file_name = target_file.get("name", "Untitled")
+
+        text, info = await drive_service.read_and_parse_file_content(access_token=access_token, file_id=file_id)
+
+        if not text.strip():
+            return f"File '{file_name}' was found, but no readable text content could be extracted."
+
+        MAX_CHARS = 30000
+        truncated = False
+        if len(text) > MAX_CHARS:
+            text = text[:MAX_CHARS]
+            truncated = True
+
+        result = (
+            f"=== Google Drive File Content ===\n"
+            f"Name: {file_name}\n"
+            f"ID: {file_id}\n"
+            f"Type: {info.get('mimeType', 'unknown')}\n\n"
+            f"--- Content ---\n"
+            f"{text}"
+        )
+        if truncated:
+            result += "\n\n[Note: Content was truncated to fit context limits.]"
+
+        return result
+    except Exception as e:
+        logger.error(f"Drive read tool error: {e}")
+        return f"Failed to read Drive file: {e}"
+
+
+async def contacts_list(user_id: str = "default", query: str = "") -> str:
+    """List or search Google Contacts for the authenticated user.
+
+    Args:
+        user_id: The user ID or email
+        query: Optional search keyword for contact name, email, or phone
+
+    Returns:
+        JSON string of matching contacts
+    """
+    from src.services.contacts.service import contacts_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return (
+                "You need to connect your Google account first. "
+                "Please go to Settings > Integrations and sign in with Google to grant contacts access."
+            )
+
+        contacts = await contacts_service.list_contacts(access_token=access_token, query=query)
+        if not contacts:
+            return f'No contacts found matching "{query}".' if query else "Your Google Contacts list is empty."
+
+        return json.dumps(contacts, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Contacts list tool error: {e}")
+        return f"Failed to list contacts: {e}"
+
+
 # Export all tools as FunctionTool instances for ADK agents
 knowledge_search_tool = FunctionTool(func=knowledge_search)
 memory_store_tool = FunctionTool(func=memory_store)
@@ -523,6 +639,8 @@ calculator_tool = FunctionTool(func=calculator)
 web_search_tool = FunctionTool(func=web_search)
 scrape_page_tool = FunctionTool(func=scrape_page)
 drive_list_tool = FunctionTool(func=drive_list)
+drive_read_tool = FunctionTool(func=drive_read_file)
 drive_upload_tool = FunctionTool(func=drive_upload)
 drive_delete_tool = FunctionTool(func=drive_delete)
+contacts_list_tool = FunctionTool(func=contacts_list)
 

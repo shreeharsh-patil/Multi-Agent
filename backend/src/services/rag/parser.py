@@ -31,14 +31,28 @@ class DocumentParser:
 
     def _parse_pdf(self, file_path: str) -> ParseResult:
         pages = []
-        with open(file_path, "rb") as f:
-            reader = PdfReader(f)
-            for page in reader.pages:
-                text = page.extract_text() or ""
-                pages.append(text)
+        try:
+            with open(file_path, "rb") as f:
+                reader = PdfReader(f)
+                for page in reader.pages:
+                    text = page.extract_text() or ""
+                    pages.append(text)
+        except Exception as e:
+            logger.warning(f"pypdf failed on {file_path}: {e}")
+
+        combined = "\n\n".join(pages).strip()
+        if not combined:
+            try:
+                import fitz
+                doc = fitz.open(file_path)
+                pages = [page.get_text() for page in doc]
+                doc.close()
+                combined = "\n\n".join(pages).strip()
+            except Exception as e2:
+                logger.warning(f"fitz fallback failed on {file_path}: {e2}")
 
         return ParseResult(
-            text="\n\n".join(pages),
+            text=combined,
             pages=pages,
         )
 

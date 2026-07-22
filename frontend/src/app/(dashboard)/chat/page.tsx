@@ -45,6 +45,11 @@ const agents = [
   { id: 'memory', name: 'Memory Agent' },
   { id: 'tool', name: 'Tool Agent' },
   { id: 'calendar', name: 'Calendar Agent' },
+  { id: 'data_analysis', name: 'Data Analysis Agent' },
+  { id: 'weather_news', name: 'Weather & News Agent' },
+  { id: 'gmail', name: 'Gmail Agent' },
+  { id: 'tasks', name: 'Tasks Agent' },
+  { id: 'youtube', name: 'YouTube Agent' },
 ]
 
 const teamworkAgents = agents.filter((agent) => agent.id !== 'auto' && agent.id !== 'tool')
