@@ -87,16 +87,17 @@ class AgentOrchestrator:
         agent_ids: list[str],
         conversation_id: Optional[str] = None,
     ) -> list[dict]:
-        results = []
-        for agent_id in agent_ids:
-            result = await self.process(
+        import asyncio
+        tasks = [
+            self.process(
                 user_input=user_input,
                 user_id=user_id,
                 agent_id=agent_id,
                 conversation_id=conversation_id,
             )
-            results.append(result)
-        return results
+            for agent_id in agent_ids
+        ]
+        return list(await asyncio.gather(*tasks))
 
     async def process_team(
         self,

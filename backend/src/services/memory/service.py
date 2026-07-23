@@ -75,9 +75,12 @@ class MemoryService:
 
     async def is_enabled(self, user_id: str) -> bool:
         if not PydanticObjectId.is_valid(user_id):
-            return False
-        user = await User.get(user_id)
-        return bool(user and getattr(user.preferences, "memory_enabled", True))
+            return True
+        try:
+            user = await User.get(user_id)
+            return getattr(user.preferences, "memory_enabled", True) if user else True
+        except Exception:
+            return True
 
     async def store(
         self,

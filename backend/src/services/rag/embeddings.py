@@ -47,8 +47,11 @@ class EmbeddingService:
         return [0.0] * settings.embedding_dimension
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        tasks = [self.embed_text(text) for text in texts]
-        return await asyncio.gather(*tasks)
+        sem = asyncio.Semaphore(10)
+        async def _embed_with_sem(t: str) -> list[float]:
+            async with sem:
+                return await self.embed_text(t)
+        return await asyncio.gather(*[_embed_with_sem(t) for t in texts])
 
 
 embedding_service = EmbeddingService()

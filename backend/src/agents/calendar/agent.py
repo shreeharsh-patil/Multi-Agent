@@ -144,20 +144,35 @@ class CalendarAgent(BaseAgent):
                     output=heading + "\n\n" + "\n\n".join(self._format_event(event) for event in events),
                 )
             if action == "create":
-                event = await calendar_service.create_event(token, command["summary"], command["start"], command["end"], command.get("description", ""), command.get("location", ""), command.get("attendees"), command.get("generate_meet_link", False), refresh_token=refresh_token)
-                msg = f"Created “{event['summary']}” from {event['start']} to {event['end']}.\n{event.get('link', '')}"
+                summary = command.get("summary") or "New Event"
+                start = command.get("start")
+                end = command.get("end")
+                if not start or not end:
+                    return AgentResult(success=False, output="Please specify a valid start and end time for the event.", error="missing_time")
+                event = await calendar_service.create_event(token, summary, start, end, command.get("description", ""), command.get("location", ""), command.get("attendees"), command.get("generate_meet_link", False), refresh_token=refresh_token)
+                msg = f"Created “{event.get('summary', summary)}” from {event.get('start', start)} to {event.get('end', end)}.\n{event.get('link', '')}"
                 if event.get("meeting_link"):
                     msg += f"\nMeeting Link: {event['meeting_link']}"
                 return AgentResult(success=True, output=msg)
             if action in {"update", "reschedule"}:
-                event = await calendar_service.update_event(token, command["event_id"], command.get("summary"), command.get("start"), command.get("end"), command.get("description"), command.get("location"), command.get("attendees"), refresh_token=refresh_token)
-                return AgentResult(success=True, output=f"Updated “{event['summary']}”.\n{event.get('link', '')}")
+                event_id = command.get("event_id")
+                if not event_id:
+                    return AgentResult(success=False, output="Event ID is required to update an event.", error="missing_event_id")
+                event = await calendar_service.update_event(token, event_id, command.get("summary"), command.get("start"), command.get("end"), command.get("description"), command.get("location"), command.get("attendees"), refresh_token=refresh_token)
+                return AgentResult(success=True, output=f"Updated “{event.get('summary', 'event')}”.\n{event.get('link', '')}")
             if action == "delete":
-                await calendar_service.delete_event(token, command["event_id"], refresh_token=refresh_token)
+                event_id = command.get("event_id")
+                if not event_id:
+                    return AgentResult(success=False, output="Event ID is required to cancel an event.", error="missing_event_id")
+                await calendar_service.delete_event(token, event_id, refresh_token=refresh_token)
                 return AgentResult(success=True, output="Event cancelled successfully.")
             if action == "availability":
-                availability = await calendar_service.find_availability(token, command["time_min"], command["time_max"], refresh_token=refresh_token)
-                return AgentResult(success=True, output="That window is available." if availability["available"] else f"You already have {len(availability['busy'])} busy block(s) in that window.")
+                time_min = command.get("time_min")
+                time_max = command.get("time_max")
+                if not time_min or not time_max:
+                    return AgentResult(success=False, output="Please specify time_min and time_max to check availability.", error="missing_time_range")
+                availability = await calendar_service.find_availability(token, time_min, time_max, refresh_token=refresh_token)
+                return AgentResult(success=True, output="That window is available." if availability.get("available") else f"You already have {len(availability.get('busy', []))} busy block(s) in that window.")
             return AgentResult(success=False, output="I can list, create, update, delete, or check availability for calendar events.", error="unsupported_calendar_action")
         except Exception as exc:
             return AgentResult(success=False, output=f"Calendar action failed: {exc}", error=str(exc))

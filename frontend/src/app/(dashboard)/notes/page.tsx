@@ -365,9 +365,11 @@ export default function NotesPage() {
         setFormTags(res.data.tags.join(', '))
       } else {
         setError(res.error || 'Failed to load the complete note')
+        setSelectedNote(null)
       }
     } catch {
       setError('Failed to load the complete note')
+      setSelectedNote(null)
     }
   }
 

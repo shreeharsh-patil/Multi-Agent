@@ -517,12 +517,17 @@ export default function WorkflowsPage() {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
+        const events = buffer.split(/\n\n|\r\n\r\n/)
+        buffer = events.pop() || ''
+        for (const eventChunk of events) {
+          const dataLine = eventChunk
+            .split(/\r?\n/)
+            .filter((l) => l.startsWith('data: '))
+            .map((l) => l.slice(6))
+            .join('\n')
+          if (!dataLine) continue
           try {
-            const evt = JSON.parse(line.slice(6))
+            const evt = JSON.parse(dataLine)
             if (evt.event === 'node_start') {
               setNodeStatuses(prev => ({ ...prev, [evt.nodeId]: 'running' }))
             } else if (evt.event === 'node_complete') {
@@ -535,7 +540,7 @@ export default function WorkflowsPage() {
               setRunOutput(evt.output ?? '')
               setRunStatus(evt.status === 'error' ? 'error' : 'complete')
             }
-          } catch { /* ignore partial JSON */ }
+          } catch { /* ignore invalid JSON */ }
         }
       }
     } catch (err) {

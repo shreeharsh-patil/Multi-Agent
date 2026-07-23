@@ -24,6 +24,7 @@ class QdrantVectorStore(VectorStore):
             kwargs["api_key"] = settings.qdrant_api_key
             kwargs["https"] = True
         self.client = QdrantClient(**kwargs)
+        self._known_collections: set[str] = set()
         logger.info(f"Qdrant initialized at {settings.qdrant_host}:{settings.qdrant_port}")
 
     async def store_embeddings(
@@ -96,6 +97,8 @@ class QdrantVectorStore(VectorStore):
         logger.info(f"Deleted {len(ids)} from '{collection}'")
 
     async def create_collection(self, collection: str) -> None:
+        if collection in self._known_collections:
+            return
         collections = await asyncio.to_thread(self.client.get_collections)
         if not any(c.name == collection for c in collections.collections):
             await asyncio.to_thread(
@@ -104,3 +107,4 @@ class QdrantVectorStore(VectorStore):
                 vectors_config=VectorParams(size=settings.embedding_dimension, distance=Distance.COSINE),
             )
             logger.info(f"Created collection '{collection}'")
+        self._known_collections.add(collection)

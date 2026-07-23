@@ -85,7 +85,8 @@ function retryDelay(attempt: number): number {
  * HTTP 4xx/5xx responses are NOT retried — those are application errors.
  */
 function isRetryableNetworkError(error: unknown): boolean {
-  if (!(error instanceof TypeError)) return false
+  if (error instanceof DOMException && error.name === 'AbortError') return true
+  if (!(error instanceof Error)) return false
   const msg = error.message.toLowerCase()
   return (
     msg.includes('networkerror') ||
@@ -141,6 +142,19 @@ async function fetchApi<T>(
         ...options,
         headers: { ...headers, ...options?.headers },
       })
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        let errorMsg = `HTTP ${res.status}: ${res.statusText}`
+        try {
+          const parsed = JSON.parse(text)
+          errorMsg = parsed.error || parsed.detail || errorMsg
+        } catch {
+          if (text) errorMsg = text.slice(0, 150)
+        }
+        return { success: false, error: errorMsg }
+      }
+
       return await res.json()
     } catch (error) {
       lastError = error

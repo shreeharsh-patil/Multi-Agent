@@ -269,6 +269,7 @@ function ChatContent() {
 
     setSpeakingId(id)
 
+    let audioUrl: string | null = null
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/voice/synthesize`,
@@ -286,30 +287,32 @@ function ChatContent() {
         try {
           const err = await response.json()
           if (err.detail) detail = err.detail
-          else if (err.error) detail = err.error
         } catch {}
         throw new Error(detail)
       }
 
       const blob = await response.blob()
-      const audioUrl = URL.createObjectURL(blob)
+      audioUrl = URL.createObjectURL(blob)
       const audio = new Audio(audioUrl)
       activeAudioRef.current = audio
       
       audio.onended = () => {
         setSpeakingId(null)
         activeAudioRef.current = null
-        URL.revokeObjectURL(audioUrl)
+        if (audioUrl) URL.revokeObjectURL(audioUrl)
       }
       
       audio.onerror = () => {
         setSpeakingId(null)
         activeAudioRef.current = null
-        URL.revokeObjectURL(audioUrl)
+        if (audioUrl) URL.revokeObjectURL(audioUrl)
       }
       
       await audio.play()
     } catch (error) {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
       console.error('Text-to-speech error:', error)
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(toSpeechText(content))
@@ -683,10 +686,6 @@ function ChatContent() {
     return () => window.removeEventListener('workspace-changed', handleWorkspaceChange)
   }, [])
 
-  useEffect(() => {
-    const event = new CustomEvent('workspace-changed', { detail: selectedWorkspace })
-    window.dispatchEvent(event)
-  }, [selectedWorkspace])
 
   useEffect(() => {
     fetchConversations()
@@ -831,6 +830,7 @@ function ChatContent() {
           documentId: updated.documentId,
         })
       }
+      attachments.forEach((att) => { if (att.previewUrl) URL.revokeObjectURL(att.previewUrl) })
       setAttachments([])
 
       const userMsg = {
@@ -1171,7 +1171,11 @@ function ChatContent() {
   }, [])
 
   const removeAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id))
+    setAttachments((prev) => {
+      const att = prev.find((a) => a.id === id)
+      if (att?.previewUrl) URL.revokeObjectURL(att.previewUrl)
+      return prev.filter((a) => a.id !== id)
+    })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

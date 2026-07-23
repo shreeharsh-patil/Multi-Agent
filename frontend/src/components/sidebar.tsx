@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -167,11 +167,11 @@ export function Sidebar() {
   }, [toggle])
 
   // Group conversations by date
-  const groupConversations = () => {
-    const today: SidebarConversation[] = []
-    const yesterday: SidebarConversation[] = []
-    const previous7Days: SidebarConversation[] = []
-    const older: SidebarConversation[] = []
+  const { today, yesterday, previous7Days, older } = useMemo(() => {
+    const todayList: SidebarConversation[] = []
+    const yesterdayList: SidebarConversation[] = []
+    const previous7DaysList: SidebarConversation[] = []
+    const olderList: SidebarConversation[] = []
 
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -188,20 +188,23 @@ export function Sidebar() {
     visible.forEach((conv) => {
       const date = new Date(conv.createdAt)
       if (date >= todayStart) {
-        today.push(conv)
+        todayList.push(conv)
       } else if (date >= yesterdayStart) {
-        yesterday.push(conv)
+        yesterdayList.push(conv)
       } else if (date >= sevenDaysAgo) {
-        previous7Days.push(conv)
+        previous7DaysList.push(conv)
       } else {
-        older.push(conv)
+        olderList.push(conv)
       }
     })
 
-    return { today, yesterday, previous7Days, older }
-  }
-
-  const { today, yesterday, previous7Days, older } = groupConversations()
+    return {
+      today: todayList,
+      yesterday: yesterdayList,
+      previous7Days: previous7DaysList,
+      older: olderList,
+    }
+  }, [conversations, conversationSearch])
 
   const handleNewChat = () => {
     if (isChatRoute) {
