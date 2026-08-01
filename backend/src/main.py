@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
         try:
             is_ssl = "mongodb+srv://" in uri or "ssl=true" in uri.lower() or "tls=true" in uri.lower()
             kwargs = {
-                "serverSelectionTimeoutMS": 5000,
+                "serverSelectionTimeoutMS": 10000,
             }
             if is_ssl:
                 kwargs["tlsAllowInvalidCertificates"] = True
@@ -47,54 +47,62 @@ async def lifespan(app: FastAPI):
             mongo_client = client
             # Monkeypatch append_metadata to prevent Beanie 1.x / PyMongo 4+ init errors
             mongo_client.append_metadata = lambda *args, **kwargs: None
-            logger.info(f"MongoDB connected")
+            logger.info(f"MongoDB connected successfully via {uri[:25]}...")
             break
         except Exception as e:
-            logger.warning(f"MongoDB attempt failed: {e}")
+            logger.warning(f"MongoDB connection attempt failed ({uri[:25]}...): {e}")
 
-    if mongo_client is None:
-        raise RuntimeError(
-            "Could not connect to MongoDB. If you are deploying to Render/Cloud, you MUST "
-            "whitelist IP '0.0.0.0/0' (Allow access from anywhere) in your MongoDB Atlas "
-            "Network Access settings, because Render uses dynamic outgoing IP addresses."
+    if mongo_client is not None:
+        from src.models.user import User
+        from src.models.document import Document, DocumentChunk
+        from src.models.conversation import Conversation
+        from src.models.memory import MemoryItem
+        from src.models.agent import AgentConfig, AgentTask, ActivityLog
+        from src.models.note import Note
+        from src.models.research import ResearchReport
+        from src.models.planner import PlannerPlan
+        from src.models.quiz import QuizSession
+        from src.models.workspace import Workspace, ChatShare
+        from src.models.search_history import SearchHistory
+        from src.models.flashcard import Flashcard, FlashcardDeck, FlashcardReview
+        from src.models.prompt_template import PromptTemplate
+        from src.models.workflow import WorkflowDAG, WorkflowRun
+
+        try:
+            await init_beanie(
+                database=mongo_client[settings.mongodb_db_name],
+                document_models=[
+                    User, Document, DocumentChunk, Conversation, MemoryItem,
+                    AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
+                    PlannerPlan, QuizSession, Workspace, ChatShare, SearchHistory,
+                    FlashcardDeck, Flashcard, FlashcardReview, PromptTemplate,
+                    WorkflowDAG, WorkflowRun,
+                ],
+            )
+            logger.info("Beanie models initialized")
+        except Exception as e:
+            logger.error(f"Beanie initialization failed: {e}")
+    else:
+        logger.error(
+            "CRITICAL: MongoDB connection failed on startup. Please ensure MongoDB Atlas Network Access "
+            "has '0.0.0.0/0' whitelisted for Render outgoing IP addresses."
         )
 
-    from src.models.user import User
-    from src.models.document import Document, DocumentChunk
-    from src.models.conversation import Conversation
-    from src.models.memory import MemoryItem
-    from src.models.agent import AgentConfig, AgentTask, ActivityLog
-    from src.models.note import Note
-    from src.models.research import ResearchReport
-    from src.models.planner import PlannerPlan
-    from src.models.quiz import QuizSession
-    from src.models.workspace import Workspace, ChatShare
-    from src.models.search_history import SearchHistory
-    from src.models.flashcard import Flashcard, FlashcardDeck, FlashcardReview
-    from src.models.prompt_template import PromptTemplate
-    from src.models.workflow import WorkflowDAG, WorkflowRun
-
-    await init_beanie(
-        database=mongo_client[settings.mongodb_db_name],
-        document_models=[
-            User, Document, DocumentChunk, Conversation, MemoryItem,
-            AgentConfig, AgentTask, ActivityLog, Note, ResearchReport,
-            PlannerPlan, QuizSession, Workspace, ChatShare, SearchHistory,
-            FlashcardDeck, Flashcard, FlashcardReview, PromptTemplate,
-            WorkflowDAG, WorkflowRun,
-        ],
-    )
-    logger.info("Beanie models initialized")
-
     # --- Initialize custom agents (fallback) ---
-    from src.agents.init_agents import initialize_agents
-    initialize_agents()
-    logger.info("Custom agents initialized")
+    try:
+        from src.agents.init_agents import initialize_agents
+        initialize_agents()
+        logger.info("Custom agents initialized")
+    except Exception as e:
+        logger.warning(f"Custom agents initialization warning: {e}")
 
     # --- Initialize ADK orchestrator eagerly ---
-    from src.adk.runner import get_orchestrator
-    get_orchestrator()
-    logger.info("ADK multi-agent system initialized")
+    try:
+        from src.adk.runner import get_orchestrator
+        get_orchestrator()
+        logger.info("ADK multi-agent system initialized")
+    except Exception as e:
+        logger.warning(f"ADK orchestrator initialization warning: {e}")
 
     yield
 

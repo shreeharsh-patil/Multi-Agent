@@ -36,10 +36,13 @@ async def enrich_pdf_with_ocr(file_path: str, parsed: ParseResult) -> tuple[Pars
             pixmap = await asyncio.to_thread(page.get_pixmap, matrix=fitz.Matrix(1.5, 1.5), alpha=False)
             image_bytes = await asyncio.to_thread(pixmap.tobytes, "png")
             prompt = (
-                "Transcribe and describe this document page for semantic search. "
-                "Extract all readable text exactly, including handwritten text, equations, labels, "
-                "table values, diagram relationships, and meaningful visual context. "
-                "Return clean plain text with short headings where useful. Do not mention the OCR process."
+                "Transcribe and analyze this document page for scientific search and Q&A. "
+                "Extract all readable text exactly, including handwritten text, forms, labels, equations, and tables. "
+                "MANDATORY FORMATTING RULES:\n"
+                "1. Format all mathematical equations, formulas, fractions, matrices, and variables in standard LaTeX ($...$ for inline, $$...$$ for display math).\n"
+                "2. Format all tables as clean, valid Markdown tables (| Header 1 | Header 2 |).\n"
+                "3. Use Markdown headings (##, ###), bullet lists, and bold text for visual structure.\n"
+                "Do not mention the OCR process."
             )
             try:
                 text = await llm_service.generate_multimodal(prompt, image_bytes, "image/png", max_output_tokens=4096)
@@ -61,11 +64,13 @@ async def enrich_pdf_with_ocr(file_path: str, parsed: ParseResult) -> tuple[Pars
 async def analyze_image(image_bytes: bytes, mime_type: str, file_name: str) -> str:
     """Extract readable text and useful visual context from an image."""
     prompt = (
-        f"Analyze the uploaded image named {file_name!r}. Extract all readable text exactly, "
-        "including handwriting, labels, tables, equations, and UI text. Then describe the "
-        "important objects, layout, relationships, and any visible issue relevant to a user asking "
-        "questions about the image. Return concise plain text with 'Extracted text' and "
-        "'Visual analysis' sections. Do not mention the OCR process."
+        f"Analyze the uploaded image or document named {file_name!r}. Extract all readable text exactly, "
+        "including handwriting, labels, receipts, invoices, forms, tables, and equations. "
+        "MANDATORY FORMATTING RULES:\n"
+        "1. Format all mathematical formulas and variables in standard LaTeX ($...$ for inline math, $$...$$ for display math).\n"
+        "2. Format all tables as clean, valid Markdown tables (| Col 1 | Col 2 |).\n"
+        "3. Return clean Markdown with '### Extracted Content' and '### Visual & Layout Analysis' sections. "
+        "Do not mention the OCR process."
     )
     try:
         res = await llm_service.generate_multimodal(
