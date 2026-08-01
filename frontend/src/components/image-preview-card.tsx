@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { Download, Maximize2, X } from 'lucide-react'
+import { downloadSecureFile } from '@/lib/download'
 
 interface ImagePreviewCardProps {
   src: string
@@ -11,6 +12,12 @@ interface ImagePreviewCardProps {
 export function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewCardProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    downloadSecureFile(src, 'generated-image.png')
+  }
 
   return (
     <>
@@ -43,17 +50,14 @@ export function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewC
             <Maximize2 className="h-3.5 w-3.5" />
             <span>Expand</span>
           </button>
-          <a
-            href={src}
-            download="generated-image.png"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={handleDownload}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium shadow-sm hover:bg-primary/90 transition-colors cursor-pointer"
             title="Download Image"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Download</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -69,16 +73,13 @@ export function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewC
           >
             {/* Top Modal Toolbar */}
             <div className="absolute top-[-44px] right-0 flex items-center gap-2">
-              <a
-                href={src}
-                download="generated-image.png"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={handleDownload}
                 className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors cursor-pointer"
                 title="Download"
               >
                 <Download className="h-5 w-5" />
-              </a>
+              </button>
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors cursor-pointer"
