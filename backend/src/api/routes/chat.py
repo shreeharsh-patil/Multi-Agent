@@ -253,6 +253,31 @@ async def can_access_conversation(conv: Conversation, user_id: str) -> bool:
     return bool(workspace and (workspace.user_id == user_id or user_id in workspace.member_ids))
 
 
+async def _generate_chat_topic(user_message: str, agent_message: str) -> str:
+    """Use LLM to generate a clean, concise, 3-6 word topic title for a conversation."""
+    try:
+        from src.services.llm import get_llm_provider
+        llm = get_llm_provider()
+        topic = await llm.generate(
+            prompt=(
+                "You are a topic title generator for an AI chat workspace. "
+                "Analyze the user prompt and generate a concise, professional title-case topic title "
+                "(3 to 6 words max). Output ONLY the title text itself with no quotes, markdown, or punctuation.\n\n"
+                f"User Prompt: {user_message[:400]}\nAssistant Response: {agent_message[:200]}"
+            ),
+            temperature=0.3,
+            max_output_tokens=25,
+        )
+        clean_topic = topic.strip().strip('"\'`').strip()
+        if clean_topic and len(clean_topic) <= 90:
+            return clean_topic
+    except Exception as e:
+        logger.warning(f"Could not generate LLM topic title: {e}")
+
+    fallback = user_message.strip()
+    return fallback[:60] + ("..." if len(fallback) > 60 else "")
+
+
 async def _save_messages(
     conv_id: str,
     user_id: str,
@@ -263,7 +288,7 @@ async def _save_messages(
     attachments: Optional[list[dict]] = None,
     workspace_id: Optional[str] = None,
 ):
-    """Save user and assistant messages to the Conversation in MongoDB."""
+    """Save user and assistant messages to the Conversation in MongoDB with LLM topic generation."""
     try:
         user_metadata = {}
         if attachments:
@@ -288,9 +313,11 @@ async def _save_messages(
             conv.updated_at = now
             if workspace_id:
                 conv.workspace_id = workspace_id
+            if is_new or conv.title in ["New Conversation", "New Chat"] or len(conv.messages) <= 2:
+                conv.title = await _generate_chat_topic(user_message, agent_message)
             await conv.save()
         else:
-            title = user_message[:80] + ("..." if len(user_message) > 80 else "")
+            title = await _generate_chat_topic(user_message, agent_message)
             conv = Conversation(
                 id=conv_id,
                 user_id=user_id,
@@ -324,8 +351,13 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
     """List all conversations for a user."""
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or user_id
+    user_email = auth_user.get("email") if auth_user else None
 
-    owned = await Conversation.find(Conversation.user_id == resolved_user_id).project({"messages": {"$slice": -1}}).to_list()
+    query = {"$or": [{"user_id": resolved_user_id}]}
+    if user_email:
+        query["$or"].append({"user_id": user_email})
+
+    owned = await Conversation.find(query).project({"messages": {"$slice": -1}}).to_list()
     workspace_ids = [str(w.id) for w in await Workspace.find({"member_ids": resolved_user_id}).to_list()]
     shared = await Conversation.find({"workspace_id": {"$in": workspace_ids}}).project({"messages": {"$slice": -1}}).to_list() if workspace_ids else []
     convs = sorted({str(c.id): c for c in owned + shared}.values(), key=lambda c: c.updated_at, reverse=True)

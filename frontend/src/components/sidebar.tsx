@@ -32,6 +32,8 @@ import {
   LibraryBig,
   BarChart2,
   CloudSun,
+  Users,
+  Radio,
   X,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -40,6 +42,8 @@ import { openCommandPalette } from '@/components/command-palette'
 // Map existing functional routes to standard names from prompt style
 const navigation = [
   { name: 'Workspace', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Agent Swarm', href: '/swarm', icon: Users },
+  { name: 'Voice Agent', href: '/voice-agent', icon: Radio },
   { name: 'Search', href: '/research', icon: Search },
   { name: 'Library', href: '/documents', icon: BookOpen },
   { name: 'Drive', href: '/drive', icon: HardDrive },

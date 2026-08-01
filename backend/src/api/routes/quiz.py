@@ -169,7 +169,13 @@ async def generate_quiz(body: GenerateRequest, http_request: Request) -> Generat
     # Build domain model objects
     questions: list[QuizQuestion] = []
     for q in questions_data:
-        options = [QuestionOption(label=o["label"], text=o["text"]) for o in q.get("options", [])]
+        if not isinstance(q, dict) or not q.get("question"):
+            continue
+        options = [
+            QuestionOption(label=o.get("label", ""), text=o.get("text", ""))
+            for o in q.get("options", [])
+            if isinstance(o, dict) and o.get("label") and o.get("text")
+        ]
         questions.append(
             QuizQuestion(
                 question=q["question"],

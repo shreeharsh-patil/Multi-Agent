@@ -18,12 +18,6 @@ function AuthTokenBridge() {
     if (status !== 'authenticated' || !session?.user?.email) return
     if (exchanged.current) return
 
-    const existing = getAccessToken()
-    if (existing) {
-      exchanged.current = true
-      return
-    }
-
     const exchange = async () => {
       try {
         const res = await api.auth.login({
@@ -36,10 +30,18 @@ function AuthTokenBridge() {
         if (res.success && res.data?.access_token) {
           setAccessToken(res.data.access_token)
           exchanged.current = true
+          window.dispatchEvent(new Event('refresh-conversations-list'))
         }
       } catch {
         // Silently fail
       }
+    }
+
+    const existing = getAccessToken()
+    if (existing) {
+      exchanged.current = true
+      window.dispatchEvent(new Event('refresh-conversations-list'))
+      return
     }
 
     exchange()

@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useSidebar } from '@/context/sidebar-context'
+import { clearAccessToken } from '@/lib/auth-store'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -85,7 +86,10 @@ export function TopBar() {
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem 
               className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center px-3 py-1.5 text-xs font-medium"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={() => {
+                clearAccessToken()
+                signOut({ callbackUrl: '/login' })
+              }}
             >
               <LogOut className="mr-2 h-4 w-4 stroke-[1.5]" />
               Sign out

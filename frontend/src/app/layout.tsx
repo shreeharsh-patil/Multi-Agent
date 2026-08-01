@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Cormorant_Garamond, JetBrains_Mono, IBM_Plex_Sans, Courier_Prime } from 'next/font/google'
 import './globals.css'
+import 'katex/dist/katex.min.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/components/session-provider'
 import { Toaster } from 'sonner'

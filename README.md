@@ -48,6 +48,7 @@ graph TD
         F["🌐 Deep Research Agent"]
         G["💻 Code Sandbox Agent"]
         H["📂 Workspace & Drive Agent"]
+        S["🐝 Multi-Agent Swarm & Debate Engine"]
     end
 
     subgraph Infrastructure & Datastore Mesh
@@ -215,6 +216,21 @@ Access UI at: **http://localhost:3000** | Interactive API Docs: **http://localho
 ```bash
 docker compose up --build -d
 ```
+
+### 🧪 Automated Testing & Continuous Integration
+
+Run backend unit and integration test suite:
+
+```bash
+cd backend
+pytest -v
+```
+
+The project includes an automated **GitHub Actions CI Pipeline** (`.github/workflows/ci.yml`) that validates every commit against:
+- Backend FastAPI route health check and auth envelope responses
+- `AgentRegistry` and custom `BaseAgent` manifest registrations
+- `AgentRouter` natural language intent evaluation engine
+- Next.js 15 frontend type checking and production build bundle compilation
 
 ---
 

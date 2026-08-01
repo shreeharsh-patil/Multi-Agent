@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { preprocessLaTeX } from '@/lib/latex'
 import { Brain, Check, ChevronRight, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react'
 import { api, type FlashcardDeckInfo, type FlashcardInfo } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -145,7 +148,7 @@ export default function FlashcardsPage() {
                 <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground"><span>{selectedDeck.name}</span><span>{due.length} due</span></div>
                 <div className="h-1 overflow-hidden bg-secondary"><div className="h-full bg-[#1f8a65] transition-all" style={{ width: `${Math.max(6, 100 / Math.max(due.length, 1))}%` }} /></div>
                 <div className="grid min-h-[340px] place-items-center border-x border-b border-border bg-background p-8 text-center">
-                  <div className="max-w-2xl"><div className="prose prose-lg max-w-none prose-headings:font-semibold prose-headings:tracking-normal prose-strong:font-bold prose-em:italic"><ReactMarkdown remarkPlugins={[remarkGfm]}>{reviewCard.front}</ReactMarkdown></div>{revealed ? <div className="prose mt-8 max-w-none border-t border-border pt-7 text-muted-foreground prose-headings:font-semibold prose-headings:tracking-normal prose-strong:font-bold prose-em:italic"><ReactMarkdown remarkPlugins={[remarkGfm]}>{reviewCard.back}</ReactMarkdown></div> : null}</div>
+                  <div className="max-w-2xl"><div className="prose prose-lg max-w-none prose-headings:font-semibold prose-headings:tracking-normal prose-strong:font-bold prose-em:italic"><ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]} rehypePlugins={[rehypeKatex]}>{preprocessLaTeX(reviewCard.front)}</ReactMarkdown></div>{revealed ? <div className="prose mt-8 max-w-none border-t border-border pt-7 text-muted-foreground prose-headings:font-semibold prose-headings:tracking-normal prose-strong:font-bold prose-em:italic"><ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]} rehypePlugins={[rehypeKatex]}>{preprocessLaTeX(reviewCard.back)}</ReactMarkdown></div> : null}</div>
                 </div>
                 {!revealed ? <Button className="mt-4 h-11" onClick={() => setRevealed(true)}>Show answer</Button> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{ratings.map((rating) => <button key={rating.id} disabled={busy} onClick={() => review(rating.id)} className={`h-14 rounded-[6px] border bg-card text-sm font-medium transition-colors disabled:opacity-50 ${rating.className}`}><span className="block">{rating.label}</span><span className="text-[10px] font-normal opacity-70">{rating.detail}</span></button>)}</div>}
               </> : <div className="grid place-items-center py-24 text-center"><Check className="mb-3 h-8 w-8 text-[#1f8a65]" /><p className="font-medium">Review complete</p><p className="mt-1 text-sm text-muted-foreground">Nothing else is due in this deck.</p><Button variant="outline" className="mt-5" onClick={() => setView('cards')}>Back to cards</Button></div>}

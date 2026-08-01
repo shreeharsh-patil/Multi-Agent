@@ -33,7 +33,6 @@
   }
 
   .dark {
-    /* Keep the light cream mode theme consistent since we are forced light theme */
     --background: 45 14% 96%;
     --foreground: 53 12% 13%;
     --card: 0 0% 100%;
@@ -63,8 +62,14 @@
 }
 
 @layer base {
+  html, body {
+    max-width: 100vw;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
   * {
     @apply border-border transition-colors duration-150;
+    box-sizing: border-box;
   }
   body, button, input, optgroup, select, textarea {
     @apply font-sans;
@@ -72,12 +77,22 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-[#f54e00] selection:text-white;
   }
-  /* Dashboard headings */
+  /* Word breaking & text safety */
+  p, span, h1, h2, h3, h4, h5, h6, li, td, th {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  /* Headings */
   h1, h2, h3 {
     @apply font-sans font-normal tracking-[-0.03em] text-[#26251e] leading-tight;
   }
   h4, h5, h6 {
     @apply font-sans font-medium text-[#26251e];
+  }
+  /* Responsive images, SVGs, and Media */
+  img, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
   }
   svg text {
     font-family: var(--font-sans), system-ui, sans-serif;
@@ -98,11 +113,31 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     @apply bg-[#e6e5e0] rounded-full hover:bg-[#f54e00]/30 transition-colors;
   }
+  
+  /* Table & Formula Overflow Containment */
+  .table-responsive {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .math-display, .katex-display, .math-block {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+  }
+  .code-block-wrapper {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
 }
 
 /* ── Landing Page Animations ────────────────────────────────────────────── */
 
-/* Glitch Animation */
 @keyframes glitch-shift {
   0%, 100% { transform: translate(0); }
   33% { transform: translate(-2px, 2px); }
@@ -116,7 +151,6 @@
   animation: glitch-shift 5s infinite ease-in-out, glitch-opacity 3s infinite ease-in-out;
 }
 
-/* Word reveal animation */
 @keyframes word-reveal {
   0% { opacity: 0; filter: blur(24px); transform: translateY(24px); }
   60% { filter: blur(3px); opacity: 0.85; }
@@ -127,18 +161,15 @@
   animation: word-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
 }
 
-/* Fade up for sections */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Smooth scrolling on landing */
 html {
   scroll-behavior: smooth;
 }
 
-/* Marquee animations */
 @keyframes marqueeLeft {
   from { transform: translateX(0); }
   to   { transform: translateX(-33.333%); }
@@ -148,12 +179,31 @@ html {
   to   { transform: translateX(0); }
 }
 
-/* Ping animation (softer than tailwind's built-in) */
 @keyframes ping-slow {
   75%, 100% { transform: scale(2.2); opacity: 0; }
 }
 
-/* Spinner for CI status */
 @keyframes spin-slow {
   to { transform: rotate(360deg); }
+}
+
+/* KaTeX Mathematical Expression Styling */
+.katex-display {
+  display: block;
+  text-align: center;
+  margin: 0.75em 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0.75rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 0.5rem;
+}
+.katex {
+  font-size: 1.08em;
+  text-indent: 0;
+}
+.katex-display > .katex {
+  display: inline-block;
+  text-align: initial;
 }

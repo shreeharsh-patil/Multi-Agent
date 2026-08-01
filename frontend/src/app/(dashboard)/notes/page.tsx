@@ -10,6 +10,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { useSession } from 'next-auth/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { preprocessLaTeX } from '@/lib/latex'
 import * as Y from 'yjs'
 import { getAccessToken } from '@/lib/auth-store'
 import {
@@ -796,7 +799,7 @@ export default function NotesPage() {
                       </div>
                       <ScrollArea className="h-[400px]">
                         <div className="prose prose-sm max-w-none pr-2 text-foreground prose-headings:font-semibold prose-headings:tracking-normal prose-strong:font-bold prose-em:italic">
-                          {formContent ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{formContent}</ReactMarkdown> : 'No content'}
+                          {formContent ? <ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]} rehypePlugins={[rehypeKatex]}>{preprocessLaTeX(formContent)}</ReactMarkdown> : 'No content'}
                         </div>
                       </ScrollArea>
                       <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border text-[10px] text-muted-foreground font-sans">

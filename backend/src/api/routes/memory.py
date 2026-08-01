@@ -3,6 +3,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from beanie import PydanticObjectId
+
 from src.api.middleware import resolve_user_id
 from src.models.user import User
 from src.services.memory.service import PROFILE_CATEGORIES, memory_service
@@ -56,6 +58,8 @@ async def memory_dashboard(
     request: Request, category: Optional[str] = None, query: Optional[str] = None
 ) -> dict:
     user_id = resolve_user_id(request)
+    if not PydanticObjectId.is_valid(user_id):
+        raise HTTPException(404, "User not found")
     user = await User.get(user_id)
     if not user:
         raise HTTPException(404, "User not found")
@@ -115,7 +119,10 @@ async def clear_memories(request: Request) -> dict:
 
 @router.put("/settings/preferences")
 async def update_memory_settings(body: MemorySettingsRequest, request: Request) -> dict:
-    user = await User.get(resolve_user_id(request))
+    user_id = resolve_user_id(request)
+    if not PydanticObjectId.is_valid(user_id):
+        raise HTTPException(404, "User not found")
+    user = await User.get(user_id)
     if not user:
         raise HTTPException(404, "User not found")
     if body.enabled is not None:

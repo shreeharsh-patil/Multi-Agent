@@ -185,7 +185,7 @@ async def _fetch_news(category: str) -> list[dict]:
             if articles:
                 return articles
         except Exception as exc:
-            logger.warning("RSS fetch/parse failed for %s at %url: %s", category, url, exc)
+            logger.warning("RSS fetch/parse failed for %s at %s: %s", category, url, exc)
 
     return []
 

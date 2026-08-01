@@ -17,7 +17,10 @@ import { CodePreviewPanel } from '@/components/code-preview-panel'
 import { FileCode, Globe, Play, Code as CodeIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
+import { preprocessLaTeX } from '@/lib/latex'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -1546,8 +1549,8 @@ function ChatContent() {
                           ) : (
                             <div className="text-xs sm:text-sm leading-relaxed [&_*]:break-words">
                               <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeRaw]}
+                                remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
+                                rehypePlugins={[rehypeKatex, rehypeRaw]}
                                 components={{
                                   a: ({ href, children }) => (
                                     <a href={resolveApiUrl(href)} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
@@ -1586,11 +1589,25 @@ function ChatContent() {
                                   h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2.5 text-foreground">{children}</h3>,
                                   blockquote: ({ children }) => <blockquote className="border-l-2 border-primary/30 pl-3 py-0.5 mb-2 text-muted-foreground italic">{children}</blockquote>,
                                   hr: () => <hr className="my-3 border-border" />,
-                                  table: ({ children }) => <div className="overflow-x-auto mb-2"><table className="min-w-full border-collapse border border-border/40 text-xs">{children}</table></div>,
-                                  th: ({ children }) => <th className="border border-border/40 px-3 py-1.5 bg-muted/30 font-semibold text-left">{children}</th>,
-                                  td: ({ children }) => <td className="border border-border/40 px-3 py-1.5">{children}</td>,
+                                  table: ({ children }) => (
+                                    <div className="table-responsive my-3 border border-border rounded-lg overflow-x-auto max-w-full">
+                                      <table className="w-full text-left border-collapse text-xs sm:text-sm">{children}</table>
+                                    </div>
+                                  ),
+                                  div: ({ className, children, ...props }) => {
+                                    if (className?.includes('math') || className?.includes('katex-display')) {
+                                      return (
+                                        <div className="math-display my-3 max-w-full overflow-x-auto scrollbar-thin text-center py-2 bg-muted/10 rounded-lg" {...props}>
+                                          {children}
+                                        </div>
+                                      )
+                                    }
+                                    return <div className={className} {...props}>{children}</div>
+                                  },
                                 }}
-                              >{msg.content}</ReactMarkdown>
+                              >
+                                {preprocessLaTeX(msg.content)}
+                              </ReactMarkdown>
                             </div>
                           )}
                         </div>

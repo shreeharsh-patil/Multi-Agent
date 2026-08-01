@@ -147,14 +147,15 @@ async def jwt_auth_middleware(request: Request, call_next):
             request.state.user = {"sub": user_id, "email": "dev@localhost", "name": "Developer"}
 
             google_token = request.headers.get("X-Google-Access-Token") or request.headers.get("X-Drive-Access-Token")
-            if google_token and PydanticObjectId.is_valid(user_id):
+            if google_token:
                 try:
                     from beanie import PydanticObjectId
                     from src.models.user import User
-                    user = await User.get(user_id)
-                    if user and user.access_token != google_token:
-                        user.access_token = google_token
-                        await user.save()
+                    if PydanticObjectId.is_valid(user_id):
+                        user = await User.get(user_id)
+                        if user and user.access_token != google_token:
+                            user.access_token = google_token
+                            await user.save()
                 except Exception:
                     pass
 
