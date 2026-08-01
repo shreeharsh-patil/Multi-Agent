@@ -1,11 +1,12 @@
 /**
- * Robust LaTeX preprocessor for Markdown rendering.
+ * Production-ready LaTeX and Markdown preprocessor.
  *
  * Handles:
  * 1. Preserving code blocks (``` ... ``` and ` ... `) untouched.
- * 2. Unescaping double backslashes before LaTeX syntax (e.g. \\tau -> \tau, \\mathbf -> \mathbf, \\frac -> \frac).
+ * 2. Unescaping double backslashes before LaTeX syntax (e.g. \\tau -> \tau, \\frac -> \frac, \\begin -> \begin).
  * 3. Normalizing LaTeX delimiters: \( ... \) to $ ... $, \[ ... \] to $$ ... $$.
- * 4. Ensuring block equations ($$ ... $$) are surrounded by empty lines so remark-math parses them reliably.
+ * 4. Auto-wrapping unwrapped \begin{...} ... \end{...} blocks in $$ ... $$.
+ * 5. Ensuring block equations ($$ ... $$) are surrounded by empty lines so remark-math parses them reliably.
  */
 export function preprocessLaTeX(content: string): string {
   if (!content) return "";
@@ -17,14 +18,18 @@ export function preprocessLaTeX(content: string): string {
     return `___CODE_BLOCK_${codeBlocks.length - 1}___`;
   });
 
-  // 2. Unescape double backslashes before LaTeX commands: e.g. \\frac -> \frac, \\tau -> \tau
-  processed = processed.replace(/\\\\([a-zA-Z]+)/g, "\\$1");
+  // 2. Unescape double backslashes before LaTeX commands: e.g. \\frac -> \frac, \\tau -> \tau, \\begin -> \begin
+  processed = processed.replace(/\\\\([a-zA-Z]+|\\|\{|\})/g, "\\$1");
 
-  // 3. Convert \( ... \) to $ ... $ (inline math)
+  // 3. Convert \( ... \) to $ ... $ (inline math) and \[ ... \] to $$ ... $$ (block math)
   processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`);
-
-  // 4. Convert \[ ... \] to $$ ... $$ (block math)
   processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `\n\n$$\n${math.trim()}\n$$\n\n`);
+
+  // 4. Auto-wrap unwrapped \begin{env} ... \end{env} environments in block $$ ... $$
+  processed = processed.replace(
+    /(?<!\$\$[\s\S]*?)(\\begin\{(?:equation|align|matrix|pmatrix|bmatrix|vmatrix|cases|array)\*?\}[\s\S]*?\\end\{(?:equation|align|matrix|pmatrix|bmatrix|vmatrix|cases|array)\*?\})/g,
+    (match) => `\n\n$$\n${match.trim()}\n$$\n\n`
+  );
 
   // 5. Ensure $$ ... $$ display equations have proper newlines for remark-math parsing
   processed = processed.replace(/\$\$\s*([\s\S]*?)\s*\$\$/g, (_, math) => `\n\n$$\n${math.trim()}\n$$\n\n`);

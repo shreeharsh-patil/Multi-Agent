@@ -6,7 +6,8 @@ from src.utils.logger import logger
 class AgentRouter:
     def __init__(self):
         self.routing_rules = [
-            (r"(?i)\b(generate|create|draw|make)\b.*\b(image|picture|illustration|poster|logo|artwork)\b", "image"),
+            (r"(?i)\b(generate|create|draw|make|design|render)\b.*\b(image|picture|illustration|poster|logo|artwork|icon|banner|avatar|graphic|vector)\b", "image"),
+            (r"(?i)\b(logo|icon|avatar)\b\s+(for|of|with|showing|featuring)\b", "image"),
             # Calendar: catch all natural calendar/scheduling requests before planner
             (r"(?i)\b(calendar|calender|calander)\b", "calendar"),
             (r"(?i)\b(meeting|appointment|event|availability|free\s*time|reschedule|book\s+(a\s+)?(slot|time|meeting|call)|add\s+to\s+(my\s+)?calendar|what.s\s+on\s+my|my\s+agenda|my\s+schedule|upcoming\s+events?|today.s\s+events?|tomorrow.s\s+events?|check\s+(my\s+)?schedule|show\s+(my\s+)?events?|list\s+(my\s+)?events?|delete\s+(the\s+)?(event|meeting|appointment)|cancel\s+(the\s+)?(event|meeting|appointment)|create\s+(a\s+)?(meeting|event|appointment)|schedule\s+(a\s+)?(meeting|call|event|appointment))\b", "calendar"),

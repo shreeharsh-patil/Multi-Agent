@@ -74,6 +74,15 @@ def _build_providers() -> list[BaseLLMProvider]:
             timeout_seconds=10,
         ))
 
+    if settings.kimi_api_key:
+        providers.append(OpenAICompatibleProvider(
+            name="Kimi",
+            api_key=settings.kimi_api_key,
+            model=settings.kimi_model,
+            base_url=settings.kimi_base_url,
+            timeout_seconds=20,
+        ))
+
     if settings.gemini_api_key:
         providers.append(GeminiProvider())
 

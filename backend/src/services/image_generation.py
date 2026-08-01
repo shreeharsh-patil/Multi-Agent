@@ -1,7 +1,6 @@
-"""Image generation with OpenAI and Stability AI backends."""
-
 import base64
 import uuid
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,6 +8,7 @@ import httpx
 
 from src.config import settings
 from src.models.document import Document
+from src.utils.logger import logger
 
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "uploads"
@@ -81,6 +81,56 @@ async def _generate_stability(prompt: str) -> tuple[bytes, str | None]:
         return response.content, None
 
 
+async def _generate_pollinations(prompt: str, size: str = "1024x1024", model: str = "flux") -> tuple[bytes, str | None]:
+    """Generate image via 100% free Pollinations.ai API."""
+    encoded_prompt = urllib.parse.quote(prompt)
+    width, height = 1024, 1024
+    if "x" in size:
+        parts = size.split("x")
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            width, height = int(parts[0]), int(parts[1])
+
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model={model}&nologo=true"
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as http:
+        response = await http.get(url)
+        response.raise_for_status()
+        return response.content, None
+
+
+async def _generate_cloudflare(prompt: str) -> tuple[bytes, str | None]:
+    """Generate image via Cloudflare Workers AI with strict matching Account ID & API Token rotation."""
+    account_ids = [a.strip() for a in settings.cloudflare_account_id.split(",") if a.strip()]
+    api_tokens = [t.strip() for t in settings.cloudflare_api_token.split(",") if t.strip()]
+
+    if not account_ids or not api_tokens:
+        raise ValueError("CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN must be configured")
+
+    # Strictly pair Account ID #1 with API Token #1, Account ID #2 with API Token #2, etc.
+    pairs = list(zip(account_ids, api_tokens))
+    if not pairs:
+        raise ValueError("No valid matching Cloudflare (Account ID, API Token) pairs found")
+
+    last_error = None
+    for acc_id, token in pairs:
+        url = f"https://api.cloudflare.com/client/v4/accounts/{acc_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60) as http:
+                response = await http.post(url, headers=headers, json={"prompt": prompt})
+                if response.status_code < 400:
+                    return response.content, None
+                logger.warning(f"Cloudflare pair (Account: {acc_id[:6]}...) returned HTTP {response.status_code}, rotating to next matched pair...")
+                last_error = f"HTTP {response.status_code}"
+        except Exception as err:
+            logger.warning(f"Cloudflare request failed for Account {acc_id[:6]}... ({err}), rotating to next matched pair...")
+            last_error = str(err)
+
+    raise RuntimeError(f"All configured Cloudflare key pairs failed. Last error: {last_error}")
+
+
 async def generate_and_store_image(
     prompt: str,
     user_id: str,
@@ -95,19 +145,39 @@ async def generate_and_store_image(
 
     provider = settings.image_provider.lower()
     if provider == "auto":
-        if settings.openai_api_key:
+        if settings.cloudflare_account_id and settings.cloudflare_api_token:
+            provider = "cloudflare"
+        elif settings.openai_api_key:
             provider = "openai"
         elif settings.stability_api_key:
             provider = "stability"
         else:
-            raise ValueError("Configure OPENAI_API_KEY or STABILITY_API_KEY for image generation")
+            provider = "pollinations"
 
-    if provider == "openai":
-        image_bytes, revised_prompt = await _generate_openai(clean_prompt, size)
+    if provider == "cloudflare":
+        try:
+            image_bytes, revised_prompt = await _generate_cloudflare(clean_prompt)
+        except Exception as e:
+            logger.warning(f"Cloudflare Workers AI failed ({e}), falling back to Pollinations.ai")
+            image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
+            provider = "pollinations"
+    elif provider == "openai":
+        try:
+            image_bytes, revised_prompt = await _generate_openai(clean_prompt, size)
+        except Exception as e:
+            logger.warning(f"OpenAI image generation failed ({e}), falling back to Pollinations.ai")
+            image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
+            provider = "pollinations"
     elif provider == "stability":
-        image_bytes, revised_prompt = await _generate_stability(clean_prompt)
+        try:
+            image_bytes, revised_prompt = await _generate_stability(clean_prompt)
+        except Exception as e:
+            logger.warning(f"Stability AI image generation failed ({e}), falling back to Pollinations.ai")
+            image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
+            provider = "pollinations"
     else:
-        raise ValueError("IMAGE_PROVIDER must be auto, openai, or stability")
+        image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
+        provider = "pollinations"
 
     file_name = f"generated-{uuid.uuid4().hex[:12]}.png"
     file_path = UPLOAD_DIR / file_name

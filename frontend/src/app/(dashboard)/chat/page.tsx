@@ -21,6 +21,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import { preprocessLaTeX } from '@/lib/latex'
+import { ImagePreviewCard } from '@/components/image-preview-card'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -1556,16 +1557,7 @@ function ChatContent() {
                                     <a href={resolveApiUrl(href)} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
                                   ),
                                   img: ({ src, alt }) => typeof src === 'string' ? (
-                                    <a href={resolveApiUrl(src)} target="_blank" rel="noopener noreferrer" className="block my-3">
-                                      <Image
-                                        src={resolveApiUrl(src) || ''}
-                                        alt={alt || 'Generated image'}
-                                        width={768}
-                                        height={768}
-                                        className="h-auto max-h-[560px] w-auto max-w-full rounded-[8px] border border-border object-contain shadow-sm"
-                                        unoptimized
-                                      />
-                                    </a>
+                                    <ImagePreviewCard src={resolveApiUrl(src) || src} alt={alt || 'Generated image'} />
                                   ) : null,
                                   code: ({ className, children, ...props }) => {
                                     const isInline = !className

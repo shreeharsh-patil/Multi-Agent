@@ -259,11 +259,11 @@ async def _generate_chat_topic(user_message: str, agent_message: str) -> str:
         from src.services.llm import get_llm_provider
         llm = get_llm_provider()
         topic = await llm.generate(
-            prompt=(
+            prompt=f"User Prompt: {user_message[:400]}\nAssistant Response: {agent_message[:200]}",
+            system_instruction=(
                 "You are a topic title generator for an AI chat workspace. "
                 "Analyze the user prompt and generate a concise, professional title-case topic title "
-                "(3 to 6 words max). Output ONLY the title text itself with no quotes, markdown, or punctuation.\n\n"
-                f"User Prompt: {user_message[:400]}\nAssistant Response: {agent_message[:200]}"
+                "(3 to 6 words max). Output ONLY the title text itself with no quotes, markdown, or punctuation."
             ),
             temperature=0.3,
             max_output_tokens=25,
@@ -357,9 +357,9 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
     if user_email:
         query["$or"].append({"user_id": user_email})
 
-    owned = await Conversation.find(query).project({"messages": {"$slice": -1}}).to_list()
+    owned = await Conversation.find(query).to_list()
     workspace_ids = [str(w.id) for w in await Workspace.find({"member_ids": resolved_user_id}).to_list()]
-    shared = await Conversation.find({"workspace_id": {"$in": workspace_ids}}).project({"messages": {"$slice": -1}}).to_list() if workspace_ids else []
+    shared = await Conversation.find({"workspace_id": {"$in": workspace_ids}}).to_list() if workspace_ids else []
     convs = sorted({str(c.id): c for c in owned + shared}.values(), key=lambda c: c.updated_at, reverse=True)
 
     return [

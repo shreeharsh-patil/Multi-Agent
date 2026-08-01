@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-004"
 
     openrouter_api_key: str = ""
-    openrouter_model: str = "openrouter/free"
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "openai/gpt-oss-120b:free"
+    openrouter_base_url: str = "https://api.openrouter.ai/api/v1"
 
     nararouter_api_key: str = ""
     nararouter_model: str = "auto/bynara"
@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     aiand_model: str = "qwen/qwen3.6-27b"
     aiand_base_url: str = "https://api.aiand.com/v1"
 
+    kimi_api_key: str = ""
+    kimi_model: str = "kimi-latest"
+    kimi_base_url: str = "https://api.moonshot.cn/v1"
+
     firecrawl_api_key: str = ""
     deepgram_api_key: str = ""
 
@@ -54,6 +58,8 @@ class Settings(BaseSettings):
     openai_image_model: str = "gpt-image-1"
     openai_image_quality: str = "medium"
     stability_api_key: str = ""
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
 
     google_client_id: str = ""
     google_client_secret: str = ""

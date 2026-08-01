@@ -7,6 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import { preprocessLaTeX } from "@/lib/latex";
+import { ImagePreviewCard } from "@/components/image-preview-card";
 
 interface MarkdownRendererProps {
   content: string;
@@ -78,15 +79,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               </a>
             );
           },
-          // Responsive Images
+          // Responsive ChatGPT Style Image Preview
           img({ src, alt }) {
-            return (
-              <img
-                src={src}
-                alt={alt || "Content image"}
-                className="max-w-full h-auto rounded-lg border shadow-xs my-2 object-contain"
-              />
-            );
+            if (typeof src !== 'string') return null;
+            return <ImagePreviewCard src={src} alt={alt || 'Generated image'} />;
           },
         }}
       >
