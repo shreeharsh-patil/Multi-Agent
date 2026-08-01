@@ -196,13 +196,10 @@ async def _build_attachment_context(
 
 async def _generate_image_message(prompt: str, user_id: str, workspace_id: str | None) -> str:
     image = await generate_and_store_image(prompt, user_id, workspace_id)
-    details = f"Generated with {image.provider.title()}"
+    content = f"![Generated image]({image.download_url})"
     if image.revised_prompt and image.revised_prompt != prompt:
-        details += f"\n\nPrompt used: {image.revised_prompt}"
-    return (
-        f"![Generated image]({image.download_url})\n\n"
-        f"{details}\n\n[Download image]({image.download_url})"
-    )
+        content += f"\n\n*Prompt used: {image.revised_prompt}*"
+    return content
 
 
 def _friendly_chat_error(error: Exception) -> str:
