@@ -1263,7 +1263,7 @@ function ChatContent() {
           </div>
         )}
 
-        {/* Top Header / Toolbar */}
+        {/* Top Header / Toolbar (Hidden per user request)
         <div className="flex items-center justify-between border-b border-border px-3 sm:px-6 py-2 sm:py-3 min-h-[48px] sm:min-h-[56px] shrink-0 bg-card select-none z-10 shadow-xs">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold truncate text-[#26251e] flex items-center gap-2">
@@ -1331,6 +1331,7 @@ function ChatContent() {
             )}
           </div>
         </div>
+        */}
 
         {shareUrl && shareUrl !== 'error' && (
           <div className="mx-6 mt-4 flex items-center gap-2 rounded-[8px] border border-[#1f8a65]/20 bg-[#1f8a65]/5 px-3 py-2 text-xs">
