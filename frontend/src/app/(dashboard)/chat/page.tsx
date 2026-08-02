@@ -203,6 +203,7 @@ function ChatContent() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const [chatDebug, setChatDebug] = useState<{ requestId?: string; status: string; agent?: string; step?: string; startedAt: number; error?: string } | null>(null)
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [orchestration, setOrchestration] = useState<{ complexity?: string; domain?: string; agents: Array<{ agent_id: string; label: string; reason?: string; status?: 'queued' | 'working' | 'complete' | 'failed' }> } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
