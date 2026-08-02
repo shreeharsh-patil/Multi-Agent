@@ -4,11 +4,11 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { Search, Globe, FileText, Loader2, Sparkles, Trash2, CheckCircle2 } from 'lucide-react'
+import { Search, Globe, FileText, Loader2, Sparkles, Trash2, CheckCircle2, Download } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { MarkdownRenderer } from '@/components/markdown-renderer'
 
 interface Report {
   id: string
@@ -20,6 +20,7 @@ interface Report {
 export default function ResearchPage() {
   const [query, setQuery] = useState('')
   const [researching, setResearching] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
   const [reports, setReports] = useState<Report[]>([])
   const [currentReport, setCurrentReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +61,7 @@ export default function ResearchPage() {
 
   useEffect(() => {
     if (resultsRef.current) {
-      resultsRef.current.scrollTop = resultsRef.current.scrollHeight
+      resultsRef.current.scrollTop = 0
     }
   }, [currentReport?.content])
 
@@ -110,6 +111,68 @@ export default function ResearchPage() {
       }
     } catch {
       setError('Failed to delete report')
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!currentReport) return
+    setExportingPdf(true)
+    try {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+      const response = await fetch(`${BACKEND_URL}/api/reports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: currentReport.query,
+          content: currentReport.content,
+          polish: false,
+        }),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const downloadUrl = data.data?.downloadUrl || data.downloadUrl
+        if (downloadUrl) {
+          const fullUrl = downloadUrl.startsWith('http') ? downloadUrl : `${BACKEND_URL}${downloadUrl}`
+          window.open(fullUrl, '_blank')
+          setExportingPdf(false)
+          return
+        }
+      }
+    } catch (err) {
+      console.warn('Backend PDF generation failed, using print PDF fallback:', err)
+    } finally {
+      setExportingPdf(false)
+    }
+
+    const printWin = window.open('', '_blank')
+    if (printWin) {
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${currentReport.query} — Research Report</title>
+            <style>
+              body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #26251e; line-height: 1.6; }
+              h1 { font-size: 24px; border-bottom: 2px solid #e5e5e0; padding-bottom: 8px; margin-bottom: 24px; }
+              h2 { font-size: 18px; margin-top: 24px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+              h3 { font-size: 15px; margin-top: 18px; }
+              pre { background: #f4f4f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; }
+              table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+              th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+              th { background-color: #f8f8f6; }
+              code { background: #f4f4f0; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+            </style>
+          </head>
+          <body>
+            <h1>Research Report: ${currentReport.query}</h1>
+            <div>${resultsRef.current?.innerHTML || currentReport.content}</div>
+            <script>
+              window.onload = function() { window.print(); }
+            </script>
+          </body>
+        </html>
+      `)
+      printWin.document.close()
     }
   }
 
@@ -199,18 +262,26 @@ export default function ResearchPage() {
 
       {currentReport && !researching && (
         <Card className="shadow-xs">
-          <CardHeader className="p-5 pb-3">
+          <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
               <Sparkles className="h-4.5 w-4.5 text-primary" />
               Research Report: {currentReport.query}
             </CardTitle>
+            <Button
+              onClick={handleDownloadPdf}
+              disabled={exportingPdf}
+              variant="outline"
+              size="sm"
+              className="gap-2 cursor-pointer shadow-2xs text-xs"
+            >
+              {exportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-primary" />}
+              Download PDF
+            </Button>
           </CardHeader>
           <CardContent className="p-5 pt-0">
-            <ScrollArea ref={resultsRef} className="max-h-[600px]">
-              <div className="max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans pr-2">
-                {currentReport.content}
-              </div>
-            </ScrollArea>
+            <div ref={resultsRef} className="max-h-[650px] overflow-y-auto pr-3 scrollbar-thin space-y-4">
+              <MarkdownRenderer content={currentReport.content} />
+            </div>
           </CardContent>
         </Card>
       )}

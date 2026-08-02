@@ -136,6 +136,9 @@ class ResearchAgent(BaseAgent):
         else:
             stages.append({"id": "followup", "label": "Gap search", "detail": "No material gaps required a second search"})
 
+        from datetime import datetime, timezone
+        now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
+
         # 7. Final publication-grade report
         final = await llm_service.generate(
             prompt=(
@@ -144,10 +147,11 @@ class ResearchAgent(BaseAgent):
                 f"SOURCE URLS:\n{chr(10).join(sources_found)}"
             ),
             system_instruction=(
-                "You are a publication-grade research editor. Produce a rigorous Markdown report with: "
-                "title, executive summary, methodology, key findings, detailed analysis, limitations, conclusion, "
-                "and a numbered bibliography. Cite claims inline as [1], [2], etc. Only cite sources present in the "
-                "provided evidence, clearly mark uncertainty, and never invent URLs or statistics."
+                f"Current Real-Time System Date & Time: {now_str}.\n"
+                "You are a publication-grade research editor. Produce a rigorous, up-to-date Markdown report containing live current information up to today's date. "
+                "Structure the report with clean Markdown elements: "
+                "# Title, ## Section Headings, ### Subheadings, **bold** emphasis for key metrics, *italics* for terms, tables for comparisons, bulleted lists for findings, and a numbered bibliography. "
+                "Cite claims inline as [1], [2], etc. Only cite sources present in the provided evidence, clearly mark uncertainty, and never invent URLs or statistics."
             ),
         )
         stages.append({"id": "final", "label": "Final report", "detail": "Published Markdown with bibliography"})
