@@ -15,16 +15,26 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
   const [hasError, setHasError] = useState(false)
   const imgRef = React.useRef<HTMLImageElement>(null)
 
+  const imageSrc = React.useMemo(() => {
+    let s = src
+    if (s.includes('/api/documents/') && s.includes('/download')) {
+      s = s.replace('/download', '/file')
+    }
+    return s.replace(/[?&]download=true/g, '')
+  }, [src])
+
   React.useEffect(() => {
-    if (imgRef.current?.complete) {
+    setIsLoading(true)
+    setHasError(false)
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
       setIsLoading(false)
     }
-  }, [src])
+  }, [imageSrc])
 
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    downloadSecureFile(src, 'generated-image.png')
+    downloadSecureFile(imageSrc, 'generated-image.png')
   }
 
   return (
@@ -55,7 +65,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
         ) : (
           <img
             ref={imgRef}
-            src={src}
+            src={imageSrc}
             alt={alt}
             onLoad={() => {
               setIsLoading(false)

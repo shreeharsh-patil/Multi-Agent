@@ -275,7 +275,7 @@ async def generate_and_store_image(
     return GeneratedImage(
         document_id=document_id,
         file_name=file_name,
-        download_url=f"/api/documents/{document_id}/download",
+        download_url=f"/api/documents/{document_id}/file",
         provider=provider,
         revised_prompt=revised_prompt,
         drive_file_id=drive_file_id,

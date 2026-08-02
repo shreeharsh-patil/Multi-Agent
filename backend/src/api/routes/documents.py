@@ -231,7 +231,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             "fileSize": doc.file_size,
             "status": doc.status,
             "chunks": doc.chunk_count,
-            "imageUrl": f"/api/documents/{doc.id}/download",
+            "imageUrl": f"/api/documents/{doc.id}/file",
             "visionAnalyzed": vision_analyzed,
             "driveFileId": doc.drive_file_id,
             "driveWebViewLink": doc.drive_web_view_link,
@@ -452,6 +452,39 @@ async def download_document(document_id: str, http_request: Request, download: b
         filename=doc.file_name,
         content_disposition_type=disposition,
         headers=headers,
+    )
+
+
+@router.get("/{document_id}/file")
+@router.get("/{document_id}/view")
+async def get_document_file(document_id: str):
+    """Serve a document file inline (for generated images and inline rendering)."""
+    doc = await Document.get(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    file_path = doc.file_path
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    media_type_map = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "gif": "image/gif",
+        "webp": "image/webp",
+        "svg": "image/svg+xml",
+        "pdf": "application/pdf",
+        "txt": "text/plain",
+        "md": "text/markdown",
+    }
+    media_type = media_type_map.get(doc.file_type.lower(), "application/octet-stream")
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=doc.file_name,
+        content_disposition_type="inline",
     )
 
 
