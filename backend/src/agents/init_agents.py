@@ -28,6 +28,8 @@ def initialize_agents() -> None:
     from src.agents.finance.agent import FinanceAgent
     from src.agents.accountant.agent import AccountantAgent
     from src.agents.economics.agent import EconomicsAgent
+    from src.agents.architect.agent import ArchitectAgent
+    from src.agents.hacker.agent import HackerAgent
 
     AgentRegistry.register(KnowledgeAgent())
     AgentRegistry.register(DriveAgent())
@@ -51,6 +53,8 @@ def initialize_agents() -> None:
     AgentRegistry.register(FinanceAgent())
     AgentRegistry.register(AccountantAgent())
     AgentRegistry.register(EconomicsAgent())
+    AgentRegistry.register(ArchitectAgent())
+    AgentRegistry.register(HackerAgent())
 
     AgentRegistry.initialize()
     logger.info(f"Initialized {len(AgentRegistry.get_all_agents())} agents")

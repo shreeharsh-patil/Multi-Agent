@@ -67,6 +67,8 @@ def create_orchestrator_agent() -> LlmAgent:
     finance = create_finance_agent()
     accountant = create_accountant_agent()
     economics = create_economics_agent()
+    architect = create_architect_agent()
+    hacker = create_hacker_agent()
 
     sub_agents = [
         knowledge,
@@ -85,6 +87,8 @@ def create_orchestrator_agent() -> LlmAgent:
         finance,
         accountant,
         economics,
+        architect,
+        hacker,
     ]
 
     return LlmAgent(
@@ -112,7 +116,9 @@ def create_orchestrator_agent() -> LlmAgent:
             "- doctor: Symptoms, medical conditions, health education\n"
             "- finance: Financial statements, valuation, markets, investing\n"
             "- accountant: Accounting, audit, taxation, GST (CA)\n"
-            "- economics: Micro and macro economics\n\n"
+            "- economics: Micro and macro economics\n"
+            "- architect: Architecture, construction, structures, design\n"
+            "- hacker: Cybersecurity, networking, ethical hacking, defense\n\n"
 
             "Analyze the user's request and transfer to the best agent. "
             "If the request spans multiple domains, handle it step by step. "
@@ -367,4 +373,39 @@ def create_economics_agent() -> LlmAgent:
         ),
         tools=[web_search_tool],
         description="Economics study tutor for micro, macro, and trade.",
+    )
+
+
+def create_architect_agent() -> LlmAgent:
+    return LlmAgent(
+        name="architect",
+        model=MODEL,
+        instruction=(
+            "You are the Architect Agent — an architecture study tutor for architecture and civil-engineering "
+            "students. Cover architectural design and history, building construction, structures, materials, "
+            "environmental systems, drafting/CAD, and professional practice. Teach concept and first principles "
+            "first, then practical application, with headings, tables, bullet points, and bold for high-yield "
+            "points; describe how to sketch and annotate key details. Add exam-style notes and mnemonics. Use "
+            "the web for up-to-date architecture topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Architecture study tutor: design, construction, structures.",
+    )
+
+
+def create_hacker_agent() -> LlmAgent:
+    return LlmAgent(
+        name="hacker",
+        model=MODEL,
+        instruction=(
+            "You are the Cyber & Security Agent — a cybersecurity study tutor for cybersecurity and CS students. "
+            "Cover networking, OS security, cryptography, web-app security, common vulnerabilities (OWASP), "
+            "secure coding, and ethical-hacking / penetration-testing methodology. Teach mechanism first, then "
+            "defense, with headings, bullet points, tables, step-by-step methodology, and bold high-yield "
+            "points. Explain offensive techniques only for study, certification, or authorized lab contexts and "
+            "remind students not to scan or exploit systems without explicit authorization. Use the web for "
+            "up-to-date security topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Cybersecurity and ethical-hacking study tutor.",
     )

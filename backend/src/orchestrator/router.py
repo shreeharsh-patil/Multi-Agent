@@ -24,6 +24,10 @@ class AgentRouter:
             (r"(?i)\b(accounting|accountant|chartered\s+accountant|journal\s+entry|ledger|trial\s+balance|final\s+accounts|debit|credit|audit|gst|income\s+tax|direct\s+tax|indirect\s+tax|depreciation|bad\s+debts|provision|cash\s+book|tally)\b", "accountant"),
             # Economics: micro/macro concepts
             (r"(?i)\b(economics|economy|microeconomic|macroeconomic|supply\s+and\s+demand|elasticity|opportunity\s+cost|inflation\s+rate\b|gdp\b|monetary\s+policy|fiscal\s+policy|central\s+bank|market\s+structure|consumer\s+surplus|producer\s+surplus)\b", "economics"),
+            # Architect: architecture, buildings, construction, structures, drafting
+            (r"(?i)\b(architecture|architect|building\s+construction|construction\b|structural\s+design|civil\s+engineering|blueprint|drafting|cad\b|building\s+materials|foundations?|beam|column|rcc|reinforced\s+concrete|sustainable\s+design|urban\s+design)\b", "architect"),
+            # Cyber & Security: networks, hacking, encryption, security of systems + disambiguation
+            (r"(?i)\b(cybersecurity|cyber\s+security|ethical\s+hacking|penetration\s+testing|pentest|hacking\b|hacker\b|vulnerability|exploit\b|malware|ransomware|phishing|cryptography|encryption|decrypt|network\s+security|firewall|intrusion\s+detection|capture\s+the\s+flag|ctf\b|owasp|sql\s+injection|xss\b)\b", "hacker"),
             # Calendar: catch all natural calendar/scheduling requests
             (r"(?i)\b(calendar|calender|calander)\b", "calendar"),
             (r"(?i)\b(meeting|appointment|event|availability|free\s*time|reschedule|book\s+(a\s+)?(slot|time|meeting)|add\s+to\s+(my\s+)?calendar|what.s\s+on\s+my|my\s+agenda|my\s+schedule|upcoming\s+events?|today.s\s+events?|tomorrow.s\s+events?|check\s+(my\s+)?schedule|show\s+(my\s+)?events?|list\s+(my\s+)?events?|delete\s+(the\s+)?(event|meeting|appointment)|cancel\s+(the\s+)?(event|meeting|appointment)|create\s+(a\s+)?(meeting|event|appointment)|schedule\s+(a\s+)?(meeting|call|event|appointment))\b", "calendar"),
