@@ -380,7 +380,12 @@ async def download_document(document_id: str, http_request: Request, download: b
     If download=True, forces direct file attachment download without redirecting.
     If download=False and a Google Drive webViewLink is available, redirects to Drive.
     """
-    doc = await Document.get(document_id)
+    from beanie import PydanticObjectId
+    doc = None
+    if PydanticObjectId.is_valid(document_id):
+        doc = await Document.get(document_id)
+    if not doc:
+        doc = await Document.find_one(Document.file_name == document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -457,15 +462,43 @@ async def download_document(document_id: str, http_request: Request, download: b
 
 @router.get("/{document_id}/file")
 @router.get("/{document_id}/view")
+@router.get("/file/{document_id}")
 async def get_document_file(document_id: str):
-    """Serve a document file inline (for generated images and inline rendering)."""
-    doc = await Document.get(document_id)
+    """Serve a document file inline (for generated images, uploads, and inline rendering)."""
+    from beanie import PydanticObjectId
+    doc = None
+    if PydanticObjectId.is_valid(document_id):
+        doc = await Document.get(document_id)
     if not doc:
+        # Fallback search by filename
+        doc = await Document.find_one(Document.file_name == document_id)
+
+    if not doc:
+        # Fallback direct disk check in UPLOAD_DIR
+        disk_path = UPLOAD_DIR / Path(document_id).name
+        if disk_path.exists():
+            ext = disk_path.suffix.lstrip(".").lower()
+            media_type_map = {
+                "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml",
+                "pdf": "application/pdf", "txt": "text/plain", "md": "text/markdown",
+            }
+            return FileResponse(
+                path=str(disk_path),
+                media_type=media_type_map.get(ext, "application/octet-stream"),
+                filename=disk_path.name,
+                content_disposition_type="inline",
+            )
         raise HTTPException(status_code=404, detail="Document not found")
 
     file_path = doc.file_path
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found on disk")
+    actual_path = Path(file_path)
+    if not actual_path.exists():
+        fallback_path = UPLOAD_DIR / actual_path.name
+        if fallback_path.exists():
+            file_path = str(fallback_path)
+        else:
+            raise HTTPException(status_code=404, detail="File not found on disk")
 
     media_type_map = {
         "png": "image/png",

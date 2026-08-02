@@ -886,11 +886,48 @@ async def _cors_proxy_scrape(url: str) -> Optional[str]:
 
 
 
+async def refresh_user_google_token(user) -> str:
+    """Attempt to refresh an expired Google access token using the user's refresh token."""
+    if not user or not getattr(user, "refresh_token", None):
+        return getattr(user, "access_token", "") or ""
+    import os
+    import httpx
+    from src.config import settings
+    client_id = settings.google_client_id or os.getenv("GOOGLE_CLIENT_ID", "")
+    client_secret = settings.google_client_secret or os.getenv("GOOGLE_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        return getattr(user, "access_token", "") or ""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": user.refresh_token,
+                    "grant_type": "refresh_token",
+                },
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                new_access_token = data.get("access_token")
+                if new_access_token:
+                    user.access_token = new_access_token
+                    await user.save()
+                    logger.info(f"Successfully refreshed Google access token for user: {getattr(user, 'email', user.id)}")
+                    return new_access_token
+    except Exception as exc:
+        logger.warning(f"Failed to refresh Google access token for user: {exc}")
+    return getattr(user, "access_token", "") or ""
+
+
 async def find_user_access_token(user_id: str) -> str:
     """Retrieve the user's Google Drive access token from the database.
 
     Tries by MongoDB ObjectId first, then by email as fallback.
-    The ADK receives user_id as an ObjectId string from the session.
+    Automatically refreshes expired access tokens if a refresh token is present.
     """
     from src.models.user import User
 
@@ -899,16 +936,22 @@ async def find_user_access_token(user_id: str) -> str:
         from beanie import PydanticObjectId
         PydanticObjectId(user_id)
         user = await User.get(user_id)
-        if user and user.access_token:
-            return user.access_token
+        if user:
+            if user.access_token:
+                return user.access_token
+            if user.refresh_token:
+                return await refresh_user_google_token(user)
     except Exception:
         pass
 
     # Fallback: try by email
     try:
         user = await User.find_one(User.email == user_id)
-        if user and user.access_token:
-            return user.access_token
+        if user:
+            if user.access_token:
+                return user.access_token
+            if user.refresh_token:
+                return await refresh_user_google_token(user)
     except Exception:
         pass
 

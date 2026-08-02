@@ -9,7 +9,7 @@ import io
 
 
 class DriveService:
-    SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+    SCOPES = ["https://www.googleapis.com/auth/drive"]
 
     def __init__(self):
         logger.info("Drive service initialized")

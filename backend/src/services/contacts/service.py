@@ -83,12 +83,51 @@ class ContactsService:
         phone_val = phones[0].get("value") if phones else ""
         orgs = person.get("organizations", [])
         company = orgs[0].get("name") if orgs else ""
+        resource_name = person.get("resourceName", "")
         return {
+            "resourceName": resource_name,
             "name": display_name,
             "email": email_val,
             "phone": phone_val,
             "company": company,
         }
+
+    async def create_contact(
+        self,
+        access_token: str,
+        name: str,
+        email: str = "",
+        phone: str = "",
+        company: str = "",
+        refresh_token: str = "",
+    ) -> dict:
+        """Create a new contact in Google Contacts."""
+        service = await self._get_service(access_token, refresh_token)
+        body: dict = {
+            "names": [{"givenName": name}],
+        }
+        if email:
+            body["emailAddresses"] = [{"value": email}]
+        if phone:
+            body["phoneNumbers"] = [{"value": phone}]
+        if company:
+            body["organizations"] = [{"name": company}]
+
+        request = service.people().createContact(body=body)
+        person = await asyncio.to_thread(request.execute)
+        return self._parse_person(person)
+
+    async def delete_contact(
+        self,
+        access_token: str,
+        resource_name: str,
+        refresh_token: str = "",
+    ) -> bool:
+        """Delete a contact by resourceName (e.g. people/c12345)."""
+        service = await self._get_service(access_token, refresh_token)
+        request = service.people().deleteContact(resourceName=resource_name)
+        await asyncio.to_thread(request.execute)
+        return True
 
 
 contacts_service = ContactsService()
