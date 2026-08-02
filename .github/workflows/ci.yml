@@ -1,4 +1,4 @@
-name: Multi-Agent Platform CI
+name: Agentic Platform CI
 
 on:
   push:

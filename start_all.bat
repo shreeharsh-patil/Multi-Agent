@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo  Starting Multi-Agent AI Platform
+echo  Starting Agentic AI Platform
 echo ============================================
 echo.
 

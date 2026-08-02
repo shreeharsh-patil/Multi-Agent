@@ -37,19 +37,19 @@ const courierPrime = Courier_Prime({
 })
 
 export const metadata: Metadata = {
-  title: 'Agentic — Multi-Agent AI Workspace',
+  title: 'Agentic — AI Agent Workspace',
   description: 'Chat with multiple specialized AI agents, research the web, query documents with RAG, generate quizzes, create study plans, and build custom agents — all in one collaborative workspace.',
   keywords: ['AI agents', 'multi-agent', 'RAG', 'knowledge base', 'AI workspace', 'study tools', 'research assistant', 'custom agents', 'LLM orchestration'],
   authors: [{ name: 'Agentic' }],
   openGraph: {
-    title: 'Agentic — Multi-Agent AI Workspace',
+    title: 'Agentic — AI Agent Workspace',
     description: 'Chat with multiple specialized AI agents, research the web, query documents with RAG, and more.',
     type: 'website',
     siteName: 'Agentic',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Agentic — Multi-Agent AI Workspace',
+    title: 'Agentic — AI Agent Workspace',
     description: 'Chat with multiple specialized AI agents, research the web, query documents with RAG, and more.',
   },
   icons: {

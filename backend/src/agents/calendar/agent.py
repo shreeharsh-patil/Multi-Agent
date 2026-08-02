@@ -66,11 +66,14 @@ class CalendarAgent(BaseAgent):
 
         if not token:
             return AgentResult(
-                success=False,
+                success=True,
                 output=(
-                    "🔗 **Google Calendar not connected.**\n\n"
-                    "To manage your calendar, please go to **Settings → Integrations** and connect your Google account. "
-                    "Once connected, I can list events, create meetings, check availability, schedule calls, and more."
+                    "📅 **Google Calendar Integration Available**\n\n"
+                    "I can manage your calendar, list upcoming events, create meetings, reschedule appointments, and check your availability!\n\n"
+                    "To enable Calendar access:\n"
+                    "1. Open **Settings → Integrations** in the sidebar menu.\n"
+                    "2. Click **Connect Google Account**.\n"
+                    "3. Once connected, ask me anytime to check your schedule or book events!"
                 ),
                 error="missing_google_calendar_token"
             )

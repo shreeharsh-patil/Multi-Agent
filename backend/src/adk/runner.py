@@ -16,7 +16,7 @@ from src.config import settings
 from src.utils.logger import logger
 
 SESSION_SERVICE = InMemorySessionService()
-APP_NAME = "multi-agent-platform"
+APP_NAME = "agentic"
 
 
 def use_adk() -> bool:
@@ -262,9 +262,11 @@ async def _fallback_process_message(
         output = await llm_service.generate(
             prompt=full_prompt,
             system_instruction=(
-                "You are a helpful assistant. Use conversation history before the latest message to understand context. "
-                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, "
-                "bullet points for lists, headings for structure."
+                "You are a helpful AI assistant. Use conversation history before the latest message to understand context. "
+                "Never claim you cannot access calendars, external applications, or tools in general — "
+                "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, and Python Execution. "
+                "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure."
             ),
         )
         return {
@@ -401,9 +403,11 @@ async def _fallback_process_message_stream(
         async for chunk in llm_service.generate_stream(
             prompt=prompt_with_context,
             system_instruction=(
-                "You are a helpful assistant. Use conversation history before the latest message to understand context. "
-                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, "
-                "bullet points for lists, headings for structure."
+                "You are a helpful AI assistant. Use conversation history before the latest message to understand context. "
+                "Never claim you cannot access calendars, external applications, or tools in general — "
+                "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, and Python Execution. "
+                "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure."
             ),
         ):
             if chunk:

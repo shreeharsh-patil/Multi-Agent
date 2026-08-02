@@ -122,5 +122,5 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days session persistence
   },
-  secret: process.env.NEXTAUTH_SECRET || 'multi-agent-platform-jwt-secret-key-30days',
+  secret: process.env.NEXTAUTH_SECRET || 'agentic-jwt-secret-key-30days',
 }

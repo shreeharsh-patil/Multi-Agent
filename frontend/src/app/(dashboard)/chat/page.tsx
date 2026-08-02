@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Image from 'next/image'
+import { marked } from 'marked'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -1416,8 +1417,8 @@ function ChatContent() {
               <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-6 sm:space-y-8 py-4">
                 <div className="space-y-3">
                   <div className="flex justify-center">
-                    <div className="h-12 w-12 rounded-xl border border-border/80 bg-card flex items-center justify-center shadow-xs transition-transform hover:scale-105 duration-300">
-                      <Image src="/logo.png" alt="Agents Logo" width={26} height={26} className="h-6.5 w-6.5 object-contain" />
+                    <div className="h-16 w-16 flex items-center justify-center transition-transform hover:scale-105 duration-300">
+                      <Image src="/developer-avatar.png" alt="Agents Logo" width={64} height={64} className="h-16 w-16 object-contain" />
                     </div>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#26251e] font-sans">
@@ -1488,11 +1489,9 @@ function ChatContent() {
                 {messages.map((msg, idx) => (
                   <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <Avatar className="h-7 w-7 border border-border shrink-0 mt-0.5 shadow-xs">
-                        <AvatarFallback className="bg-secondary text-[#5a5852] text-xs">
-                          <Bot className="h-3.5 w-3.5 text-primary" />
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="h-7 w-7 rounded-full border border-border shrink-0 mt-0.5 shadow-xs overflow-hidden bg-secondary flex items-center justify-center">
+                        <Image src="/developer-avatar.png" alt="AI" width={28} height={28} className="h-full w-full object-contain" />
+                      </div>
                     )}
                     <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
@@ -1725,6 +1724,149 @@ function ChatContent() {
                                 setActiveTabId(tabId)
                               }}
                             />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                // Use marked for proper markdown → HTML conversion
+                                marked.setOptions({ gfm: true, breaks: true })
+                                const bodyHtml = await marked.parse(msg.content)
+                                const now = new Date().toLocaleString()
+                                const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Response — ${now}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      max-width: 780px;
+      margin: 48px auto;
+      padding: 0 32px 64px;
+      color: #111;
+      line-height: 1.75;
+      font-size: 15px;
+      background: #fff;
+    }
+    .pdf-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 20px;
+      margin-bottom: 32px;
+      border-bottom: 2px solid #e5e5e5;
+    }
+    .pdf-header-title { font-size: 13px; color: #888; }
+    h1 { font-size: 1.9em; font-weight: 700; margin: 1.4em 0 0.5em; color: #0a0a0a; }
+    h2 { font-size: 1.45em; font-weight: 600; margin: 1.3em 0 0.45em; color: #0a0a0a; }
+    h3 { font-size: 1.2em; font-weight: 600; margin: 1.2em 0 0.4em; color: #111; }
+    h4, h5, h6 { font-size: 1em; font-weight: 600; margin: 1em 0 0.3em; }
+    p { margin: 0.8em 0; }
+    a { color: #0066cc; text-decoration: underline; }
+    strong { font-weight: 700; }
+    em { font-style: italic; }
+    hr { border: none; border-top: 1px solid #e5e5e5; margin: 2em 0; }
+    blockquote {
+      border-left: 4px solid #e5290a;
+      margin: 1.2em 0;
+      padding: 0.6em 1.2em;
+      background: #fff8f8;
+      color: #444;
+      border-radius: 0 4px 4px 0;
+    }
+    ul, ol { padding-left: 1.8em; margin: 0.8em 0; }
+    li { margin: 0.35em 0; }
+    li > ul, li > ol { margin: 0.2em 0; }
+    code {
+      font-family: 'SFMono-Regular', 'Fira Mono', 'Consolas', 'Courier New', monospace;
+      font-size: 0.875em;
+      background: #f3f3f3;
+      border: 1px solid #e8e8e8;
+      border-radius: 4px;
+      padding: 2px 6px;
+    }
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-size: 0.85em;
+      line-height: 1.6;
+      margin: 1em 0;
+    }
+    pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1.2em 0;
+      font-size: 0.9em;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 9px 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+      color: #222;
+    }
+    tr:nth-child(even) td { background: #fafafa; }
+    img { max-width: 100%; height: auto; border-radius: 6px; }
+    @media print {
+      body { margin: 0; padding: 24px 32px; }
+      pre { white-space: pre-wrap; word-break: break-all; }
+      a { color: #111; text-decoration: none; }
+      @page { margin: 20mm 15mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="pdf-header">
+    <div>
+      <div style="font-size:18px;font-weight:700;color:#111;">AI Response</div>
+      <div class="pdf-header-title">Generated ${now}</div>
+    </div>
+  </div>
+  ${bodyHtml}
+</body>
+</html>`
+                                // Use Blob URL + hidden link to avoid popup blockers
+                                const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' })
+                                const url = URL.createObjectURL(blob)
+                                const win = window.open(url, '_blank')
+                                if (win) {
+                                  win.addEventListener('load', () => {
+                                    setTimeout(() => {
+                                      win.print()
+                                      URL.revokeObjectURL(url)
+                                    }, 300)
+                                  })
+                                } else {
+                                  // Fallback: direct download as .html
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = `ai-response-${Date.now()}.html`
+                                  a.click()
+                                  setTimeout(() => URL.revokeObjectURL(url), 2000)
+                                }
+                              }}
+                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 15V3m0 12-4-4m4 4 4-4"/><rect x="2" y="17" width="20" height="4" rx="1"/>
+                              </svg>
+                              <span>PDF</span>
+                            </button>
                           </div>
                         )}
                       </div>

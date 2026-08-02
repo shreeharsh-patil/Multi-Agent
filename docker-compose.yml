@@ -9,7 +9,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      MONGO_INITDB_DATABASE: multi-agent-platform
+      MONGO_INITDB_DATABASE: agentic
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -40,7 +40,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MONGODB_URI: mongodb://mongodb:27017/multi-agent-platform
+      MONGODB_URI: mongodb://mongodb:27017/agentic
       VECTOR_DB_PROVIDER: qdrant
       QDRANT_HOST: qdrant
       GEMINI_API_KEY: ${GEMINI_API_KEY}

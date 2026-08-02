@@ -5,7 +5,7 @@ from src.config import settings
 
 
 def setup_logger() -> logging.Logger:
-    logger = logging.getLogger("multi-agent-platform")
+    logger = logging.getLogger("agentic")
     logger.setLevel(getattr(logging, settings.log_level.upper()))
 
     handler = logging.StreamHandler(sys.stdout)

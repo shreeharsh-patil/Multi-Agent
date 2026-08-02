@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
         direct_uri = primary_uri.replace("mongodb+srv://", "mongodb://")
         direct_uri += ("&" if "?" in direct_uri else "?") + "ssl=true&retryWrites=true&w=majority"
         uris_to_try.append(direct_uri)
-    uris_to_try.append("mongodb://localhost:27017/multi-agent-platform")
+    uris_to_try.append("mongodb://localhost:27017/agentic")
 
     for uri in uris_to_try:
         try:

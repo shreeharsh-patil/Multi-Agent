@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🤖 Agentic — Multi-Agent AI Platform
+# 🤖 Agentic — AI Agent Platform
 
 ### Enterprise-Grade Agent Orchestration Infrastructure, Retrieval-Augmented Generation & Multi-LLM Execution Mesh
 
@@ -179,7 +179,7 @@ GEMINI_API_KEY="your_google_gemini_api_key"
 LLM_PROVIDER="groq" # Options: groq, gemini, openrouter, mistral
 
 # Database & Vector Stores
-MONGODB_URI="mongodb://localhost:27017/agentic_db"
+MONGODB_URI="mongodb://localhost:27017/agentic"
 VECTOR_DB_PROVIDER="chroma" # Options: chroma, qdrant
 
 # Authentication & Tokens

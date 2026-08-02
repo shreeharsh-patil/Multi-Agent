@@ -41,7 +41,7 @@ const activityMeta = {
   document: { label: 'File', icon: FileText },
 }
 
-const FOCUS_STORAGE_KEY = 'multi-agent:dashboard-focus:v1'
+const FOCUS_STORAGE_KEY = 'agentic:dashboard-focus:v1'
 const BUILT_IN_AGENT_COUNT = 11
 
 function relativeTime(value: string) {

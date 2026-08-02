@@ -27,10 +27,14 @@ class ContactsAgent(BaseAgent):
 
         if not token:
             return AgentResult(
-                success=False,
+                success=True,
                 output=(
-                    "🔗 **Google account not connected.**\n\n"
-                    "To access your contacts, please go to **Settings → Integrations** and connect your Google account with contacts permission."
+                    "📇 **Google Contacts Integration Available**\n\n"
+                    "I can search and list your Google Contacts, retrieve email addresses, phone numbers, and company details!\n\n"
+                    "To enable Contacts access:\n"
+                    "1. Open **Settings → Integrations** in the sidebar menu.\n"
+                    "2. Click **Connect Google Account**.\n"
+                    "3. Once connected, ask me anytime to find contact details or email addresses!"
                 ),
                 error="missing_google_contacts_token",
             )
@@ -64,7 +68,8 @@ class ContactsAgent(BaseAgent):
                 msg = f'No contacts found matching "{query}".' if query else "Your Google Contacts list is empty."
                 return AgentResult(success=True, output=msg)
 
-            lines = [f"### Google Contacts{' matching \"' + query + '\"' if query else ''}:\n"]
+            header_suffix = f' matching "{query}"' if query else ''
+            lines = [f"### Google Contacts{header_suffix}:\n"]
             for c in contacts:
                 details = [f"- **{c['name']}**"]
                 if c.get("email"):

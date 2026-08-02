@@ -1,10 +1,10 @@
 [project]
-name = "multi-agent-platform-backend"
+name = "agentic-backend"
 version = "0.1.0"
-description = "Multi-Agent AI Platform Backend with Google ADK"
+description = "Agentic AI Platform Backend with Google ADK"
 requires-python = ">=3.11"
 authors = [
-    { name = "Multi-Agent Platform" },
+    { name = "Agentic Platform" },
 ]
 dependencies = [
     "fastapi>=0.115.0",

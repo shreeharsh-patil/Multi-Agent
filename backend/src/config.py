@@ -6,14 +6,14 @@ from typing import Literal
 
 
 class Settings(BaseSettings):
-    app_name: str = "Multi-Agent AI Platform"
+    app_name: str = "Agentic AI Platform"
     app_version: str = "0.1.0"
     debug: bool = True
     host: str = "0.0.0.0"
     port: int = 8000
 
-    mongodb_uri: str = "mongodb://localhost:27017/multi-agent-platform"
-    mongodb_db_name: str = "multi-agent-platform"
+    mongodb_uri: str = "mongodb://localhost:27017/agentic"
+    mongodb_db_name: str = "agentic"
 
     vector_db_provider: Literal["chroma", "qdrant"] = "chroma"
     qdrant_host: str = "localhost"
