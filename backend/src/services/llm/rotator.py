@@ -60,6 +60,10 @@ class TokenBucket:
         return wait
 
 
+class EmptyProviderResponse(RuntimeError):
+    """Raised when a provider completes without returning usable text."""
+
+
 class RotatingProvider(BaseLLMProvider):
     """Wraps multiple LLM providers and rotates through them transparently.
 
@@ -112,33 +116,38 @@ class RotatingProvider(BaseLLMProvider):
             provider = self.providers[idx]
             name = getattr(provider, "name", type(provider).__name__)
 
-            try:
-                func = getattr(provider, method)
-                result = await func(**kwargs)
+            for retry in range(3):
+                try:
+                    func = getattr(provider, method)
+                    result = await func(**kwargs)
+                    if isinstance(result, str) and not result.strip():
+                        raise EmptyProviderResponse(f"{name} returned an empty response")
 
-                # Persist the successful provider index
-                async with self._lock:
-                    self._current_idx = idx
+                    # Persist the successful provider index
+                    async with self._lock:
+                        self._current_idx = idx
 
-                return result
+                    return result
 
-            except Exception as e:
-                last_error = e
-                err_msg = str(e)
-                is_rate_limit = (
-                    "429" in err_msg
-                    or "quota" in err_msg.lower()
-                    or "rate" in err_msg.lower()
-                    or "resource" in err_msg.lower()
-                    or "exhausted" in err_msg.lower()
-                    or "limit" in err_msg.lower()
-                )
-                kind = "rate-limited/exhausted" if is_rate_limit else "failed"
-                logger.warning(
-                    f"Provider rotation: {name} {kind} for '{method}'. "
-                    f"Error: {err_msg}. "
-                    f"Trying next provider immediately ({i + 1}/{attempts})..."
-                )
+                except Exception as e:
+                    last_error = e
+                    err_msg = str(e)
+                    is_rate_limit = (
+                        "429" in err_msg
+                        or "quota" in err_msg.lower()
+                        or "rate" in err_msg.lower()
+                        or "resource" in err_msg.lower()
+                        or "exhausted" in err_msg.lower()
+                        or "limit" in err_msg.lower()
+                    )
+                    kind = "rate-limited/exhausted" if is_rate_limit else "failed"
+                    logger.warning(
+                        f"Provider rotation: {name} {kind} for '{method}' retry {retry + 1}/3. Error: {err_msg}."
+                    )
+                    if retry < 2:
+                        await asyncio.sleep(0.5 * (2 ** retry))
+                        continue
+                    break
 
         logger.error(
             f"All {attempts} provider(s) failed for '{method}'. "
@@ -159,35 +168,43 @@ class RotatingProvider(BaseLLMProvider):
             provider = self.providers[idx]
             name = getattr(provider, "name", type(provider).__name__)
 
-            try:
-                func = getattr(provider, method)
-                gen = func(**kwargs)
+            for retry in range(3):
+                emitted = False
+                try:
+                    func = getattr(provider, method)
+                    gen = func(**kwargs)
 
-                async with self._lock:
-                    self._current_idx = idx
+                    async with self._lock:
+                        self._current_idx = idx
 
-                async for chunk in gen:
-                    yield chunk
+                    async for chunk in gen:
+                        if chunk and str(chunk).strip():
+                            emitted = True
+                            yield chunk
 
-                return
+                    if not emitted:
+                        raise EmptyProviderResponse(f"{name} returned an empty stream")
+                    return
 
-            except Exception as e:
-                last_error = e
-                err_msg = str(e)
-                is_rate_limit = (
-                    "429" in err_msg
-                    or "quota" in err_msg.lower()
-                    or "rate" in err_msg.lower()
-                    or "resource" in err_msg.lower()
-                    or "exhausted" in err_msg.lower()
-                    or "limit" in err_msg.lower()
-                )
-                kind = "rate-limited/exhausted" if is_rate_limit else "failed"
-                logger.warning(
-                    f"Provider rotation: {name} {kind} for '{method}'. "
-                    f"Error: {err_msg}. "
-                    f"Trying next provider immediately ({i + 1}/{attempts})..."
-                )
+                except Exception as e:
+                    last_error = e
+                    err_msg = str(e)
+                    is_rate_limit = (
+                        "429" in err_msg
+                        or "quota" in err_msg.lower()
+                        or "rate" in err_msg.lower()
+                        or "resource" in err_msg.lower()
+                        or "exhausted" in err_msg.lower()
+                        or "limit" in err_msg.lower()
+                    )
+                    kind = "rate-limited/exhausted" if is_rate_limit else "failed"
+                    logger.warning(
+                        f"Provider rotation: {name} {kind} for '{method}' retry {retry + 1}/3. Error: {err_msg}."
+                    )
+                    if retry < 2:
+                        await asyncio.sleep(0.5 * (2 ** retry))
+                        continue
+                    break
 
         logger.error(
             f"All {attempts} provider(s) failed for '{method}'. "

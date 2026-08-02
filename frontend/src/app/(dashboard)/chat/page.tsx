@@ -1112,6 +1112,9 @@ function ChatContent() {
         return
       }
       const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'
+      const displayError = /empty response|no content|closed before completion/i.test(errorMessage)
+        ? "We couldn't generate a complete response after automatic recovery."
+        : errorMessage
       setChatDebug((current) => current ? { ...current, status: 'error', step: 'request_error', error: errorMessage } : current)
       if (!streamingAttempted) {
         // Fall back to non-streaming API
@@ -1145,7 +1148,7 @@ function ChatContent() {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantId
-                  ? { ...msg, content: res.error || 'Request failed. Please retry.', error: true }
+                  ? { ...msg, content: /empty response|no content/i.test(res.error || '') ? "We couldn't generate a complete response after automatic recovery.\n\nPlease retry." : (res.error || 'Request failed. Please retry.'), error: true }
                   : msg,
               ),
             )
@@ -1154,7 +1157,7 @@ function ChatContent() {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantId
-                ? { ...msg, content: `Network error: ${errorMessage}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
+                ? { ...msg, content: `Network error: ${displayError}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
                 : msg,
             ),
           )
@@ -1163,7 +1166,7 @@ function ChatContent() {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantId
-              ? { ...msg, content: `The response was interrupted: ${errorMessage}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
+              ? { ...msg, content: `The response was interrupted: ${displayError}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
               : msg,
           ),
         )
