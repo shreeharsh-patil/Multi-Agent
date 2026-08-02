@@ -27,7 +27,7 @@ export default function SwarmPage() {
   const [consensus, setConsensus] = useState<string>("");
   const outputEndRef = useRef<HTMLDivElement>(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
   const handleStartSwarm = async () => {
     if (!prompt.trim() || isRunning) return;
@@ -54,18 +54,19 @@ export default function SwarmPage() {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const data = JSON.parse(trimmed.slice(6));
               
               if (data.type === "agent_start") {
                 setAgents((prev) =>
                   prev.map((a) =>
-                    a.id === data.agent_id ? { ...a, status: "running" } : a
+                    a.id === data.agent_id ? { ...a, status: "running", output: "" } : a
                   )
                 );
               } else if (data.type === "agent_token") {
@@ -84,7 +85,7 @@ export default function SwarmPage() {
                 setConsensus(data.consensus);
               }
             } catch (err) {
-              console.error("SSE parse error", err);
+              console.error("SSE parse error", err, part);
             }
           }
         }

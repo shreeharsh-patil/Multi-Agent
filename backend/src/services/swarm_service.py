@@ -54,7 +54,8 @@ SWARM_AGENTS = [
 
 async def stream_swarm_collaboration(user_prompt: str) -> AsyncGenerator[str, None]:
     """Execute a multi-agent swarm debate & collaboration loop yielding SSE events."""
-    rotator = get_llm_provider()
+    from src.services.llm import llm_service
+
     conversation_history: Dict[str, str] = {}
 
     yield f"data: {json.dumps({'type': 'swarm_init', 'topic': user_prompt, 'agents': SWARM_AGENTS})}\n\n"
@@ -76,7 +77,7 @@ async def stream_swarm_collaboration(user_prompt: str) -> AsyncGenerator[str, No
 
         full_output_chunks = []
         try:
-            async for chunk in rotator.generate_stream(
+            async for chunk in llm_service.generate_stream(
                 prompt=context_str,
                 system_instruction=agent["system_prompt"],
             ):
