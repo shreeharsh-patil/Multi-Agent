@@ -67,6 +67,10 @@ const agents = [
   { id: 'economics', name: 'Economics Agent' },
   { id: 'architect', name: 'Architect Agent' },
   { id: 'hacker', name: 'Cyber & Security Agent' },
+  { id: 'cooking', name: 'Cooking & Chef Agent' },
+  { id: 'music', name: 'Music Agent' },
+  { id: 'fitness', name: 'Fitness & Health Agent' },
+  { id: 'art', name: 'Art & Design Agent' },
 ]
 
 const teamworkAgents = agents.filter((agent) => agent.id !== 'auto' && agent.id !== 'tool')

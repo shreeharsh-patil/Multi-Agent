@@ -69,6 +69,10 @@ def create_orchestrator_agent() -> LlmAgent:
     economics = create_economics_agent()
     architect = create_architect_agent()
     hacker = create_hacker_agent()
+    cooking = create_chef_agent()
+    music = create_music_agent()
+    fitness = create_fitness_agent()
+    art = create_art_agent()
 
     sub_agents = [
         knowledge,
@@ -89,6 +93,10 @@ def create_orchestrator_agent() -> LlmAgent:
         economics,
         architect,
         hacker,
+        cooking,
+        music,
+        fitness,
+        art,
     ]
 
     return LlmAgent(
@@ -118,7 +126,11 @@ def create_orchestrator_agent() -> LlmAgent:
             "- accountant: Accounting, audit, taxation, GST (CA)\n"
             "- economics: Micro and macro economics\n"
             "- architect: Architecture, construction, structures, design\n"
-            "- hacker: Cybersecurity, networking, ethical hacking, defense\n\n"
+            "- hacker: Cybersecurity, networking, ethical hacking, defense\n"
+            "- cooking: Cooking, techniques, recipes, gastronomy\n"
+            "- music: Music theory, composition, analysis\n"
+            "- fitness: Fitness, exercise science, nutrition\n"
+            "- art: Art history, technique, design\n\n"
 
             "Analyze the user's request and transfer to the best agent. "
             "If the request spans multiple domains, handle it step by step. "
@@ -406,6 +418,73 @@ def create_hacker_agent() -> LlmAgent:
             "remind students not to scan or exploit systems without explicit authorization. Use the web for "
             "up-to-date security topics when helpful."
         ),
-        tools=[web_search_tool],
+tools=[web_search_tool],
         description="Cybersecurity and ethical-hacking study tutor.",
+    )
+
+
+def create_chef_agent() -> LlmAgent:
+    return LlmAgent(
+        name="cooking",
+        model=MODEL,
+        instruction=(
+            "You are the Chef Agent — a culinary study tutor for cooking and hospitality students. Cover cooking "
+            "techniques, ingredient science, recipes with exact measurements, plating, food safety (HACCP), menu "
+            "planning, pastry, and gastronomy. Teach technique and the why behind it first, then step-by-step, "
+            "with headings, bullet points, tables, exact measurements/timings/temperatures, and bold for "
+            "high-yield points. Add exam-style notes and mnemonics. Use the web for up-to-date culinary topics "
+            "when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Cooking and culinary study tutor: techniques, recipes, gastronomy.",
+    )
+
+
+def create_music_agent() -> LlmAgent:
+    return LlmAgent(
+        name="music",
+        model=MODEL,
+        instruction=(
+            "You are the Music Agent — a music study tutor for music and performing-arts students. Cover music "
+            "theory, scales and intervals, melody and harmony, rhythm, ear training, composition, analysis, and "
+            "music history. Teach concept and first principles first, then examples, with headings, bullet "
+            "points, and tables; name notes, chords, and intervals clearly so they can be followed without "
+            "audio. Add exam-style notes and mnemonics. Use the web for up-to-date music topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Music theory and composition study tutor.",
+    )
+
+
+def create_fitness_agent() -> LlmAgent:
+    return LlmAgent(
+        name="fitness",
+        model=MODEL,
+        instruction=(
+            "You are the Fitness & Health Agent — a fitness study tutor for physical-education and "
+            "exercise-science students. Cover exercise physiology, kinesiology and muscle anatomy, resistance "
+            "and cardio programming, mobility, nutrition, and injury prevention. Explain the physiology/muscle "
+            "first, then its application to programming, with headings, bullet points, tables, sets/reps/rest "
+            "and progression descriptors, and bold high-yield points. Keep it general education and recommend a "
+            "professional for personal medical issues. Use the web for up-to-date sports-science topics when "
+            "helpful."
+        ),
+        tools=[web_search_tool],
+        description="Fitness and wellness study tutor for PE/sports science.",
+    )
+
+
+def create_art_agent() -> LlmAgent:
+    return LlmAgent(
+        name="art",
+        model=MODEL,
+        instruction=(
+            "You are the Art & Design Agent — an art study tutor for art and design students. Cover art history "
+            "and movements, drawing and painting technique, composition, color theory, perspective, graphic "
+            "design principles, and critique. Explain the theory or movement first, then its application, with "
+            "headings, bullet points, and tables on line, shape, value, color, and space. Add exam-style notes "
+            "and mnemonics. Use the web for up-to-date art topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Art history, technique, and design study tutor.",
     )

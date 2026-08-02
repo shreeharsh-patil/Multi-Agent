@@ -28,6 +28,14 @@ class AgentRouter:
             (r"(?i)\b(architecture|architect|building\s+construction|construction\b|structural\s+design|civil\s+engineering|blueprint|drafting|cad\b|building\s+materials|foundations?|beam|column|rcc|reinforced\s+concrete|sustainable\s+design|urban\s+design)\b", "architect"),
             # Cyber & Security: networks, hacking, encryption, security of systems + disambiguation
             (r"(?i)\b(cybersecurity|cyber\s+security|ethical\s+hacking|penetration\s+testing|pentest|hacking\b|hacker\b|vulnerability|exploit\b|malware|ransomware|phishing|cryptography|encryption|decrypt|network\s+security|firewall|intrusion\s+detection|capture\s+the\s+flag|ctf\b|owasp|sql\s+injection|xss\b)\b", "hacker"),
+            # Cooking/Chef: cooking, culinary, recipes, food
+            (r"(?i)\b(cooking|cuisine|culinary|chef\b|recipe|recipes|baking\b|pastry|sauce\b|grilling\b|knife\s+skills|mise\s+en\s+place|gastronomy|food\s+science|meal\s+prep|plating|dough|fermentation)\b", "cooking"),
+            # Music: theory, instruments, composition
+            (r"(?i)\b(music\b|musical|music\s+theory|melody|harmony|rhythm|scale\b|scales\b|chord\b|chords\b|intervals\b|ear\s+training|composition\b|songwriting|guitar\b|piano\b|violin\b|orchestra|symphony|note\s+reading|solfege)\b", "music"),
+            # Fitness: exercise, gym, workout, nutrition
+            (r"(?i)\b(fitness|workout|gym\b|exercise\b|exercises?\b|muscle\b|muscles\b|reps\b|bodyweight|squat\b|deadlift|bench\s+press|cardio\b|sports\s+science|kinesiology|nutrition\b|protein\b|macros?\b|weight\s+training|calisthenics)\b", "fitness"),
+            # Art: drawing, painting, design
+            (r"(?i)\b(art\b|artist|drawing\b|sketch\b|painting\b|paint\b|color\s+theory|colour\s+theory|perspective\s+drawing|portrait\b|landscape\s+art|graphic\s+design|composition\b|art\s+history|impressionism|renaissance\b|watercolour|watercolor)\b", "art"),
             # Calendar: catch all natural calendar/scheduling requests
             (r"(?i)\b(calendar|calender|calander)\b", "calendar"),
             (r"(?i)\b(meeting|appointment|event|availability|free\s*time|reschedule|book\s+(a\s+)?(slot|time|meeting)|add\s+to\s+(my\s+)?calendar|what.s\s+on\s+my|my\s+agenda|my\s+schedule|upcoming\s+events?|today.s\s+events?|tomorrow.s\s+events?|check\s+(my\s+)?schedule|show\s+(my\s+)?events?|list\s+(my\s+)?events?|delete\s+(the\s+)?(event|meeting|appointment)|cancel\s+(the\s+)?(event|meeting|appointment)|create\s+(a\s+)?(meeting|event|appointment)|schedule\s+(a\s+)?(meeting|call|event|appointment))\b", "calendar"),
