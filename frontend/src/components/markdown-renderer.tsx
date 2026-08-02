@@ -9,6 +9,7 @@ import rehypeRaw from "rehype-raw";
 import { preprocessLaTeX } from "@/lib/latex";
 import { downloadSecureFile } from "@/lib/download";
 import { ImagePreviewCard } from "@/components/image-preview-card";
+import { MermaidWorkspace } from "@/components/mermaid-workspace";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 const resolveApiUrl = (url?: string) => url?.startsWith('/api/') ? `${BACKEND_URL}${url}` : url;
@@ -47,6 +48,10 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
             {children}
           </code>
         );
+      }
+      if (className?.includes("language-mermaid")) {
+        const source = String(children).replace(/\n$/, "");
+        return <MermaidWorkspace content={`\`\`\`mermaid\n${source}\n\`\`\``} title="Diagram" />;
       }
       return (
         <code className="font-mono text-xs sm:text-sm" {...props}>

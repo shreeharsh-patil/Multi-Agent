@@ -34,7 +34,9 @@ const DEFAULT_MINDMAP = `mindmap
 
 function extractMermaid(content?: string) {
   const match = content?.match(/```mermaid\s*([\s\S]*?)```/i)
-  return match?.[1]?.trim() || ''
+  const source = match?.[1]?.trim() || ''
+  // Be forgiving of the common missing `g` typo in pasted flowcharts.
+  return source.replace(/^raph\b/i, 'graph')
 }
 
 export function MermaidWorkspace({ content, title = 'Visual study map' }: { content?: string; title?: string }) {
