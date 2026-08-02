@@ -3,14 +3,20 @@ import { describe, it, expect } from 'vitest'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 
 describe('MarkdownRenderer (XSS regression)', () => {
-  it('does not emit executable attributes from raw HTML in AI output', () => {
-    const payload = '<img src=x onerror="alert(1)"> hello <svg onload="evil()"></svg>'
+  it('does not emit executable raw html from AI output', () => {
+    const payload = '<img src=x onerror="alert(1)"> <svg onload="evil()"></svg><script>alert(1)</script>'
     const html = renderToStaticMarkup(
       <MarkdownRenderer content={'before ' + payload + ' after'} />,
     )
-    expect(html).not.toContain('onerror')
-    expect(html).not.toContain('onload')
-    expect(html).not.toContain('<script')
+    // Raw HTML must be escaped into inert text, never created as real elements.
+    expect(html).not.toMatch(/<img/i)
+    expect(html).not.toMatch(/<svg/i)
+    expect(html).not.toMatch(/<script/i)
+    // The payload appears only as HTML-escaped text (no executable tag/attr).
+    expect(html).toContain('&lt;img')
+    // No real attribute with a JS handler is produced on any element.
+    expect(html).not.toMatch(/<[a-z:\-]+\s[^>]*onerror\s*=/i)
+    expect(html).not.toMatch(/<[a-z:\-]+\s[^>]*onload\s*=/i)
   })
 
   it('renders plain markdown still (table/headings survive)', () => {
