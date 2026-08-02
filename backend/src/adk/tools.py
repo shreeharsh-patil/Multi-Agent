@@ -232,114 +232,208 @@ async def calculator(expression: str) -> str:
 async def web_search(query: str, for_research: bool = False) -> str:
     """Search the internet for current information.
 
-    Args:
-        query: The search query
-        for_research: If True, returns more results with full markdown content
-                       (used by the Research Agent for deep research)
-
-    Returns:
-        Search result summary
+    Priority Order:
+    1. Free Jina AI Search API (s.jina.ai)
+    2. Free SearXNG Meta-Search API
+    3. Free DuckDuckGo Search (duckduckgo_search / DDGS)
+    4. Firecrawl Search API (Last Fallback, used only if configured & free search yields no results)
     """
-    # If Firecrawl is configured, use it for rich web search!
-    if settings.firecrawl_api_key:
-        try:
-            logger.info(f"Using Firecrawl search for query: {query}")
-            max_items = 5 if for_research else 3
-            response = await firecrawl_rotator.execute_request(
-                "POST",
-                "/search",
-                json={"query": query, "limit": max_items, "lang": "en",
-                      "scrapeOptions": {"formats": ["markdown"]}}
-            )
-            # v2 returns results at top-level key "data" (list of objects)
-            data = response.get("data", []) or response.get("results", [])
-            if not data:
-                return f"No results found on Firecrawl for query: '{query}'"
+    max_items = 5 if for_research else 3
 
-            results = []
-            for item in data[:max_items]:
-                title = item.get("title", "No Title")
-                url = item.get("url", "No URL")
-                # For research, include full markdown content when available
-                if for_research:
-                    content = item.get("markdown", "") or item.get("content", "") or item.get("description", "")
-                    snippet = content[:2000] if content else "No content extracted"
-                else:
-                    snippet = (
-                        item.get("description", "")
-                        or item.get("markdown", "")[:300]
-                        or item.get("content", "")[:300]
-                    )
-                results.append(f"### {title}\nURL: {url}\n{snippet}\n")
-            return "\n".join(results)
-        except Exception as e:
-            logger.error(f"Firecrawl search failed, falling back to DuckDuckGo: {e}")
-
+    # 1. Free Jina AI Search API (https://s.jina.ai/)
     try:
+        jina_res = await _jina_search(query, max_items)
+        if jina_res and len(jina_res.strip()) > 30:
+            logger.info(f"Successfully retrieved search results via Jina AI Search: {query}")
+            return jina_res
+    except Exception as e:
+        logger.warning(f"Jina AI Search failed: {e}")
+
+    # 2. Free SearXNG Meta-Search API
+    try:
+        searx_res = await _searxng_search(query, max_items)
+        if searx_res and len(searx_res.strip()) > 30:
+            logger.info(f"Successfully retrieved search results via SearXNG: {query}")
+            return searx_res
+    except Exception as e:
+        logger.warning(f"SearXNG search failed: {e}")
+
+    # 3. 100% Free Live Web Search via DuckDuckGo
+    try:
+        results = []
+        try:
+            from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                ddg_results = list(ddgs.text(query, max_results=max_items))
+                for item in ddg_results:
+                    title = item.get("title", "No Title")
+                    url = item.get("href", "No URL")
+                    snippet = item.get("body", "No Snippet")
+                    results.append(f"### {title}\nURL: {url}\n{snippet}\n")
+        except Exception as ddg_err:
+            logger.warning(f"duckduckgo_search package failed ({ddg_err}), trying HTTP DDG fallback")
+
+        if results:
+            return "\n".join(results)
+
+        # HTTP Fallback search via DuckDuckGo Instant API
         client = _get_firecrawl_client()
-        # Try DuckDuckGo-style search via a free API
         response = await client.get(
             "https://api.duckduckgo.com/",
-            params={
-                "q": query,
-                "format": "json",
-                "no_html": 1,
-                "skip_disambig": 1,
-            },
+            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
         )
         if response.status_code == 200:
             data = response.json()
-            results = []
-
-            # Abstract text
             abstract = data.get("AbstractText", "")
             if abstract:
                 results.append(f"Summary: {abstract}")
-
-            # Related topics
             topics = data.get("RelatedTopics", [])
             for topic in topics[:5]:
                 if "Text" in topic:
                     results.append(f"- {topic['Text']}")
-                elif "Topics" in topic:
-                    for sub in topic.get("Topics", [])[:3]:
-                        if "Text" in sub:
-                            results.append(f"- {sub['Text']}")
-
             if results:
                 return "\n".join(results)
-
-        # Fallback to a simple text message
-        return (
-            f"Search results for '{query}':\n"
-            "1. Check Google for the latest information\n"
-            "2. Browse relevant Wikipedia articles\n"
-            f"Note: Full web search requires a dedicated API key (Google Custom Search, etc.)"
-        )
-    except ImportError:
-        return f"Web search unavailable: httpx library not installed. Run: pip install httpx"
     except Exception as e:
-        logger.error(f"Web search failed: {e}")
-        return f"Web search encountered an error: {e}. Please try again later."
+        logger.warning(f"Free DuckDuckGo search failed: {e}")
+
+    # 4. Firecrawl Search API (LAST FALLBACK)
+    if settings.firecrawl_api_key:
+        try:
+            logger.info(f"Free engines yielded no results, using Firecrawl fallback search for query: {query}")
+            response = await firecrawl_rotator.execute_request(
+                "POST",
+                "/search",
+                json={"query": query, "limit": max_items, "lang": "en", "scrapeOptions": {"formats": ["markdown"]}}
+            )
+            data = response.get("data", []) or response.get("results", [])
+            if data:
+                results = []
+                for item in data[:max_items]:
+                    title = item.get("title", "No Title")
+                    url = item.get("url", "No URL")
+                    snippet = item.get("markdown", "")[:1000] if for_research else item.get("description", "")[:300]
+                    results.append(f"### {title}\nURL: {url}\n{snippet}\n")
+                return "\n".join(results)
+        except Exception as e:
+            logger.error(f"Firecrawl search fallback failed: {e}")
+
+    return f"No search results found for '{query}'."
+
+
+async def _jina_search(query: str, max_items: int = 5) -> str:
+    """Free Jina AI Search API (https://s.jina.ai/). Returns clean Markdown search results."""
+    import urllib.parse
+    client = _get_firecrawl_client()
+    url = f"https://s.jina.ai/{urllib.parse.quote(query)}"
+    headers = {"Accept": "application/json", "X-No-Cache": "true"}
+    resp = await client.get(url, headers=headers)
+    if resp.status_code == 200:
+        try:
+            data = resp.json()
+            items = data.get("data", [])
+            results = []
+            for item in items[:max_items]:
+                title = item.get("title", "No Title")
+                item_url = item.get("url", "No URL")
+                content = item.get("content", "") or item.get("description", "")
+                results.append(f"### {title}\nURL: {item_url}\n{content[:1500]}\n")
+            if results:
+                return "\n".join(results)
+        except Exception:
+            text = resp.text
+            if text and len(text) > 50:
+                return text[:10000]
+    return ""
+
+
+async def _searxng_search(query: str, max_items: int = 5) -> str:
+    """SearXNG Meta-Search API (Self-hosted or Public instance)."""
+    import os
+    searxng_url = os.getenv("SEARXNG_URL", "https://searx.be").rstrip("/")
+    client = _get_firecrawl_client()
+    try:
+        resp = await client.get(
+            f"{searxng_url}/search",
+            params={"q": query, "format": "json", "language": "en"},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            items = data.get("results", [])
+            results = []
+            for item in items[:max_items]:
+                title = item.get("title", "No Title")
+                item_url = item.get("url", "No URL")
+                snippet = item.get("content", "")
+                results.append(f"### {title}\nURL: {item_url}\n{snippet}\n")
+            if results:
+                return "\n".join(results)
+    except Exception as err:
+        logger.warning(f"SearXNG search failed: {err}")
+    return ""
 
 
 async def scrape_page(url: str) -> str:
     """Scrape a web page and convert it into clean markdown format.
 
-    Uses Firecrawl when the API key is configured (recommended), otherwise
-    falls back to a basic HTTP fetch + HTML-to-text extraction so the
-    Research Agent can always gather source content.
-
-    Args:
-        url: The URL of the web page to scrape.
-
-    Returns:
-        The page content in markdown format.
+    Priority Order:
+    1. Free Jina AI Reader API (r.jina.ai)
+    2. Free Crawl4AI / Playwright Headless Browser
+    3. Free BeautifulSoup HTML Scraper
+    4. Firecrawl Scrape API (Last Fallback, used only if configured & free scrapers fail)
     """
-    # Try Firecrawl first when configured
+    # 1. Free Jina AI Reader API (https://r.jina.ai/{url})
+    try:
+        client = _get_firecrawl_client()
+        jina_url = f"https://r.jina.ai/{url}"
+        resp = await client.get(jina_url, headers={"X-No-Cache": "true"})
+        if resp.status_code == 200 and resp.text and len(resp.text) > 50:
+            logger.info(f"Successfully scraped URL via Jina Reader: {url}")
+            return resp.text[:15000]
+    except Exception as e:
+        logger.warning(f"Jina Reader scrape failed for {url}: {e}")
+
+    # 2. Crawl4AI / Playwright Headless Browser for JS rendering
+    try:
+        crawl_text = await _crawl4ai_scrape(url)
+        if crawl_text and len(crawl_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Crawl4AI / Playwright: {url}")
+            return crawl_text
+    except Exception as e:
+        logger.warning(f"Crawl4AI / Playwright scrape failed for {url}: {e}")
+
+    # 3. Free BeautifulSoup HTML Scraper Fallback
+    try:
+        client = _get_firecrawl_client()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        resp = await client.get(url, headers=headers, follow_redirects=True)
+        if resp.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header", "svg", "noscript", "iframe"]):
+                tag.decompose()
+            main = soup.find("main") or soup.find("article") or soup.body or soup
+            paragraphs = []
+            for element in main.find_all(["h1", "h2", "h3", "p", "li"]):
+                txt = element.get_text(strip=True)
+                if len(txt) > 20:
+                    if element.name in ["h1", "h2", "h3"]:
+                        paragraphs.append(f"\n### {txt}\n")
+                    elif element.name == "li":
+                        paragraphs.append(f"- {txt}")
+                    else:
+                        paragraphs.append(txt)
+            clean_text = "\n\n".join(paragraphs).strip()
+            if clean_text and len(clean_text) > 50:
+                logger.info(f"Successfully scraped URL via BeautifulSoup: {url}")
+                return clean_text[:15000]
+    except Exception as e:
+        logger.warning(f"BeautifulSoup scrape failed for {url}: {e}")
+
+    # 4. Firecrawl Scrape API (LAST FALLBACK)
     if settings.firecrawl_api_key:
         try:
-            logger.info(f"Using Firecrawl to scrape URL: {url}")
+            logger.info(f"Free scrapers failed, using Firecrawl fallback to scrape URL: {url}")
             response = await firecrawl_rotator.execute_request(
                 "POST",
                 "/scrape",
@@ -347,33 +441,38 @@ async def scrape_page(url: str) -> str:
             )
             markdown = response.get("data", {}).get("markdown", "")
             if markdown:
-                return markdown[:15000]  # Limit to prevent prompt/context window issues
+                return markdown[:15000]
         except Exception as e:
-            logger.warning(f"Firecrawl scrape failed, falling back to HTTP fetch: {e}")
-
-    # Basic fallback: fetch HTML and strip tags
-    try:
-        client = _get_firecrawl_client()
-        resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
-        if resp.status_code == 200:
-            import re
-            html = resp.text
-            # Remove script/style tags and their content
-            html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-            html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
-            # Strip remaining HTML tags
-            text = re.sub(r'<[^>]+>', '', html)
-            # Collapse whitespace
-            text = re.sub(r'\n\s*\n', '\n\n', text)
-            text = re.sub(r' {2,}', ' ', text)
-            text = text.strip()[:15000]
-            if text:
-                logger.info(f"Successfully scraped URL via HTTP fallback: {url}")
-                return text
-    except Exception as e:
-        logger.warning(f"HTTP fallback scrape failed for {url}: {e}")
+            logger.error(f"Firecrawl fallback scrape failed for {url}: {e}")
 
     return "Error: Could not scrape page content."
+
+
+async def _crawl4ai_scrape(url: str) -> str:
+    """Scrape JS-rendered web pages using Crawl4AI or Playwright headless browser."""
+    try:
+        from crawl4ai import AsyncWebCrawler
+        async with AsyncWebCrawler(verbose=False) as crawler:
+            res = await crawler.arun(url=url)
+            if res and hasattr(res, "markdown") and res.markdown:
+                return res.markdown[:15000]
+    except Exception as e:
+        logger.warning(f"Crawl4AI failed: {e}")
+
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            text = await page.inner_text("body")
+            await browser.close()
+            if text:
+                return text[:15000]
+    except Exception as e:
+        logger.warning(f"Playwright failed: {e}")
+
+    return ""
 
 
 
