@@ -1428,6 +1428,18 @@ function ChatContent() {
               <span className="text-xs hidden sm:inline">Teamwork</span>
               <span className="hidden sm:inline rounded bg-[#1f8a65]/10 px-1 py-0.5 text-[9px] font-bold text-[#1f8a65]">BETA</span>
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 gap-1.5 hover:bg-secondary rounded-lg px-1.5 sm:px-2.5 ${
+                showDebugPanel ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs' : 'text-muted-foreground'
+              }`}
+              onClick={() => setShowDebugPanel(!showDebugPanel)}
+              title="Toggle Developer Debug Panel"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              <span className="text-xs hidden sm:inline">Debug</span>
+            </Button>
 
             {!teamMode && (
               <div className="relative flex items-center">
@@ -1447,29 +1459,6 @@ function ChatContent() {
             )}
           </div>
         </div>
-        */}
-
-        {shareUrl && shareUrl !== 'error' && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-[8px] border border-[#1f8a65]/20 bg-[#1f8a65]/5 px-3 py-2 text-xs">
-            <Share2 className="h-3.5 w-3.5 text-[#1f8a65]" />
-            <span className="font-medium text-[#1f8a65]">Conversation link copied:</span>
-            <Input readOnly value={shareUrl} className="ml-auto h-7 max-w-sm text-[10px] bg-card border-border text-[#26251e]" />
-          </div>
-        )}
-        {shareUrl === 'error' && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-xs">
-            <X className="h-3.5 w-3.5 text-red-500" />
-            <span className="font-medium text-red-600">Failed to create share link.</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto h-6 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-100"
-              onClick={() => setShareUrl(null)}
-            >
-              Dismiss
-            </Button>
-          </div>
-        )}
 
         {/* Voice Mode Banner */}
         {voiceMode && (
@@ -1487,19 +1476,33 @@ function ChatContent() {
           </div>
         )}
 
-        {process.env.NODE_ENV === 'development' && chatDebug && (
-          <details className="mx-3 sm:mx-6 mt-3 rounded-lg border border-dashed border-border bg-card/60 px-3 py-2 text-[10px] text-muted-foreground">
-            <summary className="cursor-pointer font-medium">Chat diagnostics · {chatDebug.status}</summary>
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
-              <span>Step: {chatDebug.step || '—'}</span>
-              <span>Agent: {chatDebug.agent || '—'}</span>
-              <span>Request: {chatDebug.requestId || '—'}</span>
-              <span>Elapsed: {Math.max(0, Date.now() - chatDebug.startedAt)} ms</span>
-              {chatDebug.error && <span className="col-span-2 text-destructive">Error: {chatDebug.error}</span>}
+        {showDebugPanel && (
+          <div className="mx-3 sm:mx-6 mt-3 rounded-xl border border-border bg-card p-3 shadow-xs text-xs font-mono">
+            <div className="flex items-center justify-between border-b border-border pb-2 mb-2 font-sans">
+              <span className="font-semibold text-foreground flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-primary" /> Developer Debug Panel & System State
+              </span>
+              <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                State: {chatDebug?.status === 'complete' ? 'SUCCESS' : chatDebug?.status === 'error' ? 'FAILED_WITH_REASON' : sending ? 'RUNNING' : 'IDLE'}
+              </Badge>
             </div>
-          </details>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
+              <div><span className="text-foreground font-medium">Status:</span> {chatDebug?.status || 'idle'}</div>
+              <div><span className="text-foreground font-medium">Step:</span> {chatDebug?.step || 'idle'}</div>
+              <div><span className="text-foreground font-medium">Active Agent:</span> {chatDebug?.agent || selectedAgent || 'orchestrator'}</div>
+              <div><span className="text-foreground font-medium">Request ID:</span> {chatDebug?.requestId ? chatDebug.requestId.slice(0, 8) + '...' : '—'}</div>
+              <div><span className="text-foreground font-medium">Domain:</span> {orchestration?.domain || 'general'}</div>
+              <div><span className="text-foreground font-medium">Complexity:</span> {orchestration?.complexity || 'standard'}</div>
+              <div><span className="text-foreground font-medium">Specialists:</span> {orchestration?.agents?.length || 0}</div>
+              <div><span className="text-foreground font-medium">Elapsed:</span> {chatDebug?.startedAt ? `${Math.max(0, Date.now() - chatDebug.startedAt)}ms` : '0ms'}</div>
+            </div>
+            {chatDebug?.error && (
+              <div className="mt-2 text-destructive bg-destructive/10 p-2 rounded-md font-sans text-xs">
+                ⚠️ Error: {chatDebug.error}
+              </div>
+            )}
+          </div>
         )}
-
 
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
@@ -1645,26 +1648,40 @@ function ChatContent() {
                           }`}
                         >
                           {msg.role === 'assistant' && !msg.content && sending ? (
-                            orchestration && orchestration.agents.length > 1 ? (
-                              <div className="min-w-[240px] space-y-2 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5" role="status" aria-label="AI team working">
-                                <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                  <span>{orchestration.complexity === 'complex' ? 'Assembling a specialist team…' : 'Understanding your request…'}</span>
+                            orchestration && orchestration.agents.length > 0 ? (
+                              <div className="min-w-[260px] space-y-2 rounded-xl border border-border/80 bg-card/90 px-3.5 py-3 shadow-xs" role="status" aria-label="AI team working">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                                  <span>{orchestration.complexity === 'complex' ? 'Assembling specialist team…' : 'Understanding your request…'}</span>
                                 </div>
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5 pt-1">
                                   {orchestration.agents.map((agent) => (
-                                    <div key={agent.agent_id} className="flex items-center gap-2 text-[11px]">
-                                      {agent.status === 'complete' ? <CheckCircle2 className="h-3 w-3 text-[#1f8a65]" /> : agent.status === 'failed' ? <X className="h-3 w-3 text-destructive" /> : agent.status === 'working' ? <Loader2 className="h-3 w-3 animate-spin text-primary" /> : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
-                                      <span className={agent.status === 'working' ? 'text-foreground' : 'text-muted-foreground'}>{agent.label}</span>
+                                    <div key={agent.agent_id} className="flex items-center justify-between gap-2 text-xs">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        {agent.status === 'complete' ? (
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-[#1f8a65] shrink-0" />
+                                        ) : agent.status === 'failed' ? (
+                                          <X className="h-3.5 w-3.5 text-destructive shrink-0" />
+                                        ) : agent.status === 'working' ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                                        ) : (
+                                          <span className="h-2 w-2 rounded-full bg-muted-foreground/30 shrink-0" />
+                                        )}
+                                        <span className={`truncate ${agent.status === 'working' ? 'font-medium text-foreground' : agent.status === 'complete' ? 'text-muted-foreground' : agent.status === 'failed' ? 'text-destructive/80 line-through' : 'text-muted-foreground/70'}`}>
+                                          {agent.label}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] text-muted-foreground uppercase font-mono shrink-0">
+                                        {agent.status === 'working' ? 'Running' : agent.status === 'complete' ? 'Done' : agent.status === 'failed' ? 'Skipped' : 'Queued'}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
                               </div>
                             ) : (
-                              <span className="inline-flex items-center gap-1 h-5" role="status" aria-label="Typing">
-                                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '0ms' }} />
-                                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '200ms' }} />
-                                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '400ms' }} />
+                              <span className="inline-flex items-center gap-1.5 h-6 text-xs text-muted-foreground" role="status" aria-label="Typing">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                <span>Thinking…</span>
                               </span>
                             )
                           ) : (

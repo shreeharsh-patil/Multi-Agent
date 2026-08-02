@@ -169,22 +169,28 @@ class AgentOrchestrator:
         context: Optional[dict] = None,
         on_event=None,
     ) -> dict:
-        """Execute an automatically selected team and merge it into one answer."""
+        """Execute an automatically selected team and merge it into one answer cleanly."""
         import asyncio
+        import time
         from src.orchestrator.dynamic import record_routing
+        from src.services.llm import llm_service
 
+        start_time = time.time()
         valid_steps = [
             step for step in plan.get("steps", [])
             if self.registry.get_agent(step.get("agent_id", ""))
         ]
         if not valid_steps:
-            raise AgentException("Automatic orchestration found no available specialist")
+            valid_steps = [{"agent_id": "knowledge", "label": "Knowledge Agent", "reason": "General reasoning fallback", "role": "general reasoning"}]
 
         async def emit(event: str, data: dict) -> None:
             if on_event:
-                result = on_event(event, data)
-                if hasattr(result, "__await__"):
-                    await result
+                try:
+                    result = on_event(event, data)
+                    if hasattr(result, "__await__"):
+                        await result
+                except Exception as emit_err:
+                    logger.warning("Event emission failed: %s", emit_err)
 
         await emit("plan", {
             "complexity": plan.get("complexity", "simple"),
@@ -194,62 +200,155 @@ class AgentOrchestrator:
 
         async def run_step(step: dict) -> dict:
             agent_id = step["agent_id"]
+            step_start = time.time()
             await emit("agent_started", {"agent_id": agent_id, "label": step["label"], "reason": step["reason"]})
             try:
                 agent = self.registry.get_agent(agent_id)
-                result = await agent.execute(
-                    user_input,
-                    {
-                        "user_id": user_id,
-                        "conversation_id": conversation_id,
-                        "orchestration_role": step.get("role", "specialist analysis"),
-                        **(context or {}),
-                    },
-                )
-                output = result.output or ""
-                await emit("agent_complete", {"agent_id": agent_id, "label": step["label"], "success": bool(result.success)})
-                return {"step": step, "output": output, "citations": getattr(result, "citations", []), "success": result.success}
-            except Exception as exc:
-                logger.warning("Dynamic specialist %s failed: %s", agent_id, exc)
-                await emit("agent_complete", {"agent_id": agent_id, "label": step["label"], "success": False})
-                return {"step": step, "output": "", "citations": [], "success": False, "error": str(exc)}
+                if not agent:
+                    raise AgentException(f"Agent {agent_id} is not registered")
 
-        # All specialists receive the same original request, so they can run
-        # concurrently. The final synthesis is the only dependent stage.
-        results = await asyncio.gather(*(run_step(step) for step in valid_steps))
-        usable = [result for result in results if result["output"].strip()]
-        citations = [citation for result in usable for citation in result.get("citations", [])]
-        record_routing(plan.get("domain", "general"), [result["step"]["agent_id"] for result in usable])
+                # Wrap agent execution in a hard 25-second timeout to prevent deadlocks
+                result = await asyncio.wait_for(
+                    agent.execute(
+                        user_input,
+                        {
+                            "user_id": user_id,
+                            "conversation_id": conversation_id,
+                            "orchestration_role": step.get("role", "specialist analysis"),
+                            **(context or {}),
+                        },
+                    ),
+                    timeout=25.0,
+                )
+                output = (result.output or "").strip()
+                elapsed = round((time.time() - step_start) * 1000, 2)
+                await emit("agent_complete", {
+                    "agent_id": agent_id,
+                    "label": step["label"],
+                    "success": bool(result.success and output),
+                    "execution_time_ms": elapsed,
+                })
+                return {
+                    "step": step,
+                    "output": output,
+                    "citations": getattr(result, "citations", []) or [],
+                    "success": bool(result.success and output),
+                    "execution_time_ms": elapsed,
+                }
+            except asyncio.TimeoutError:
+                elapsed = round((time.time() - step_start) * 1000, 2)
+                logger.warning("Dynamic specialist %s timed out after 25s", agent_id)
+                await emit("agent_complete", {
+                    "agent_id": agent_id,
+                    "label": step["label"],
+                    "success": False,
+                    "error": "Execution timed out (25s limit)",
+                    "execution_time_ms": elapsed,
+                })
+                return {"step": step, "output": "", "citations": [], "success": False, "error": "Timeout", "execution_time_ms": elapsed}
+            except Exception as exc:
+                elapsed = round((time.time() - step_start) * 1000, 2)
+                logger.warning("Dynamic specialist %s failed: %s", agent_id, exc)
+                await emit("agent_complete", {
+                    "agent_id": agent_id,
+                    "label": step["label"],
+                    "success": False,
+                    "error": str(exc),
+                    "execution_time_ms": elapsed,
+                })
+                return {"step": step, "output": "", "citations": [], "success": False, "error": str(exc), "execution_time_ms": elapsed}
+
+        # Run all specialists concurrently with circuit breaker error isolation
+        results = await asyncio.gather(*(run_step(step) for step in valid_steps), return_exceptions=True)
+
+        cleaned_results = []
+        for r, step in zip(results, valid_steps):
+            if isinstance(r, dict):
+                cleaned_results.append(r)
+            else:
+                cleaned_results.append({"step": step, "output": "", "citations": [], "success": False, "error": str(r), "execution_time_ms": 0})
+
+        usable = [r for r in cleaned_results if r.get("output", "").strip()]
+        citations = [citation for r in usable for citation in r.get("citations", []) if citation]
+        record_routing(plan.get("domain", "general"), [r["step"]["agent_id"] for r in usable])
+
+        await emit("synthesizing", {"usable_agents": len(usable), "total_agents": len(valid_steps)})
+
+        output = ""
+        state = "SUCCESS"
 
         if len(usable) == 1:
             output = usable[0]["output"]
-        else:
-            from src.services.llm import llm_service
+        elif len(usable) > 1:
             evidence = "\n\n".join(
-                f"[{result['step']['label']} — {result['step'].get('role', 'specialist')}]:\n{result['output']}"
-                for result in usable
+                f"[{r['step']['label']} — {r['step'].get('role', 'specialist')}]:\n{r['output']}"
+                for r in usable
             )
-            output = await llm_service.generate(
-                prompt=f"User request:\n{user_input}\n\nSpecialist findings:\n{evidence}",
-                system_instruction=(
-                    "You are the Master Orchestrator's answer editor. Merge the specialist findings into one "
-                    "coherent answer for the user. Do not mention agents, orchestration, handoffs, or internal "
-                    "findings. Resolve contradictions conservatively, preserve useful citations, and use clear "
-                    "Markdown. If a diagram is useful, include valid Mermaid in a fenced mermaid block."
-                ),
-                temperature=0.35,
-                max_output_tokens=6000,
-            )
+            try:
+                output = await asyncio.wait_for(
+                    llm_service.generate(
+                        prompt=f"User request:\n{user_input}\n\nSpecialist findings:\n{evidence}",
+                        system_instruction=(
+                            "You are the Master Orchestrator's answer editor. Merge the specialist findings into one "
+                            "coherent answer for the user. Do not mention agents, orchestration, handoffs, or internal "
+                            "findings. Resolve contradictions conservatively, preserve useful citations, and use clear "
+                            "Markdown. If a diagram is useful, include valid Mermaid in a fenced mermaid block."
+                        ),
+                        temperature=0.35,
+                        max_output_tokens=6000,
+                    ),
+                    timeout=30.0,
+                )
+            except Exception as synth_err:
+                logger.error("Master synthesis failed: %s, using concatenated findings", synth_err)
+                output = "\n\n---\n\n".join(r["output"] for r in usable)
+                state = "PARTIAL_SUCCESS"
 
+        # Fallback if all specialists failed or generated empty outputs
+        if not output or not output.strip():
+            logger.warning("No usable specialist output, running direct master fallback synthesis")
+            state = "PARTIAL_SUCCESS" if usable else "FAILED_WITH_REASON"
+            try:
+                from datetime import datetime, timezone
+                now_utc = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
+                output = await asyncio.wait_for(
+                    llm_service.generate(
+                        prompt=user_input,
+                        system_instruction=(
+                            f"Current Real-Time System Date & Time: {now_utc}.\n"
+                            "You are the Master AI Assistant for the Agentic Multi-Agent Workspace platform. "
+                            "Provide a comprehensive, accurate, and direct response to the user's request. "
+                            "Use clear Markdown formatting with headings, bold text, lists, and code blocks as appropriate."
+                        ),
+                        temperature=0.7,
+                        max_output_tokens=4096,
+                    ),
+                    timeout=25.0,
+                )
+            except Exception as fallback_err:
+                logger.error("Direct master fallback synthesis failed: %s", fallback_err)
+                output = "The orchestrator processed your request, but experienced a temporary delay. Please try resending your message."
+                state = "TIMEOUT"
+
+        total_latency = round((time.time() - start_time) * 1000, 2)
         return {
-            "output": output,
+            "output": output.strip(),
             "citations": citations,
             "agent_traces": [
-                {"agent_id": result["step"]["agent_id"], "event_type": "DynamicSpecialist", "has_content": bool(result["output"])}
-                for result in results
+                {
+                    "agent_id": r["step"]["agent_id"],
+                    "event_type": "DynamicSpecialist",
+                    "has_content": bool(r.get("output")),
+                    "execution_time_ms": r.get("execution_time_ms", 0),
+                    "success": r.get("success", False),
+                    "error": r.get("error"),
+                }
+                for r in cleaned_results
             ],
-            "events_count": len(results),
-            "success": bool(output),
+            "events_count": len(cleaned_results),
+            "success": bool(output.strip()),
+            "state": state,
+            "latency_ms": total_latency,
             "plan": plan,
         }
 
