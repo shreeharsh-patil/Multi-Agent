@@ -212,7 +212,13 @@ function MiniMarkdown({ text }: { text: string }) {
           return <div key={i} className="flex gap-2 text-xs py-0.5">{cells.map((c, j) => <span key={j} className="flex-1 text-foreground">{c}</span>)}</div>
         }
         if (line.startsWith('|---')) return null
-        const inline = line
+        const escaped = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+        const inline = escaped
           .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
           .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline font-medium">$1</a>')
           .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-xs font-mono">$1</code>')

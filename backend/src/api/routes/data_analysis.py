@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 
 from src.utils.logger import logger
+from src.api.middleware import resolve_user_id
 
 router = APIRouter(prefix="/api/data-analysis", tags=["Data Analysis"])
 
@@ -22,6 +23,17 @@ router = APIRouter(prefix="/api/data-analysis", tags=["Data Analysis"])
 
 MAX_ROWS_FOR_CONTEXT = 200  # rows sent verbatim to the LLM
 MAX_FILE_MB = 20
+
+
+def _require_session_owner(session, caller: str) -> None:
+    """Reject access to a session that belongs to a different authenticated user.
+
+    Collections uploaded to the shared ``default`` bucket remain readable by any
+    caller (public-pool behaviour consistent with the rest of the platform).
+    """
+    owner = session.get("user_id", "default")
+    if owner != "default" and caller != owner:
+        raise HTTPException(status_code=404, detail="Session not found.")
 
 
 def _parse_csv(content: bytes) -> tuple[list[str], list[list[str]]]:
@@ -137,11 +149,12 @@ async def upload_file(
         raise HTTPException(status_code=422, detail="File appears to be empty or unreadable.")
 
     session_id = uuid.uuid4().hex
+    owner_id = resolve_user_id(request, user_id)
     _sessions[session_id] = {
         "filename": file.filename,
         "headers": headers,
         "rows": rows,
-        "user_id": user_id,
+        "user_id": owner_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -171,6 +184,7 @@ async def analyse(
     session = _sessions.get(body.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found. Please re-upload the file.")
+    _require_session_owner(session, resolve_user_id(request, "default"))
 
     from src.services.llm import llm_service
 
@@ -203,6 +217,7 @@ async def get_session(session_id: str, request: Request):
     session = _sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
+    _require_session_owner(session, resolve_user_id(request, "default"))
     return {
         "success": True,
         "session_id": session_id,
@@ -217,5 +232,8 @@ async def get_session(session_id: str, request: Request):
 @router.delete("/session/{session_id}")
 async def delete_session(session_id: str, request: Request):
     """Remove a session from memory."""
-    _sessions.pop(session_id, None)
+    session = _sessions.get(session_id)
+    if session:
+        _require_session_owner(session, resolve_user_id(request, "default"))
+        _sessions.pop(session_id, None)
     return {"success": True}

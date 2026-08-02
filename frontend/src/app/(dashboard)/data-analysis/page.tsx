@@ -188,7 +188,13 @@ function MarkdownRenderer({ text }: { text: string }) {
         </div>
       )
     } else {
-      const inline = line
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+      const inline = escaped
         .replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground font-semibold">$1</strong>')
         .replace(/`(.+?)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-primary text-xs font-mono">$1</code>')
         .replace(/^### (.+)/, '<h3 class="text-sm font-bold text-foreground mt-3 mb-1">$1</h3>')

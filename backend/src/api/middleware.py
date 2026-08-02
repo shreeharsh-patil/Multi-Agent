@@ -77,15 +77,16 @@ async def get_user_id_from_request(request: Request) -> str:
         if payload and payload.get("sub"):
             return payload["sub"]
 
-    # 2. X-User-Id header (for development/testing)
-    user_id = request.headers.get("X-User-Id", "")
-    if user_id:
-        return user_id
+    # 2. X-User-Id header (for development/testing only)
+    if settings.debug:
+        user_id = request.headers.get("X-User-Id", "")
+        if user_id:
+            return user_id
 
-    # 3. Query param fallback
-    user_id = request.query_params.get("user_id", "")
-    if user_id:
-        return user_id
+        # 3. Query param fallback (development/testing only)
+        user_id = request.query_params.get("user_id", "")
+        if user_id:
+            return user_id
 
     return "default"
 
@@ -180,8 +181,8 @@ def _cors_headers(request: Request) -> dict:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id, X-Google-Access-Token, X-Drive-Access-Token, X-Drive-Refresh-Token",
         }
     return {}
 

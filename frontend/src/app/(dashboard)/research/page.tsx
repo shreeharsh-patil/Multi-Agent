@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Search, Globe, FileText, Loader2, Sparkles, Trash2, CheckCircle2, Download } from 'lucide-react'
+import { Search, Globe, FileText, Loader2, Sparkles, Trash2, CheckCircle2, Download, BookOpen, Brain, Check } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
@@ -28,6 +28,9 @@ export default function ResearchPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeStage, setActiveStage] = useState(0)
+  const [studyBusy, setStudyBusy] = useState<'notes' | 'quiz' | null>(null)
+  const [studyNotes, setStudyNotes] = useState<{ title: string; content: string } | null>(null)
+  const [studyQuiz, setStudyQuiz] = useState<Array<{ question: string; answer: string; explanation: string }> | null>(null)
   const stages = [
     { label: 'Research plan', detail: 'Framing questions and source strategy' },
     { label: 'Sub-question decomposition', detail: 'Splitting the topic into focused angles' },
@@ -176,6 +179,46 @@ export default function ResearchPage() {
     }
   }
 
+  const createStudyNotes = async () => {
+    if (!currentReport || studyBusy) return
+    setStudyBusy('notes')
+    setError(null)
+    try {
+      const response = await api.study.notes({
+        topic: currentReport.query,
+        style: 'detailed',
+        save_as_note: true,
+      })
+      if (response.success && response.data) {
+        setStudyNotes({ title: response.data.title, content: response.data.content })
+      } else setError(response.error || 'Could not create study notes')
+    } catch {
+      setError('Could not create study notes')
+    } finally {
+      setStudyBusy(null)
+    }
+  }
+
+  const createStudyQuiz = async () => {
+    if (!currentReport || studyBusy) return
+    setStudyBusy('quiz')
+    setError(null)
+    try {
+      const response = await api.study.quiz({ topic: currentReport.query, count: 5, blooms_level: 'all' })
+      if (response.success && response.data) {
+        setStudyQuiz(response.data.questions.map((question) => ({
+          question: question.question,
+          answer: question.correctAnswer,
+          explanation: question.explanation,
+        })))
+      } else setError(response.error || 'Could not generate quiz')
+    } catch {
+      setError('Could not generate quiz')
+    } finally {
+      setStudyBusy(null)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
       <div className="space-y-1">
@@ -283,6 +326,42 @@ export default function ResearchPage() {
               <div ref={resultsRef} className="max-h-[650px] overflow-y-auto pr-3 scrollbar-thin space-y-4">
                 <MarkdownRenderer content={currentReport.content} />
               </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-xs">
+            <CardHeader className="p-5 pb-3">
+              <CardTitle className="flex items-center gap-2 text-base font-sans font-normal tracking-[-0.02em]">
+                <Brain className="h-4 w-4 text-primary" /> Turn research into study material
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Create a saved note or test your understanding from this report.</p>
+            </CardHeader>
+            <CardContent className="p-5 pt-0">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" className="gap-2 text-xs" onClick={createStudyNotes} disabled={studyBusy !== null}>
+                  {studyBusy === 'notes' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookOpen className="h-3.5 w-3.5" />}
+                  Create saved study notes
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2 text-xs" onClick={createStudyQuiz} disabled={studyBusy !== null}>
+                  {studyBusy === 'quiz' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+                  Generate 5-question quiz
+                </Button>
+              </div>
+              {studyNotes && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium"><Check className="h-4 w-4 text-[#1f8a65]" /> {studyNotes.title} saved to Notes</div>
+                  <div className="max-h-[360px] overflow-y-auto rounded-lg bg-secondary/50 p-4"><MarkdownRenderer content={studyNotes.content} /></div>
+                </div>
+              )}
+              {studyQuiz && (
+                <div className="mt-4 space-y-3 border-t border-border pt-4">
+                  {studyQuiz.map((item, index) => (
+                    <details key={`${item.question}-${index}`} className="rounded-lg border border-border bg-secondary/40 p-3">
+                      <summary className="cursor-pointer text-sm font-medium">{index + 1}. {item.question}</summary>
+                      <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground"><p><span className="font-semibold text-foreground">Answer:</span> {item.answer}</p><p className="mt-2">{item.explanation}</p></div>
+                    </details>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
           <MermaidWorkspace content={currentReport.content} title="Research concept map" />

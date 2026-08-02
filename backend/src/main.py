@@ -133,8 +133,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-User-Id", "X-Google-Access-Token", "X-Drive-Access-Token", "X-Drive-Refresh-Token"],
 )
 app.middleware("http")(jwt_auth_middleware)
 app.middleware("http")(error_handler_middleware)

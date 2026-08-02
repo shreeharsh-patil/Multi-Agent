@@ -5,7 +5,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import rehypeRaw from "rehype-raw";
 import { preprocessLaTeX } from "@/lib/latex";
 import { downloadSecureFile } from "@/lib/download";
 import { ImagePreviewCard } from "@/components/image-preview-card";
@@ -113,7 +112,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
     <div className={`prose dark:prose-invert max-w-full overflow-x-hidden text-sm leading-relaxed ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
-        rehypePlugins={[rehypeKatex, rehypeRaw]}
+        rehypePlugins={[rehypeKatex]}
         components={components}
       >
         {processedContent}

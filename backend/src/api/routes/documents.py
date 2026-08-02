@@ -23,12 +23,40 @@ IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 TEXT_EXTENSIONS = {"pdf", "docx", "pptx", "txt", "md"}
 ALL_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS
 
+# Max accepted upload size in bytes (prevents memory/disk exhaustion DoS).
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+def _safe_filename(filename: str | None) -> str:
+    """Strip path separators and header-injection characters from a client filename."""
+    name = Path(filename or "").name
+    name = "".join(ch for ch in name if ch not in '\r\n"\\')
+    return name.strip() or "unnamed"
+
 
 async def can_use_workspace(workspace_id: str | None, user_id: str) -> bool:
     if not workspace_id:
         return True
     workspace = await Workspace.get(workspace_id)
     return bool(workspace and (workspace.user_id == user_id or user_id in workspace.member_ids))
+
+
+async def can_access_document(doc, resolved_user_id: str) -> bool:
+    """Ownership + workspace-membership check for document reads.
+
+    - Owners can always access their own documents.
+    - Workspace members can access documents shared into a workspace they belong to.
+    - The public ``"default"`` bucket remains readable by any user/anonymous caller
+      (used by shared images) but a non-owner user cannot read another person's
+      non-workspace (private) document.
+    """
+    if doc.user_id == resolved_user_id:
+        return True
+    if doc.workspace_id and await can_use_workspace(doc.workspace_id, resolved_user_id):
+        return True
+    if doc.user_id == "default":
+        return True
+    return False
 
 
 @router.get("/storage")
@@ -114,12 +142,16 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
     if workspace_id and not await can_use_workspace(workspace_id, resolved_user_id):
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    ext = os.path.splitext(file.filename)[1].lower().lstrip(".")
+    safe_name = _safe_filename(file.filename)
+    ext = os.path.splitext(safe_name)[1].lower().lstrip(".")
     if ext not in ALL_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     is_image = ext in IMAGE_EXTENSIONS
-    content = await file.read()
+    # Read with a hard cap to avoid memory/disk exhaustion (50 MB).
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
 
     # Optional Google Drive sync
     drive_access_token = http_request.headers.get("X-Drive-Access-Token", "")
@@ -127,18 +159,18 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
 
     from src.services.rag.opendocuments_client import should_use_opendocuments, opendocuments_client
     if not workspace_id and not is_image and await should_use_opendocuments(resolved_user_id):
-        return await opendocuments_client.upload_document(file.filename, content)
+        return await opendocuments_client.upload_document(safe_name, content)
 
     if is_image:
         # Store images permanently in uploads directory
-        safe_name = f"{uuid.uuid4().hex}_{file.filename}"
-        dest_path = UPLOAD_DIR / safe_name
+        dest_name = f"{uuid.uuid4().hex}_{safe_name}"
+        dest_path = UPLOAD_DIR / dest_name
         with open(dest_path, "wb") as f:
             f.write(content)
 
         doc = Document(
             user_id=resolved_user_id,
-            file_name=file.filename,
+            file_name=safe_name,
             file_type=ext,
             file_size=len(content),
             file_path=str(dest_path),
@@ -155,7 +187,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 "gif": "image/gif", "webp": "image/webp",
             }
             try:
-                analysis = await analyze_image(content, mime_map[ext], file.filename)
+                analysis = await analyze_image(content, mime_map[ext], safe_name)
                 if analysis.strip():
                     await DocumentChunk(
                         document_id=str(doc.id),
@@ -163,13 +195,13 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                         content=analysis.strip(),
                         chunk_index=0,
                         section="Image analysis",
-                        metadata={"file_name": file.filename, "kind": "vision_ocr"},
+                        metadata={"file_name": safe_name, "kind": "vision_ocr"},
                     ).insert()
                     doc.chunk_count = 1
                     await doc.save()
                     vision_analyzed = True
             except Exception as e:
-                logger.warning(f"Vision analysis failed for {file.filename}: {e}")
+                logger.warning(f"Vision analysis failed for {safe_name}: {e}")
 
         if drive_access_token:
             try:
@@ -179,18 +211,18 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 drive_result = await drive.upload_file(
                     access_token=drive_access_token,
                     file_path=str(dest_path),
-                    file_name=file.filename,
+                    file_name=safe_name,
                     mime_type=mime_map.get(ext, "application/octet-stream"),
                     refresh_token=drive_refresh_token,
                 )
                 doc.drive_file_id = drive_result.get("id")
                 doc.drive_web_view_link = drive_result.get("webViewLink")
                 await doc.save()
-                logger.info(f"Image synced to Drive: {file.filename} (id={doc.drive_file_id})")
+                logger.info(f"Image synced to Drive: {safe_name} (id={doc.drive_file_id})")
             except Exception as e:
                 logger.warning(f"Failed to sync image to Drive: {e}")
 
-        logger.info(f"Stored image: {file.filename}")
+        logger.info(f"Stored image: {safe_name}")
 
         return {
             "id": str(doc.id),
@@ -207,15 +239,15 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
     else:
         # Documents: parse, chunk, store in vector DB
         # Store file persistently so it can be served for preview later
-        safe_name = f"{uuid.uuid4().hex}_{file.filename}"
-        dest_path = UPLOAD_DIR / safe_name
+        dest_name = f"{uuid.uuid4().hex}_{safe_name}"
+        dest_path = UPLOAD_DIR / dest_name
         with open(dest_path, "wb") as f:
             f.write(content)
         file_path = str(dest_path)
 
         doc = Document(
             user_id=resolved_user_id,
-            file_name=file.filename,
+            file_name=safe_name,
             file_type=ext,
             file_size=len(content),
             file_path=file_path,
@@ -251,7 +283,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                     chunk_index=chunk.chunk_index,
                     page_number=chunk.page_number,
                     section=chunk.section,
-                    metadata={"file_name": file.filename, "kind": "document_text"},
+                    metadata={"file_name": safe_name, "kind": "document_text"},
                 ).insert()
 
             retriever = get_retriever()
@@ -259,7 +291,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                 chunks=chunk_data,
                 user_id=resolved_user_id,
                 document_id=str(doc.id),
-                file_name=file.filename,
+                file_name=safe_name,
                 workspace_id=workspace_id,
             )
 
@@ -276,18 +308,18 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
                     drive_result = await drive.upload_file(
                         access_token=drive_access_token,
                         file_path=file_path,
-                        file_name=file.filename,
+                        file_name=safe_name,
                         mime_type=media_type_map.get(ext, "application/octet-stream"),
                         refresh_token=drive_refresh_token,
                     )
                     doc.drive_file_id = drive_result.get("id")
                     doc.drive_web_view_link = drive_result.get("webViewLink")
                     await doc.save()
-                    logger.info(f"Document synced to Drive: {file.filename} (id={doc.drive_file_id})")
+                    logger.info(f"Document synced to Drive: {safe_name} (id={doc.drive_file_id})")
                 except Exception as e:
                     logger.warning(f"Failed to sync document to Drive: {e}")
 
-            logger.info(f"Processed document: {file.filename} ({len(chunks)} chunks)")
+            logger.info(f"Processed document: {safe_name} ({len(chunks)} chunks)")
 
             return {
                 "id": str(doc.id),
@@ -321,9 +353,8 @@ async def get_document(document_id: str, http_request: Request) -> dict:
 
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
-    if doc.workspace_id and resolved_user_id != "default" and doc.user_id != resolved_user_id:
-        if not await can_use_workspace(doc.workspace_id, resolved_user_id):
-            raise HTTPException(status_code=403, detail="Not authorized to access this document")
+    if not await can_access_document(doc, resolved_user_id):
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     is_image = doc.file_type in IMAGE_EXTENSIONS
     return {
@@ -355,9 +386,8 @@ async def download_document(document_id: str, http_request: Request, download: b
 
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
-    if doc.workspace_id and resolved_user_id != "default" and doc.user_id != resolved_user_id:
-        if not await can_use_workspace(doc.workspace_id, resolved_user_id):
-            raise HTTPException(status_code=403, detail="Not authorized to access this document")
+    if not await can_access_document(doc, resolved_user_id):
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     # Image formats must be served directly as binary image bytes for <img> tags
     is_image = doc.file_type.lower() in {"png", "jpg", "jpeg", "gif", "webp", "svg"}
@@ -409,11 +439,19 @@ async def download_document(document_id: str, http_request: Request, download: b
     inline_types = {"pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "txt", "md"}
     disposition = "attachment" if download else ("inline" if doc.file_type in inline_types else "attachment")
 
+    # Active-content types (SVG can carry scripts; text files can embed HTML).
+    # Serve with a strict sandbox CSP so a hostile document cannot run scripts
+    # in the origin if it is rendered inline.
+    headers = {}
+    if doc.file_type in {"svg", "txt", "md"}:
+        headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src * data:; style-src 'unsafe-inline'"
+
     return FileResponse(
         path=file_path,
         media_type=media_type,
         filename=doc.file_name,
         content_disposition_type=disposition,
+        headers=headers,
     )
 
 

@@ -11,6 +11,7 @@ from typing import Optional
 from src.adk.runner import process_message, process_message_stream
 from src.orchestrator.base import get_orchestrator
 from src.orchestrator.router import AgentRouter
+from src.orchestrator.dynamic import plan_dynamic
 from src.agents.custom import CustomAgent
 from src.models.agent import AgentConfig
 from src.models.conversation import Conversation, Message, Citation
@@ -141,7 +142,8 @@ async def _build_attachment_context(
             continue
 
         if doc and user_id and doc.user_id != user_id and doc.user_id != "default":
-            if doc.workspace_id and not await can_use_workspace(doc.workspace_id, user_id):
+            accessible = bool(doc.workspace_id and await can_use_workspace(doc.workspace_id, user_id))
+            if not accessible:
                 sections.append(f"## {name}\nThe uploaded document is not available to the current user.")
                 continue
 
@@ -528,6 +530,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
                 raise HTTPException(status_code=404, detail="Workspace not found")
         routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
+        automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
@@ -553,6 +556,14 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 drive_access_token=drive_token, drive_refresh_token=drive_refresh
             )
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
+        elif automatic_mode:
+            result = await get_orchestrator().process_dynamic(
+                augmented_message,
+                user_id,
+                plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
+                conv_id,
+                context=google_agent_context,
+            )
         elif body.team_agents:
             result = await get_orchestrator().process_team(
                 augmented_message,
@@ -639,6 +650,7 @@ async def chat_stream(
         if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
             raise HTTPException(status_code=404, detail="Workspace not found")
     routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
+    automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
     accumulated_output = ""
@@ -668,6 +680,12 @@ async def chat_stream(
                 "conversation_history": history_snippet,
             }
 
+            async def orchestration_event(event_name: str, data: dict):
+                yield_value = {"event": event_name, "data": data}
+                event_queue.append(yield_value)
+
+            event_queue: list[dict] = []
+
             if routed_agent_id == "image":
                 drive_token = http_request.headers.get("X-Drive-Access-Token") or stream_google_context["google_access_token"]
                 drive_refresh = http_request.headers.get("X-Drive-Refresh-Token") or stream_google_context["google_refresh_token"]
@@ -684,6 +702,40 @@ async def chat_stream(
                     attachments=attachments_data, workspace_id=body.workspace_id,
                 )
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                return
+
+            if automatic_mode and routed_agent_id != "image":
+                # The queue lets the dynamic executor report live progress
+                # while specialist tasks run concurrently.
+                async def on_dynamic_event(event_name: str, data: dict):
+                    event_queue.append({"event": event_name, "data": data})
+
+                dynamic_task = asyncio.create_task(get_orchestrator().process_dynamic(
+                    augmented_message,
+                    user_id,
+                    plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
+                    conv_id,
+                    context=stream_google_context,
+                    on_event=on_dynamic_event,
+                ))
+                while not dynamic_task.done() or event_queue:
+                    while event_queue:
+                        queued = event_queue.pop(0)
+                        yield f"event: {queued['event']}\ndata: {json.dumps(queued['data'], ensure_ascii=False)}\n\n"
+                    if not dynamic_task.done():
+                        await asyncio.sleep(0.02)
+                dynamic_result = await dynamic_task
+                accumulated_output = dynamic_result["output"]
+                async for word in _word_chunks(accumulated_output):
+                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
+                attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                await _save_messages(
+                    conv_id=conv_id, user_id=user_id, user_message=body.message,
+                    agent_message=accumulated_output, agent_id="orchestrator", is_new=is_new,
+                    attachments=attachments_data, workspace_id=body.workspace_id,
+                    citations=dynamic_result.get("citations"),
+                )
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': dynamic_result.get('citations', [])})}\n\n"
                 return
 
             if body.team_agents:

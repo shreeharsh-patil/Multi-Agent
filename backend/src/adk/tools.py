@@ -6,6 +6,8 @@ so agents can invoke them via function calling.
 
 import json
 import asyncio
+import ipaddress
+from urllib.parse import urlparse
 from typing import Optional, Dict, Any, List
 import httpx
 from google.adk.tools import FunctionTool
@@ -14,6 +16,42 @@ from src.config import settings
 
 # Shared httpx client for Firecrawl to reuse TCP connections across requests.
 _firecrawl_client: httpx.AsyncClient | None = None
+
+
+def _validate_outbound_url(url: str) -> bool:
+    """Reject SSRF-prone targets before the server dereferences a URL.
+
+    We only allow http/https with a public (non-private, non-loopback,
+    non-link-local) host. This stops a prompt-injected or user-supplied URL
+    from probing localhost, cloud metadata, or internal services.
+    """
+    if not url or "://" not in url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    # Bare localhost names.
+    lowered = host.lower()
+    if lowered in {"localhost", "localhost.localdomain"}:
+        return False
+    try:
+        addr = ipaddress.ip_address(parsed.hostname)
+        if (addr.is_private or addr.is_loopback or addr.is_link_local
+                or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
+            return False
+    except ValueError:
+        # Non-literal hostname (e.g., example.com): resolve it to be safe on
+        # SSRF via DNS rebinding is not fully preventable here, but we still
+        # reject common internal TLDs.
+        if lowered.endswith((".local", ".internal", ".localhost")) or "169.254" in parsed.netloc:
+            return False
+    return True
 
 
 def _get_firecrawl_client() -> httpx.AsyncClient:
@@ -190,10 +228,67 @@ async def memory_search(query: str, user_id: str = "default") -> str:
         return f"Memory search failed: {e}"
 
 
+def _safe_ast_eval(node, env):
+    """Recursively evaluate a validated math AST using only an allow-listed env.
+
+    Never calls ``eval``/``exec``; only Constant/Name/BinOp/UnaryOp/Call of
+    whitelisted functions (abs, min, max, round, sum, math.*) can execute.
+    """
+    import ast
+
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        if node.id not in env:
+            raise ValueError(f"Unknown variable: {node.id}")
+        return env[node.id]
+    if isinstance(node, ast.BinOp):
+        left = _safe_ast_eval(node.left, env)
+        right = _safe_ast_eval(node.right, env)
+        op = node.op
+        if isinstance(op, ast.Add):
+            return left + right
+        if isinstance(op, ast.Sub):
+            return left - right
+        if isinstance(op, ast.Mult):
+            return left * right
+        if isinstance(op, ast.Div):
+            return left / right
+        if isinstance(op, ast.Pow):
+            return left ** right
+        if isinstance(op, ast.Mod):
+            return left % right
+        if isinstance(op, ast.FloorDiv):
+            return left // right
+        raise ValueError("Unsupported operator")
+    if isinstance(node, ast.UnaryOp):
+        operand = _safe_ast_eval(node.operand, env)
+        if isinstance(node.op, ast.USub):
+            return -operand
+        if isinstance(node.op, ast.UAdd):
+            return +operand
+        raise ValueError("Unsupported unary operator")
+    if isinstance(node, ast.List):
+        return [_safe_ast_eval(e, env) for e in node.elts]
+    if isinstance(node, ast.Tuple):
+        return tuple(_safe_ast_eval(e, env) for e in node.elts)
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("Only named functions allowed")
+        fn = env.get(node.func.id)
+        if fn is None:
+            raise ValueError(f"Unknown function: {node.func.id}")
+        args = [_safe_ast_eval(a, env) for a in node.args]
+        kwargs = {kwd.arg: _safe_ast_eval(kwd.value, env) for kwd in node.keywords if kwd.arg}
+        return fn(*args, **kwargs)
+    raise ValueError(f"Unsupported syntax: {type(node).__name__}")
+
+
 async def calculator(expression: str) -> str:
     """Evaluate a mathematical expression safely.
 
-    Uses AST validation to allow only numeric expressions and math functions.
+    Uses AST validation to allow only numeric expressions and math functions,
+    then evaluates the AST directly (no ``eval``/``exec``).
 
     Args:
         expression: The math expression (e.g. '2 + 2', 'sqrt(16)', '3 * 7')
@@ -202,14 +297,14 @@ async def calculator(expression: str) -> str:
         The calculated result
     """
     import ast
-    import math
-    safe_dict = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
+    safe_dict = {k: v for k, v in __import__("math").__dict__.items() if not k.startswith("_")}
     safe_dict.update({"abs": abs, "min": min, "max": max, "round": round, "sum": sum})
     try:
         tree = ast.parse(expression.strip(), mode="eval")
         allowed = (ast.Expression, ast.Constant, ast.BinOp, ast.UnaryOp,
                    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow,
-                   ast.USub, ast.Mod, ast.FloorDiv, ast.Name, ast.Call, ast.List, ast.Tuple)
+                   ast.USub, ast.Mod, ast.FloorDiv, ast.Name, ast.Load, ast.Call,
+                   ast.List, ast.Tuple, ast.keyword)
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):
                 if node.id not in safe_dict:
@@ -221,7 +316,7 @@ async def calculator(expression: str) -> str:
                     raise ValueError(f"Unknown function: {node.func.id}")
             elif not isinstance(node, allowed):
                 raise ValueError(f"Unsupported syntax: {type(node).__name__}")
-        result = eval(expression, {"__builtins__": {}}, safe_dict)
+        result = _safe_ast_eval(tree.body, safe_dict)
         return f"Result: {result}"
     except Exception as e:
         exc = str(e)
@@ -398,14 +493,27 @@ async def scrape_page(url: str) -> str:
     """Scrape a web page and convert it into clean markdown format.
 
     Priority Order:
-    1. Free Jina AI Reader API (r.jina.ai)
-    2. Free Readability Article Content Scanner
-    3. Free Crawl4AI / Playwright Headless Browser
-    4. Free Google Web Cache Text-Only Proxy Scanner
-    5. Free Rotated User-Agent Browser Scanner (Chrome/Safari/Firefox headers)
-    6. Free BeautifulSoup & Markdownify Semantic HTML Parser
-    7. Firecrawl Scrape API (Last Fallback, used only if configured & free scrapers fail)
+    1. Obscura CDP browser (when OBSCURA_CDP_URL is configured)
+    2. Free Jina AI Reader API (r.jina.ai)
+    3. Free Readability Article Content Scanner
+    4. Free Crawl4AI / Playwright Headless Browser
+    5. Free Google Web Cache Text-Only Proxy Scanner
+    6. Free Rotated User-Agent Browser Scanner (Chrome/Safari/Firefox headers)
+    7. Free BeautifulSoup & Markdownify Semantic HTML Parser
+    8. Firecrawl Scrape API (Last Fallback, used only if configured & free scrapers fail)
     """
+    if not _validate_outbound_url(url):
+        return "The requested URL was blocked by the server's SSRF protection (only public http/https URLs are allowed)."
+
+    if settings.obscura_cdp_url:
+        try:
+            obscura_text = await _obscura_scrape(url)
+            if obscura_text and len(obscura_text.strip()) > 50:
+                logger.info(f"Successfully scraped URL via Obscura: {url}")
+                return obscura_text[:15000]
+        except Exception as e:
+            logger.warning(f"Obscura scrape failed, continuing with fallback scrapers: {e}")
+
     # 1. Free Jina AI Reader API (https://r.jina.ai/{url})
     try:
         client = _get_firecrawl_client()
@@ -506,6 +614,30 @@ async def scrape_page(url: str) -> str:
             logger.error(f"Firecrawl fallback scrape failed for {url}: {e}")
 
     return "Error: Could not scrape page content."
+
+
+async def _obscura_scrape(url: str) -> str:
+    """Extract visible text from a JavaScript page through Obscura's CDP endpoint."""
+    from playwright.async_api import async_playwright
+
+    timeout_ms = max(5, settings.obscura_timeout_seconds) * 1000
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.connect_over_cdp(settings.obscura_cdp_url)
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=min(timeout_ms, 10000))
+            except Exception:
+                pass
+            title = await page.title()
+            text = await page.locator("body").inner_text(timeout=timeout_ms)
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            return ((f"# {title}\n\n" if title else "") + "\n\n".join(lines)).strip()
+        finally:
+            await page.close()
+            await browser.close()
 
 
 async def _crawl4ai_scrape(url: str) -> str:
@@ -1020,4 +1152,3 @@ drive_read_tool = FunctionTool(func=drive_read_file)
 drive_upload_tool = FunctionTool(func=drive_upload)
 drive_delete_tool = FunctionTool(func=drive_delete)
 contacts_list_tool = FunctionTool(func=contacts_list)
-

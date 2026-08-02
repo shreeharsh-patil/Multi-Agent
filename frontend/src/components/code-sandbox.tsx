@@ -34,7 +34,11 @@ ${html}
 try {
   ${escapeCloser(js)}
 } catch (e) {
-  document.body.innerHTML += '<pre style="color:red;margin-top:16px">Runtime Error: ' + e.message + '<\\/pre>';
+  var errEl = document.createElement('pre');
+  errEl.style.color = 'red';
+  errEl.style.marginTop = '16px';
+  errEl.textContent = 'Runtime Error: ' + (e && e.message ? e.message : String(e));
+  document.body.appendChild(errEl);
 }
 </script>
 </body>
@@ -123,7 +127,7 @@ export function CodeSandbox({ html = '', css = '', js = '', fullHtml, className 
       <iframe
         key={key}
         srcDoc={srcdoc}
-        sandbox="allow-scripts allow-modals"
+        sandbox="allow-scripts"
         className="w-full bg-white"
         style={{ height: iframeHeight, border: 'none' }}
         title="Code Preview"

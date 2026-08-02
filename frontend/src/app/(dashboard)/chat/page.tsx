@@ -6,7 +6,6 @@ import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Image from 'next/image'
-import { marked } from 'marked'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -22,7 +21,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import rehypeRaw from 'rehype-raw'
 import { preprocessLaTeX } from '@/lib/latex'
 import { ImagePreviewCard } from '@/components/image-preview-card'
 import { MermaidWorkspace, repairMermaidMarkdown } from '@/components/mermaid-workspace'
@@ -202,6 +200,7 @@ function ChatContent() {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
+  const [orchestration, setOrchestration] = useState<{ complexity?: string; domain?: string; agents: Array<{ agent_id: string; label: string; reason?: string; status?: 'queued' | 'working' | 'complete' | 'failed' }> } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
@@ -845,6 +844,7 @@ function ChatContent() {
 
     sendingRef.current = true
     setSending(true)
+    setOrchestration(null)
 
     // Attachments already began uploading on select. Await any in-flight
     // upload; only kick off a fresh upload for ones that never started
@@ -973,6 +973,22 @@ function ChatContent() {
                 if (frameId === null) {
                   frameId = requestAnimationFrame(flushState)
                 }
+            } else if (currentEvent === 'plan' && Array.isArray(data.agents)) {
+                setOrchestration({
+                  complexity: data.complexity,
+                  domain: data.domain,
+                  agents: data.agents.map((agent: any) => ({ ...agent, status: 'queued' })),
+                })
+            } else if (currentEvent === 'agent_started' && data.agent_id) {
+                setOrchestration((current) => current ? {
+                  ...current,
+                  agents: current.agents.map((agent) => agent.agent_id === data.agent_id ? { ...agent, status: 'working' } : agent),
+                } : current)
+            } else if (currentEvent === 'agent_complete' && data.agent_id) {
+                setOrchestration((current) => current ? {
+                  ...current,
+                  agents: current.agents.map((agent) => agent.agent_id === data.agent_id ? { ...agent, status: data.success ? 'complete' : 'failed' } : agent),
+                } : current)
             } else if (currentEvent === 'agent' && data.agent_id) {
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -1092,6 +1108,7 @@ function ChatContent() {
     } finally {
       sendingRef.current = false
       setSending(false)
+      setOrchestration(null)
       abortControllerRef.current = null
       // Refresh side-panel document list and sidebar conversation history on send completion
       window.dispatchEvent(new Event('refresh-documents-list'))
@@ -1409,37 +1426,6 @@ function ChatContent() {
         )}
 
 
-        {/* Team Collaboration Banner */}
-        {teamMode && (
-          <div className="border-b border-border bg-secondary p-3 shrink-0">
-            <div className="max-w-3xl mx-auto flex items-start gap-2 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[#26251e] text-[11px] uppercase tracking-wider">Agent Specialist Squad</p>
-                <p className="text-[10px] text-muted-foreground">Pick which agents participate collaboratively in order.</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {teamworkAgents.map((agent) => {
-                    const active = teamAgents.includes(agent.id)
-                    return (
-                      <button
-                        key={agent.id}
-                        type="button"
-                        onClick={() => setTeamAgents((current) => active ? current.filter((id) => id !== agent.id) : [...current, agent.id])}
-                        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition-all ${
-                          active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-card'
-                        }`}
-                      >
-                        {active ? <CheckCircle2 className="h-3 w-3 text-primary" /> : <span className="h-2 w-2 rounded-full border border-[#cfcdc4]" />}
-                        {agent.name.replace(' Agent', '')}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
@@ -1584,16 +1570,33 @@ function ChatContent() {
                           }`}
                         >
                           {msg.role === 'assistant' && !msg.content && sending ? (
-                            <span className="inline-flex items-center gap-1 h-5" role="status" aria-label="Typing">
-                              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '0ms' }} />
-                              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '200ms' }} />
-                              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '400ms' }} />
-                            </span>
+                            orchestration ? (
+                              <div className="min-w-[240px] space-y-2 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5" role="status" aria-label="AI team working">
+                                <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  <span>{orchestration.complexity === 'complex' ? 'Assembling a specialist team…' : 'Understanding your request…'}</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  {orchestration.agents.map((agent) => (
+                                    <div key={agent.agent_id} className="flex items-center gap-2 text-[11px]">
+                                      {agent.status === 'complete' ? <CheckCircle2 className="h-3 w-3 text-[#1f8a65]" /> : agent.status === 'failed' ? <X className="h-3 w-3 text-destructive" /> : agent.status === 'working' ? <Loader2 className="h-3 w-3 animate-spin text-primary" /> : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
+                                      <span className={agent.status === 'working' ? 'text-foreground' : 'text-muted-foreground'}>{agent.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 h-5" role="status" aria-label="Typing">
+                                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '0ms' }} />
+                                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '200ms' }} />
+                                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground/60" style={{ animationDelay: '400ms' }} />
+                              </span>
+                            )
                           ) : (
                             <div className="text-xs sm:text-sm leading-relaxed [&_*]:break-words">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
-                                rehypePlugins={[rehypeKatex, rehypeRaw]}
+                                rehypePlugins={[rehypeKatex]}
                                 components={{
                                   a: ({ href, children }) => {
                                     const resolved = resolveApiUrl(href)

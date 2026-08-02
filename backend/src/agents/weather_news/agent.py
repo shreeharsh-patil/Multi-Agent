@@ -4,7 +4,7 @@ No API keys are required for weather or news fetching.
 """
 
 import asyncio
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as SafeET
 from typing import Optional
 import httpx
 
@@ -255,7 +255,7 @@ async def _fetch_news(category: str) -> list[dict]:
                 r.raise_for_status()
                 xml_text = r.text
 
-            root = ET.fromstring(xml_text)
+            root = SafeET.fromstring(xml_text)
             items = root.findall(".//{*}item") or root.findall(".//item") or root.findall(".//{*}entry") or root.findall(".//entry")
             articles = []
             for item in items[:MAX_ARTICLES]:

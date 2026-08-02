@@ -10,6 +10,7 @@ from typing import AsyncGenerator, Optional
 
 from src.services.llm import llm_service
 from src.utils.logger import logger
+from src.config import settings
 
 MAX_ITERATIONS = 3
 PISTON_URL = "https://emkc.org/api/v2/piston"
@@ -246,10 +247,13 @@ async def execute_code(language: str, code: str, stdin: str = "") -> dict:
 
     language = normalize_language(language)
 
-    # Priority 1: Try local sandboxed subprocess execution (instant, 100% reliable)
-    local_res = await _execute_local_subprocess(language, code, stdin)
-    if local_res is not None:
-        return local_res
+    # Priority 1: Try local subprocess execution (instant) only when explicitly
+    # allowed. It runs untrusted code on the backend host, so it is disabled by
+    # default for security; remote sandboxes are used instead.
+    if settings.allow_local_code_execution:
+        local_res = await _execute_local_subprocess(language, code, stdin)
+        if local_res is not None:
+            return local_res
 
     # Priority 2: Try Wandbox free public API
     wandbox_res = await _execute_wandbox(language, code, stdin)

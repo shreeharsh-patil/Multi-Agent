@@ -1,14 +1,25 @@
 import os
 from pathlib import Path
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 from typing import Literal
+
+
+def _is_insecure_secret(value: str) -> bool:
+    v = (value or "").strip()
+    if not v:
+        return True
+    if v.lower() in {"change-this-in-production", "changeme", "secret", "secret-key"}:
+        return True
+    if len(v) < 16:
+        return True
+    return False
 
 
 class Settings(BaseSettings):
     app_name: str = "Agentic AI Platform"
     app_version: str = "0.1.0"
-    debug: bool = True
+    debug: bool = False
     host: str = "0.0.0.0"
     port: int = 8000
 
@@ -51,6 +62,9 @@ class Settings(BaseSettings):
     kimi_base_url: str = "https://api.moonshot.cn/v1"
 
     firecrawl_api_key: str = ""
+    # Optional Obscura CDP endpoint for managed or self-hosted browser scraping.
+    obscura_cdp_url: str = ""
+    obscura_timeout_seconds: int = 30
     deepgram_api_key: str = ""
 
     image_provider: str = "auto"
@@ -68,6 +82,9 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-in-production"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24
+    # When False (default), generated/untrusted code is never executed directly
+    # on the backend host; it only runs in remote sandboxes (Wandbox/Judge0/Piston).
+    allow_local_code_execution: bool = False
     embedding_dimension: int = 768
     enable_multimodal_ocr: bool = True
     ocr_min_page_chars: int = 40
@@ -104,9 +121,25 @@ class Settings(BaseSettings):
             normalized = value.strip().lower()
             if normalized in {"true", "1", "yes", "on", "development", "dev"}:
                 return True
-            if normalized in {"false", "0", "no", "off", "production", "prod", "release"}:
+            if normalized in {"false", "0", "no", "off", "production", "prod", "release", "warn", "warning", "info", "debug", "error"}:
                 return False
         return value
+
+    @model_validator(mode="after")
+    def _reject_insecure_secret(self):
+        """Refuse to start with a weak/known JWT signing key outside debug mode.
+
+        A publicly known secret key lets any caller forge valid JWTs for any
+        user (full account takeover), so we fail closed instead of silently
+        running insecure. Local development can still opt in by setting DEBUG
+        and supplying a strong SECRET_KEY.
+        """
+        if not self.debug and _is_insecure_secret(self.secret_key):
+            raise ValueError(
+                "REFUSING TO START: SECRET_KEY must be a strong random value of at least 16 characters "
+                "outside debug mode. Set a strong SECRET_KEY (or DEBUG=true for local development)."
+            )
+        return self
 
     model_config = {
         # Resolve both env files so startup works from either the repository
@@ -153,4 +186,3 @@ if settings.firecrawl_api_key:
     first_key = next((k.strip() for k in settings.firecrawl_api_key.split(",") if k.strip()), "")
     if first_key:
         os.environ["FIRECRAWL_API_KEY"] = first_key
-

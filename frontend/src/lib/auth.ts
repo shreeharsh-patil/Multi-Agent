@@ -3,6 +3,14 @@ import type { JWT } from 'next-auth/jwt'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 
+const nextAuthSecret = process.env.NEXTAUTH_SECRET
+if (!nextAuthSecret) {
+  throw new Error(
+    'REFUSING TO START: NEXTAUTH_SECRET must be set to a strong random value. ' +
+    'Refusing to fall back to a known/hardcoded secret (JWT forgery risk).'
+  )
+}
+
 /**
  * Refresh an expired Google OAuth access token using the stored refresh token.
  * Google access tokens expire after ~1 hour; without this the Drive/Calendar
@@ -49,21 +57,24 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
-    CredentialsProvider({
-      name: 'Developer Login',
-      credentials: {
-        username: { label: "Username", type: "text", placeholder: "developer" }
-      },
-      async authorize(_credentials) {
-        // Return a mock developer session profile
-        return {
-          id: 'dev-user-123',
-          name: 'Developer User',
-          email: 'developer@example.com',
-          image: '/developer-avatar.png'
-        }
-      }
-    })
+    // Development-only "Developer Login" — never enabled in production and
+    // it performs no credential check, so it must not ship in prod builds.
+    ...(process.env.NODE_ENV !== 'production'
+      ? [CredentialsProvider({
+          name: 'Developer Login',
+          credentials: {
+            username: { label: "Username", type: "text", placeholder: "developer" }
+          },
+          async authorize(_credentials) {
+            return {
+              id: 'dev-user-123',
+              name: 'Developer User',
+              email: 'developer@example.com',
+              image: '/developer-avatar.png'
+            }
+          }
+        })]
+      : []),
   ],
   callbacks: {
     async jwt({ token, user, account }) {
@@ -122,5 +133,5 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days session persistence
   },
-  secret: process.env.NEXTAUTH_SECRET || 'agentic-jwt-secret-key-30days',
+  secret: nextAuthSecret,
 }
