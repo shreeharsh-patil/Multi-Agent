@@ -30,17 +30,21 @@ def use_adk() -> bool:
 
 async def get_or_create_session(user_id: str, conversation_id: str):
     """Get an existing session or create a new one."""
-    session = SESSION_SERVICE.get_session(
+    import inspect
+    session_res = SESSION_SERVICE.get_session(
         app_name=APP_NAME,
         user_id=user_id,
         session_id=conversation_id,
     )
+    session = await session_res if inspect.iscoroutine(session_res) else session_res
+
     if not session:
-        session = SESSION_SERVICE.create_session(
+        create_res = SESSION_SERVICE.create_session(
             app_name=APP_NAME,
             user_id=user_id,
             session_id=conversation_id,
         )
+        session = await create_res if inspect.iscoroutine(create_res) else create_res
         logger.info(f"Created session: {conversation_id} for user: {user_id}")
     return session
 
