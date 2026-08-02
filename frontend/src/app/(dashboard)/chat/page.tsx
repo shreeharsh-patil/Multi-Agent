@@ -1111,66 +1111,62 @@ function ChatContent() {
         )
         return
       }
-      const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'
-      const displayError = /empty response|no content|closed before completion/i.test(errorMessage)
-        ? "We couldn't generate a complete response after automatic recovery."
-        : errorMessage
-      setChatDebug((current) => current ? { ...current, status: 'error', step: 'request_error', error: errorMessage } : current)
-      if (!streamingAttempted) {
-        // Fall back to non-streaming API
-        try {
-          const res = await api.chat.send({
-            message: text || `Uploaded ${attachmentCount} file(s)`,
-            conversation_id: currentConvId,
-            agent_id: currentAgent,
-            team_agents: teamMode ? teamAgents as AgentId[] : undefined,
-            workspace_id: currentWorkspace,
-            attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-          }, googleAccessToken, googleRefreshToken)
-          if (res.success && res.data) {
-            // Mark as locally created to prevent refetch overriding messages
-            locallyCreatedIds.current.add(res.data.conversation_id)
-            setConversationId(res.data.conversation_id)
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantId
-                  ? {
-                      ...msg,
-                      content: res.data!.output,
-                      error: false,
-                      agentId: res.data!.agent_traces?.[0]?.agent_id,
-                      citations: res.data!.citations || msg.citations,
-                    }
-                  : msg,
-              ),
-            )
-          } else {
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantId
-                  ? { ...msg, content: /empty response|no content/i.test(res.error || '') ? "We couldn't generate a complete response after automatic recovery.\n\nPlease retry." : (res.error || 'Request failed. Please retry.'), error: true }
-                  : msg,
-              ),
-            )
-          }
-        } catch (fallbackErr) {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantId
-                ? { ...msg, content: `Network error: ${displayError}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
-                : msg,
-            ),
-          )
-        }
-      } else {
+
+      // If we already received a valid response text during streaming, keep it!
+      if (accumulatedContent.trim().length >= 30) {
+        if (frameId !== null) cancelAnimationFrame(frameId)
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantId
-              ? { ...msg, content: `The response was interrupted: ${displayError}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
+              ? { ...msg, content: accumulatedContent, error: false }
               : msg,
           ),
         )
+        return
       }
+
+      // Fall back to non-streaming API request for seamless automatic recovery
+      try {
+        const res = await api.chat.send({
+          message: text || `Uploaded ${attachmentCount} file(s)`,
+          conversation_id: currentConvId,
+          agent_id: currentAgent,
+          team_agents: teamMode ? teamAgents as AgentId[] : undefined,
+          workspace_id: currentWorkspace,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        }, googleAccessToken, googleRefreshToken)
+        if (res.success && res.data) {
+          locallyCreatedIds.current.add(res.data.conversation_id)
+          setConversationId(res.data.conversation_id)
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? {
+                    ...msg,
+                    content: res.data!.output,
+                    error: false,
+                    agentId: res.data!.agent_traces?.[0]?.agent_id,
+                    citations: res.data!.citations || msg.citations,
+                  }
+                : msg,
+            ),
+          )
+          return
+        }
+      } catch (fallbackErr) {
+        console.warn('Chat non-streaming fallback failed:', fallbackErr)
+      }
+
+      const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'
+      setChatDebug((current) => current ? { ...current, status: 'error', step: 'request_error', error: errorMessage } : current)
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId
+            ? { ...msg, content: accumulatedContent || "The chat request encountered an error. Please click retry below to try again.", error: true, requestId: streamRequestId || undefined }
+            : msg,
+        ),
+      )
     } finally {
       sendingRef.current = false
       setSending(false)
