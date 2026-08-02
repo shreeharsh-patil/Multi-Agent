@@ -235,8 +235,10 @@ async def web_search(query: str, for_research: bool = False) -> str:
     Priority Order:
     1. Free Jina AI Search API (s.jina.ai)
     2. Free SearXNG Meta-Search API
-    3. Free DuckDuckGo Search (duckduckgo_search / DDGS)
-    4. Firecrawl Search API (Last Fallback, used only if configured & free search yields no results)
+    3. Free Wikipedia API Academic Search
+    4. Free ArXiv Scientific Papers Search
+    5. Free DuckDuckGo Search (duckduckgo_search / DDGS)
+    6. Firecrawl Search API (Last Fallback, used only if configured & free search yields no results)
     """
     max_items = 5 if for_research else 3
 
@@ -258,7 +260,25 @@ async def web_search(query: str, for_research: bool = False) -> str:
     except Exception as e:
         logger.warning(f"SearXNG search failed: {e}")
 
-    # 3. 100% Free Live Web Search via DuckDuckGo
+    # 3. Free Wikipedia API Search
+    try:
+        wiki_res = await _wikipedia_search(query)
+        if wiki_res and len(wiki_res.strip()) > 30:
+            logger.info(f"Successfully retrieved search results via Wikipedia API: {query}")
+            return wiki_res
+    except Exception as e:
+        logger.warning(f"Wikipedia search failed: {e}")
+
+    # 4. Free ArXiv Academic Papers Search
+    try:
+        arxiv_res = await _arxiv_search(query)
+        if arxiv_res and len(arxiv_res.strip()) > 30:
+            logger.info(f"Successfully retrieved search results via ArXiv API: {query}")
+            return arxiv_res
+    except Exception as e:
+        logger.warning(f"ArXiv search failed: {e}")
+
+    # 5. 100% Free Live Web Search via DuckDuckGo
     try:
         results = []
         try:
@@ -296,7 +316,7 @@ async def web_search(query: str, for_research: bool = False) -> str:
     except Exception as e:
         logger.warning(f"Free DuckDuckGo search failed: {e}")
 
-    # 4. Firecrawl Search API (LAST FALLBACK)
+    # 6. Firecrawl Search API (LAST FALLBACK)
     if settings.firecrawl_api_key:
         try:
             logger.info(f"Free engines yielded no results, using Firecrawl fallback search for query: {query}")
@@ -378,9 +398,12 @@ async def scrape_page(url: str) -> str:
 
     Priority Order:
     1. Free Jina AI Reader API (r.jina.ai)
-    2. Free Crawl4AI / Playwright Headless Browser
-    3. Free BeautifulSoup HTML Scraper
-    4. Firecrawl Scrape API (Last Fallback, used only if configured & free scrapers fail)
+    2. Free Readability Article Content Scanner
+    3. Free Crawl4AI / Playwright Headless Browser
+    4. Free Google Web Cache Text-Only Proxy Scanner
+    5. Free Rotated User-Agent Browser Scanner (Chrome/Safari/Firefox headers)
+    6. Free BeautifulSoup & Markdownify Semantic HTML Parser
+    7. Firecrawl Scrape API (Last Fallback, used only if configured & free scrapers fail)
     """
     # 1. Free Jina AI Reader API (https://r.jina.ai/{url})
     try:
@@ -393,19 +416,55 @@ async def scrape_page(url: str) -> str:
     except Exception as e:
         logger.warning(f"Jina Reader scrape failed for {url}: {e}")
 
-    # 2. Crawl4AI / Playwright Headless Browser for JS rendering
+    # 2. Free Readability Article Content Scanner
+    try:
+        readability_text = await _readability_scrape(url)
+        if readability_text and len(readability_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Readability Scanner: {url}")
+            return readability_text[:15000]
+    except Exception as e:
+        logger.warning(f"Readability scrape failed for {url}: {e}")
+
+    # 3. Crawl4AI / Playwright Headless Browser for JS rendering
     try:
         crawl_text = await _crawl4ai_scrape(url)
         if crawl_text and len(crawl_text.strip()) > 50:
             logger.info(f"Successfully scraped URL via Crawl4AI / Playwright: {url}")
-            return crawl_text
+            return crawl_text[:15000]
     except Exception as e:
         logger.warning(f"Crawl4AI / Playwright scrape failed for {url}: {e}")
 
-    # 3. Free BeautifulSoup HTML Scraper Fallback
+    # 4. Free Google Web Cache Text-Only Proxy Scanner
+    try:
+        cache_text = await _google_cache_scrape(url)
+        if cache_text and len(cache_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Google Cache Scanner: {url}")
+            return cache_text[:15000]
+    except Exception as e:
+        logger.warning(f"Google Cache scrape failed for {url}: {e}")
+
+    # 5. Free Rotated User-Agent Browser Scanner
+    try:
+        browser_text = await _rotated_user_agent_scrape(url)
+        if browser_text and len(browser_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Rotated User-Agent Scanner: {url}")
+            return browser_text[:15000]
+    except Exception as e:
+        logger.warning(f"Rotated User-Agent scrape failed for {url}: {e}")
+
+    # 6. Free Wayback Machine Archive Proxy Scanner
+    try:
+        archive_text = await _wayback_archive_scrape(url)
+        if archive_text and len(archive_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Wayback Archive Scanner: {url}")
+            return archive_text[:15000]
+    except Exception as e:
+        logger.warning(f"Wayback Archive scrape failed for {url}: {e}")
+
+    # 6. Free BeautifulSoup & Markdownify Semantic HTML Parser Fallback
     try:
         client = _get_firecrawl_client()
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}
         resp = await client.get(url, headers=headers, follow_redirects=True)
         if resp.status_code == 200:
             from bs4 import BeautifulSoup
@@ -430,7 +489,7 @@ async def scrape_page(url: str) -> str:
     except Exception as e:
         logger.warning(f"BeautifulSoup scrape failed for {url}: {e}")
 
-    # 4. Firecrawl Scrape API (LAST FALLBACK)
+    # 7. Firecrawl Scrape API (LAST FALLBACK)
     if settings.firecrawl_api_key:
         try:
             logger.info(f"Free scrapers failed, using Firecrawl fallback to scrape URL: {url}")
@@ -462,17 +521,235 @@ async def _crawl4ai_scrape(url: str) -> str:
     try:
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-infobars",
+                    "--window-size=1920,1080",
+                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                ],
+            )
+            context = await browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            )
+            page = await context.new_page()
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+            """)
             await page.goto(url, wait_until="domcontentloaded", timeout=15000)
             text = await page.inner_text("body")
             await browser.close()
             if text:
                 return text[:15000]
     except Exception as e:
-        logger.warning(f"Playwright failed: {e}")
+        logger.warning(f"Stealth Playwright failed: {e}")
+
+    # Fallback to free CORS Proxy anti-bot bypasser
+    try:
+        proxy_text = await _cors_proxy_scrape(url)
+        if proxy_text and len(proxy_text.strip()) > 50:
+            logger.info(f"Successfully bypassed anti-bot via CORS Proxy: {url}")
+            return proxy_text[:15000]
+    except Exception as e:
+        logger.warning(f"CORS proxy bypass failed for {url}: {e}")
 
     return ""
+
+
+async def _readability_scrape(url: str) -> Optional[str]:
+    """Extract clean main body content using Readability algorithm."""
+    try:
+        client = _get_firecrawl_client()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        resp = await client.get(url, headers=headers, follow_redirects=True)
+        if resp.status_code == 200 and resp.text:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for element in soup(["script", "style", "header", "footer", "nav", "aside", "form"]):
+                element.decompose()
+            article = soup.find("article") or soup.find("main") or soup.find("div", class_=lambda c: c and ("content" in c or "body" in c or "post" in c))
+            target = article if article else soup.body
+            if target:
+                text_blocks = [p.get_text(strip=True) for p in target.find_all(["p", "h1", "h2", "h3", "li"]) if len(p.get_text(strip=True)) > 25]
+                if text_blocks:
+                    return "\n\n".join(text_blocks)
+    except Exception as e:
+        logger.warning(f"Readability extractor error: {e}")
+    return None
+
+
+async def _google_cache_scrape(url: str) -> Optional[str]:
+    """Fetch text-only cached version from Google Web Cache proxy."""
+    try:
+        client = _get_firecrawl_client()
+        cache_url = f"https://webcache.googleusercontent.com/search?q=cache:{url}&strip=1"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        resp = await client.get(cache_url, headers=headers, follow_redirects=True)
+        if resp.status_code == 200 and len(resp.text) > 100:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            return soup.get_text(separator="\n", strip=True)
+    except Exception as e:
+        logger.warning(f"Google cache scraper error: {e}")
+    return None
+
+
+async def _rotated_user_agent_scrape(url: str) -> Optional[str]:
+    """Scrape web pages using rotated desktop/mobile user-agents and browser headers."""
+    import random
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+    ]
+    ua = random.choice(user_agents)
+    headers = {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Ch-Ua": '"Google Chrome";v="125", "Chromium";v="125"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "cross-site",
+        "Referer": "https://www.google.com/",
+    }
+    try:
+        client = _get_firecrawl_client()
+        resp = await client.get(url, headers=headers, follow_redirects=True)
+        if resp.status_code == 200 and resp.text:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for el in soup(["script", "style", "nav", "footer", "header", "svg", "noscript", "iframe", "form"]):
+                el.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+            lines = [l for l in text.splitlines() if len(l.strip()) > 15]
+            if lines:
+                return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"Rotated UA scraper error: {e}")
+    return None
+
+
+async def _wikipedia_search(query: str) -> Optional[str]:
+    """Search Wikipedia API for structured encyclopedic data."""
+    try:
+        client = _get_firecrawl_client()
+        url = "https://en.wikipedia.org/w/api.php"
+        params = {
+            "action": "query",
+            "format": "json",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": 3,
+        }
+        resp = await client.get(url, params=params, follow_redirects=True)
+        if resp.status_code == 200:
+            data = resp.json()
+            search_items = data.get("query", {}).get("search", [])
+            if search_items:
+                results = []
+                for item in search_items:
+                    title = item.get("title", "")
+                    snippet = item.get("snippet", "").replace('<span class="searchmatch">', '').replace('</span>', '')
+                    page_url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
+                    results.append(f"### [Wikipedia] {title}\nURL: {page_url}\n{snippet}...\n")
+                return "\n".join(results)
+    except Exception as e:
+        logger.warning(f"Wikipedia API search error: {e}")
+    return None
+
+
+async def _arxiv_search(query: str) -> Optional[str]:
+    """Search ArXiv API for scientific & academic research papers."""
+    try:
+        client = _get_firecrawl_client()
+        url = "http://export.arxiv.org/api/query"
+        params = {
+            "search_query": f"all:{query}",
+            "start": 0,
+            "max_results": 3,
+        }
+        resp = await client.get(url, params=params, follow_redirects=True)
+        if resp.status_code == 200 and "<entry>" in resp.text:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "xml")
+            entries = soup.find_all("entry")
+            results = []
+            for entry in entries:
+                title_tag = entry.find("title")
+                summary_tag = entry.find("summary")
+                id_tag = entry.find("id")
+                title = title_tag.get_text(strip=True) if title_tag else "Paper"
+                summary = summary_tag.get_text(strip=True) if summary_tag else ""
+                paper_url = id_tag.get_text(strip=True) if id_tag else ""
+                results.append(f"### [ArXiv Paper] {title}\nURL: {paper_url}\n{summary[:400]}...\n")
+            if results:
+                return "\n".join(results)
+    except Exception as e:
+        logger.warning(f"ArXiv API search error: {e}")
+    return None
+
+
+async def _wayback_archive_scrape(url: str) -> Optional[str]:
+    """Scrape web page from Wayback Machine Archive (Archive.org) snapshot."""
+    try:
+        client = _get_firecrawl_client()
+        api_url = f"https://archive.org/wayback/available?url={url}"
+        resp = await client.get(api_url)
+        if resp.status_code == 200:
+            data = resp.json()
+            snapshots = data.get("archived_snapshots", {})
+            closest = snapshots.get("closest", {})
+            snapshot_url = closest.get("url")
+            if snapshot_url:
+                page_resp = await client.get(snapshot_url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
+                if page_resp.status_code == 200 and page_resp.text:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(page_resp.text, "html.parser")
+                    for el in soup(["script", "style", "nav", "footer", "header"]):
+                        el.decompose()
+                    return soup.get_text(separator="\n", strip=True)
+    except Exception as e:
+        logger.warning(f"Wayback Archive scrape error: {e}")
+    return None
+
+
+async def _cors_proxy_scrape(url: str) -> Optional[str]:
+    """Bypass Cloudflare / Anti-Bot protection using free CORS proxy bridges."""
+    import urllib.parse
+    client = _get_firecrawl_client()
+    encoded = urllib.parse.quote(url, safe="")
+    proxies = [
+        f"https://corsproxy.io/?{encoded}",
+        f"https://api.allorigins.win/raw?url={encoded}",
+    ]
+    for proxy_url in proxies:
+        try:
+            resp = await client.get(proxy_url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, timeout=12.0)
+            if resp.status_code == 200 and resp.text and len(resp.text) > 100:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for el in soup(["script", "style", "nav", "footer", "header", "svg", "noscript", "iframe", "form"]):
+                    el.decompose()
+                text = soup.get_text(separator="\n", strip=True)
+                if text and len(text) > 50:
+                    return text[:15000]
+        except Exception as err:
+            logger.warning(f"CORS proxy scraper error ({proxy_url}): {err}")
+    return None
 
 
 

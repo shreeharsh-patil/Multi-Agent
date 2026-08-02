@@ -69,7 +69,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
     a({ href, children }: any) {
       const resolved = resolveApiUrl(href);
       const textContent = typeof children === 'string' ? children.toLowerCase() : '';
-      const isDownload = resolved?.includes('/download') || textContent.includes('download');
+      const isDownload = resolved?.includes('/download') || textContent.includes('download') || resolved?.toLowerCase().endsWith('.pdf');
       if (isDownload && resolved) {
         return (
           <button
@@ -77,7 +77,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              downloadSecureFile(resolved, 'downloaded-file');
+              downloadSecureFile(resolved);
             }}
             className="text-primary underline hover:underline break-all font-medium cursor-pointer inline-flex items-center gap-1"
           >

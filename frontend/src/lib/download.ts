@@ -30,14 +30,16 @@ export async function downloadSecureFile(url: string, fileName?: string): Promis
     // Extract filename from response headers or fallback
     let suggestedName = fileName;
     const disposition = res.headers.get('Content-Disposition');
-    if (!suggestedName && disposition && disposition.includes('filename=')) {
+    if (disposition && disposition.includes('filename=')) {
       const match = disposition.match(/filename="?([^";]+)"?/);
       if (match && match[1]) {
         suggestedName = match[1];
       }
     }
-    if (!suggestedName) {
-      suggestedName = `document-${Date.now()}`;
+    if (!suggestedName || suggestedName === 'downloaded-file') {
+      const urlExt = targetUrl.split('.').pop()?.split('?')[0];
+      const ext = (urlExt && ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'txt', 'md'].includes(urlExt)) ? urlExt : 'pdf';
+      suggestedName = `document-${Date.now()}.${ext}`;
     }
 
     const a = document.createElement('a');
@@ -49,14 +51,9 @@ export async function downloadSecureFile(url: string, fileName?: string): Promis
 
     setTimeout(() => {
       window.URL.revokeObjectURL(blobUrl);
-    }, 1000);
+    }, 2000);
   } catch (err) {
-    console.error('Secure download failed:', err);
-    const a = document.createElement('a');
-    a.href = targetUrl;
-    if (fileName) a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    console.error('Secure download failed, opening direct URL:', err);
+    window.open(targetUrl, '_blank');
   }
 }

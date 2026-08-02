@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { MermaidWorkspace } from '@/components/mermaid-workspace'
 
 interface Note {
   id: string
@@ -838,7 +839,7 @@ export default function NotesPage() {
                       </div>
                     </div>
                   ) : selectedNote ? (
-                    <div>
+                    <div className="space-y-5">
                       <div className="flex flex-wrap gap-1 mb-4">
                         {selectedNote.tags.map((tag) => (
                           <Badge key={tag} variant="secondary" className="bg-secondary border border-border text-muted-foreground text-[10px] px-2 py-0.5 shadow-none">
@@ -856,6 +857,7 @@ export default function NotesPage() {
                         <span>·</span>
                         <span>Updated: {formatDate(selectedNote.updatedAt)}</span>
                       </div>
+                      <MermaidWorkspace content={selectedNote.content} title="Study note concept map" />
                     </div>
                   ) : null}
                 </CardContent>

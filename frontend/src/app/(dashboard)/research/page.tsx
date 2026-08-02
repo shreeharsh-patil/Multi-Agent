@@ -9,6 +9,7 @@ import { Search, Globe, FileText, Loader2, Sparkles, Trash2, CheckCircle2, Downl
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
+import { MermaidWorkspace } from '@/components/mermaid-workspace'
 
 interface Report {
   id: string
@@ -261,29 +262,32 @@ export default function ResearchPage() {
       )}
 
       {currentReport && !researching && (
-        <Card className="shadow-xs">
-          <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
-              <Sparkles className="h-4.5 w-4.5 text-primary" />
-              Research Report: {currentReport.query}
-            </CardTitle>
-            <Button
-              onClick={handleDownloadPdf}
-              disabled={exportingPdf}
-              variant="outline"
-              size="sm"
-              className="gap-2 cursor-pointer shadow-2xs text-xs"
-            >
-              {exportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-primary" />}
-              Download PDF
-            </Button>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div ref={resultsRef} className="max-h-[650px] overflow-y-auto pr-3 scrollbar-thin space-y-4">
-              <MarkdownRenderer content={currentReport.content} />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card className="shadow-xs">
+            <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2 font-sans font-normal tracking-[-0.02em] text-lg text-foreground">
+                <Sparkles className="h-4.5 w-4.5 text-primary" />
+                Research Report: {currentReport.query}
+              </CardTitle>
+              <Button
+                onClick={handleDownloadPdf}
+                disabled={exportingPdf}
+                variant="outline"
+                size="sm"
+                className="gap-2 cursor-pointer shadow-2xs text-xs"
+              >
+                {exportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-primary" />}
+                Download PDF
+              </Button>
+            </CardHeader>
+            <CardContent className="p-5 pt-0">
+              <div ref={resultsRef} className="max-h-[650px] overflow-y-auto pr-3 scrollbar-thin space-y-4">
+                <MarkdownRenderer content={currentReport.content} />
+              </div>
+            </CardContent>
+          </Card>
+          <MermaidWorkspace content={currentReport.content} title="Research concept map" />
+        </div>
       )}
 
       {!currentReport && !researching && (
