@@ -150,6 +150,8 @@ async def generate_and_store_image(
     user_id: str,
     workspace_id: str | None = None,
     size: str = "1024x1024",
+    drive_access_token: str | None = None,
+    drive_refresh_token: str | None = None,
 ) -> GeneratedImage:
     clean_prompt = prompt.strip()
     if not clean_prompt:
@@ -196,6 +198,26 @@ async def generate_and_store_image(
     file_name = f"generated-{uuid.uuid4().hex[:12]}.png"
     file_path = UPLOAD_DIR / file_name
     file_path.write_bytes(image_bytes)
+
+    drive_file_id = None
+    drive_web_view_link = None
+    if drive_access_token:
+        try:
+            from src.services.drive.service import DriveService
+            drive = DriveService()
+            drive_result = await drive.upload_file(
+                access_token=drive_access_token,
+                file_path=str(file_path),
+                file_name=file_name,
+                mime_type="image/png",
+                refresh_token=drive_refresh_token or "",
+            )
+            drive_file_id = drive_result.get("id")
+            drive_web_view_link = drive_result.get("webViewLink")
+            logger.info(f"Generated image uploaded directly to Drive: {file_name} (id={drive_file_id})")
+        except Exception as err:
+            logger.warning(f"Failed to upload generated image to Drive: {err}")
+
     document = Document(
         user_id=user_id,
         file_name=file_name,
@@ -204,6 +226,8 @@ async def generate_and_store_image(
         file_path=str(file_path),
         status="ready",
         workspace_id=workspace_id,
+        drive_file_id=drive_file_id,
+        drive_web_view_link=drive_web_view_link,
     )
     await document.insert()
     document_id = str(document.id)
@@ -213,4 +237,6 @@ async def generate_and_store_image(
         download_url=f"/api/documents/{document_id}/download",
         provider=provider,
         revised_prompt=revised_prompt,
+        drive_file_id=drive_file_id,
+        drive_web_view_link=drive_web_view_link,
     )

@@ -17,12 +17,16 @@ class GenerateImageRequest(BaseModel):
 async def generate_image(request: Request, body: GenerateImageRequest) -> dict:
     user = getattr(request.state, "user", None) or {}
     user_id = user.get("sub", "default")
+    drive_access_token = request.headers.get("X-Drive-Access-Token") or request.headers.get("X-Google-Access-Token", "")
+    drive_refresh_token = request.headers.get("X-Drive-Refresh-Token") or request.headers.get("X-Google-Refresh-Token", "")
     try:
         image = await generate_and_store_image(
             prompt=body.prompt,
             user_id=user_id,
             workspace_id=body.workspace_id,
             size=body.size,
+            drive_access_token=drive_access_token,
+            drive_refresh_token=drive_refresh_token,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -35,4 +39,6 @@ async def generate_image(request: Request, body: GenerateImageRequest) -> dict:
         "imageUrl": image.download_url,
         "provider": image.provider,
         "revisedPrompt": image.revised_prompt,
+        "driveFileId": image.drive_file_id,
+        "driveWebViewLink": image.drive_web_view_link,
     }

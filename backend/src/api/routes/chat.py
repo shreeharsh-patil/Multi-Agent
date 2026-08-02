@@ -194,8 +194,20 @@ async def _build_attachment_context(
     )
 
 
-async def _generate_image_message(prompt: str, user_id: str, workspace_id: str | None) -> str:
-    image = await generate_and_store_image(prompt, user_id, workspace_id)
+async def _generate_image_message(
+    prompt: str,
+    user_id: str,
+    workspace_id: str | None,
+    drive_access_token: str | None = None,
+    drive_refresh_token: str | None = None,
+) -> str:
+    image = await generate_and_store_image(
+        prompt=prompt,
+        user_id=user_id,
+        workspace_id=workspace_id,
+        drive_access_token=drive_access_token,
+        drive_refresh_token=drive_refresh_token,
+    )
     content = f"![Generated image]({image.download_url})"
     if image.revised_prompt and image.revised_prompt != prompt:
         content += f"\n\n*Prompt used: {image.revised_prompt}*"
@@ -516,7 +528,12 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         registry_agent = get_orchestrator().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
 
         if routed_agent_id == "image":
-            output = await _generate_image_message(body.message, user_id, body.workspace_id)
+            drive_token = http_request.headers.get("X-Drive-Access-Token") or google_access_token
+            drive_refresh = http_request.headers.get("X-Drive-Refresh-Token") or google_refresh_token
+            output = await _generate_image_message(
+                body.message, user_id, body.workspace_id,
+                drive_access_token=drive_token, drive_refresh_token=drive_refresh
+            )
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
         elif body.team_agents:
             result = await get_orchestrator().process_team(
@@ -632,7 +649,12 @@ async def chat_stream(
             }
 
             if routed_agent_id == "image":
-                accumulated_output = await _generate_image_message(body.message, user_id, body.workspace_id)
+                drive_token = http_request.headers.get("X-Drive-Access-Token") or stream_google_context["google_access_token"]
+                drive_refresh = http_request.headers.get("X-Drive-Refresh-Token") or stream_google_context["google_refresh_token"]
+                accumulated_output = await _generate_image_message(
+                    body.message, user_id, body.workspace_id,
+                    drive_access_token=drive_token, drive_refresh_token=drive_refresh
+                )
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'image'})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': accumulated_output})}\n\n"
                 attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None

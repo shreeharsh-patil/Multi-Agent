@@ -362,7 +362,10 @@ async def download_document(document_id: str, http_request: Request, download: b
         return RedirectResponse(url=doc.drive_web_view_link)
 
     file_path = doc.file_path
-    if not os.path.exists(file_path):
+    if not file_path or not os.path.exists(file_path):
+        if doc.drive_web_view_link:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=doc.drive_web_view_link)
         raise HTTPException(status_code=404, detail="File not found on disk")
 
     media_type_map = {
