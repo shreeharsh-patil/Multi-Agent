@@ -60,7 +60,7 @@ export const authOptions: NextAuthOptions = {
           id: 'dev-user-123',
           name: 'Developer User',
           email: 'developer@example.com',
-          image: 'https://api.dicebear.com/7.x/bottts/svg?seed=developer'
+          image: '/developer-avatar.png'
         }
       }
     })

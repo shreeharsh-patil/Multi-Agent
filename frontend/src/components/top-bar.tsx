@@ -27,7 +27,7 @@ export function TopBar() {
   const { setMobileMenuOpen } = useSidebar()
 
   return (
-    <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-4 border-b bg-secondary/80 backdrop-blur-md border-border w-full relative">
+    <header className="lg:hidden flex items-center justify-between gap-4 px-4 sm:px-8 py-4 border-b bg-secondary/80 backdrop-blur-md border-border w-full relative">
       {/* Mobile Menu Button */}
       <div className="lg:hidden flex items-center">
         <Button 
