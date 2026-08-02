@@ -66,17 +66,17 @@ class ContactsAgent(BaseAgent):
             contacts = await contacts_service.list_contacts(token, refresh_token=refresh_token, query=query)
             if not contacts:
                 # If query is general QA or document context, fallback to answering directly
-                if context.get("conversation_history") or any(w in user_input.lower() for w in ["principal", "college", "university", "school", "director", "president", "who is"]):
+                if context.get("conversation_history") or any(w in user_input.lower() for w in ["principal", "college", "university", "school", "director", "president", "who is", "what is"]):
                     try:
                         fallback = await llm_service.generate(
                             prompt=user_input,
-                            system_instruction="Answer the user's question accurately using conversation context and general knowledge. Do not talk about address books or personal contacts unless explicitly relevant.",
+                            system_instruction="You are a helpful knowledge and study assistant. Answer the user's question accurately using conversation history and general knowledge.",
                         )
                         if fallback and len(fallback.strip()) > 5:
                             return AgentResult(success=True, output=fallback)
                     except Exception as err:
                         logger.warning(f"ContactsAgent fallback failed: {err}")
-                msg = f'No contacts found matching "{query}".' if query else "Your Google Contacts list is empty."
+                msg = f'📇 No Google Contacts matching "{query}" were found in your connected Google account.' if query else "📇 Your Google Contacts list is empty."
                 return AgentResult(success=True, output=msg)
 
             header_suffix = f' matching "{query}"' if query else ''
