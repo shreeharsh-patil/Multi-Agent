@@ -27,23 +27,21 @@ class NotesAgent(BaseAgent):
         drive_refresh_token = context.get("google_refresh_token") or context.get("drive_refresh_token")
 
         input_lower = user_input.lower()
-        style = "detailed"
-        if "exam" in input_lower:
-            style = "exam"
-        elif "beginner" in input_lower or "simple" in input_lower:
-            style = "beginner"
-        elif "revision" in input_lower or "summary" in input_lower or "recap" in input_lower:
-            style = "revision"
-        elif "cheat" in input_lower or "formula" in input_lower:
-            style = "cheatsheet"
-
+        is_book = any(w in input_lower for w in ["book", "textbook", "chapter", "complete guide", "publication", "comprehensive"])
         try:
-            notes_res = await study_agent_service.generate_study_notes(
-                topic=user_input,
-                user_id=user_id,
-                style=style,
-                workspace_id=workspace_id,
-            )
+            if is_book:
+                notes_res = await study_agent_service.generate_academic_book_chapter(
+                    topic=user_input,
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                )
+            else:
+                notes_res = await study_agent_service.generate_study_notes(
+                    topic=user_input,
+                    user_id=user_id,
+                    style=style,
+                    workspace_id=workspace_id,
+                )
             title = notes_res.get("title", "Study Notes")
             content = notes_res.get("content", "")
         except Exception as e:

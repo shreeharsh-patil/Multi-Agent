@@ -1427,71 +1427,48 @@ function ChatContent() {
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
           {messages.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 sm:p-6 text-center select-none bg-background overflow-y-auto scrollbar-thin">
-              <div className="max-w-2xl w-full flex flex-col items-center justify-center space-y-6 sm:space-y-8 py-4">
+            <div 
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer?.files?.length) {
+                  handleFileSelect({ target: { files: e.dataTransfer.files } } as any);
+                }
+              }}
+              className="absolute inset-0 flex flex-col items-center justify-center p-4 sm:p-8 text-center select-none bg-background overflow-y-auto scrollbar-thin"
+            >
+              <div className="max-w-xl w-full flex flex-col items-center justify-center space-y-6 py-8">
+                {/* Logo & Welcoming Header */}
                 <div className="space-y-3">
                   <div className="flex justify-center">
                     <div className="h-16 w-16 flex items-center justify-center transition-transform hover:scale-105 duration-300">
                       <Image src="/developer-avatar.png" alt="Agents Logo" width={64} height={64} className="h-16 w-16 object-contain" />
                     </div>
                   </div>
-                  <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#26251e] font-sans">
-                    How can I help you today?
+                  <h1 className="text-2xl sm:text-4xl font-semibold tracking-tight text-[#26251e] font-sans">
+                    What can I help you build or learn today?
                   </h1>
                   <p className="text-xs sm:text-sm text-muted-foreground/80 max-w-md mx-auto leading-relaxed font-sans">
-                    Ask anything, analyze documents, or delegate tasks to specialized AI agents in this collaborative workspace.
+                    Ask a question, analyze documents, write code, or run multi-agent research in a calm, distraction-free workspace.
                   </p>
                 </div>
 
-                {/* AI Study Learning Modes Bar */}
-                <div className="w-full px-2 space-y-2">
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground font-medium mb-1">
-                    <GraduationCap className="h-4 w-4 text-primary" />
-                    <span>AI Study Learning Modes:</span>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {[
-                      { name: 'Teach Me', prefix: 'Teach me step-by-step with examples and diagrams: ' },
-                      { name: 'ELI10', prefix: 'Explain like I am 10 years old with simple analogies: ' },
-                      { name: 'Professor Mode', prefix: 'Provide a rigorous academic explanation with KaTeX formulas, proofs, and definitions: ' },
-                      { name: 'Research Mode', prefix: 'Provide a research-grade analysis with citations, trade-offs, and open problems: ' },
-                      { name: 'Exam Mode', prefix: 'Format as high-scoring exam points (2/5/10 mark pattern) with formulas and common traps: ' },
-                      { name: 'Revision Mode', prefix: 'Create a 1-page rapid revision guide with bullet points and mnemonics: ' },
-                      { name: 'Interview Mode', prefix: 'Format as technical interview questions with complexity analysis and code dry-runs: ' },
-                    ].map((mode) => (
-                      <button
-                        key={mode.name}
-                        onClick={() => {
-                          setInput(mode.prefix)
-                        }}
-                        className="text-xs bg-secondary/80 hover:bg-primary/10 hover:border-primary/40 border border-border text-foreground px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer font-medium shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
-                      >
-                        {mode.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Central quick suggestion buttons as premium cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 w-full px-2">
+                {/* 5 Small Subtle Suggested Prompts */}
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2 max-w-lg mx-auto">
                   {[
-                    { text: 'Research a topic', desc: 'Perform deep search across the web', icon: Globe },
-                    { text: 'Analyze a file', desc: 'Upload documents or spreadsheets', icon: FileText },
-                    { text: 'Generate code', desc: 'Write, debug or refactor code', icon: CodeIcon },
-                    { text: 'Create an image', desc: 'Generate high-fidelity visual assets', icon: ImageIcon },
-                    { text: 'Write something', desc: 'Draft articles, copy, or summaries', icon: FileCode },
-                    { text: 'Plan & organize', desc: 'Create study plans and schedule tasks', icon: Sparkles },
-                  ].map((card) => (
+                    "Explain Operating Systems",
+                    "Summarize my PDF",
+                    "Generate Exam Notes",
+                    "Create Flashcards",
+                    "Research Quantum Computing",
+                  ].map((promptText) => (
                     <button
-                      key={card.text}
-                      onClick={() => handleSuggestionClick(card.text)}
-                      className="group flex flex-col items-start p-4 rounded-xl border border-border/70 bg-card text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-primary/40 active:translate-y-0 shadow-2xs cursor-pointer"
+                      key={promptText}
+                      onClick={() => handleSuggestionClick(promptText)}
+                      className="text-xs bg-secondary/70 hover:bg-secondary border border-border/80 text-foreground px-3.5 py-1.5 rounded-full transition-all duration-200 cursor-pointer font-medium hover:border-primary/40 shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
                     >
-                      <div className="h-8 w-8 rounded-lg border border-border/60 bg-secondary flex items-center justify-center mb-2.5 group-hover:border-primary/30 group-hover:bg-primary/5 transition-colors">
-                        <card.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors stroke-[1.8]" />
-                      </div>
-                      <span className="text-xs font-semibold text-[#26251e] mb-1 font-sans group-hover:text-primary transition-colors">{card.text}</span>
-                      <span className="text-[11px] text-muted-foreground/80 leading-relaxed font-sans line-clamp-2">{card.desc}</span>
+                      {promptText}
                     </button>
                   ))}
                 </div>
@@ -1876,7 +1853,7 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 px-3 py-1.5 text-xs sm:text-sm text-[#26251e] placeholder-muted-foreground focus:outline-none focus:ring-0 resize-none font-sans min-h-[28px] max-h-[140px] leading-relaxed"
+                className="flex-1 bg-transparent border-0 px-3 py-1.5 text-base sm:text-sm text-[#26251e] placeholder-muted-foreground focus:outline-none focus:ring-0 resize-none font-sans min-h-[28px] max-h-[140px] leading-relaxed"
               />
               <div className="flex items-center gap-1">
                 <Button
@@ -1895,7 +1872,7 @@ function ChatContent() {
                 <Button
                   onClick={sending ? handleStop : () => handleSend()}
                   disabled={!sending && ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0))}
-                  className="rounded-[10px] h-9 w-9 hover:scale-[1.02] transition-all bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs shrink-0 flex items-center justify-center cursor-pointer"
+                  className="rounded-[10px] h-9 w-9 transition-colors bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs shrink-0 flex items-center justify-center cursor-pointer"
                   size="icon"
                   title={sending ? 'Stop' : 'Send'}
                 >

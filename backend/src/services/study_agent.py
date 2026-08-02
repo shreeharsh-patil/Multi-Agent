@@ -162,6 +162,73 @@ class StudyAgentService:
             "citations": citations,
         }
 
+    async def generate_academic_book_chapter(
+        self,
+        topic: str,
+        user_id: str,
+        workspace_id: Optional[str] = None,
+        custom_instructions: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a publication-grade, multi-section university textbook chapter with live web research, KaTeX, Mermaid diagrams, solved examples, and a complete question bank."""
+        from src.adk.tools import web_search
+
+        # 1. Execute live multi-source web research across trusted academic domains
+        research_data = ""
+        try:
+            research_data = await web_search(f"site:edu OR site:mit.edu OR site:stanford.edu OR site:ieee.org OR site:acm.org {topic} complete guide lecture notes specifications", for_research=True)
+        except Exception as err:
+            logger.warning(f"Live web research for topic '{topic}' failed: {err}")
+
+        # 2. Retrieve document context from user workspace if available
+        rag_context, rag_citations = await self.get_document_context(user_id, topic, workspace_id=workspace_id, top_k=8)
+
+        system_instruction = (
+            "You are a Distinguished University Chair Professor, Senior Principal AI Architect, and Professional Academic Publisher. "
+            "Your task is to write a publication-grade, exhaustive university textbook chapter on the requested topic.\n\n"
+            "MUST INCLUDE ALL 15 MANDATORY SECTIONS:\n"
+            "1. # Chapter Title & Executive Overview / Preface\n"
+            "2. ## Table of Contents\n"
+            "3. ## Historical Background & Theoretical Motivation\n"
+            "4. ## Formal Definitions, Core Intuition & Real-World Analogies\n"
+            "5. ## Mathematical Foundations, Theorems & KaTeX Step-by-Step Proofs ($...$ & $$...$$)\n"
+            "6. ## System Architecture & Working Principles (include ```mermaid ... ``` diagrams)\n"
+            "7. ## Detailed Comparison Tables & Trade-off Matrices (Markdown tables with pros/cons)\n"
+            "8. ## Step-by-Step Solved Algorithms & Production Code Walkthroughs (```python, ```cpp, ```js)\n"
+            "9. ## Real-World Industrial Applications & Solved Case Studies\n"
+            "10. ## Common Student Traps, Edge Cases & Misconceptions (> [!WARNING])\n"
+            "11. ## High-Yield Exam Scoring Points, Memory Tricks & Mnemonics (> [!TIP])\n"
+            "12. ## Complete Bloom's Taxonomy Question Bank (MCQs, 2-Mark, 5-Mark, 10-Mark, Solved Numericals & Interview Qs)\n"
+            "13. ## Rapid 1-Page Revision Guide & Key Takeaways\n"
+            "14. ## Complete Formula Sheet & Terminology Glossary\n"
+            "15. ## Academic References & Bibliography (IEEE/APA format with DOIs/URLs)\n\n"
+            "FORMATTING & DESIGN RULES:\n"
+            "- Write in an authoritative, clear, academic textbook tone.\n"
+            "- Render inline math with $...$ and block math with $$...$$.\n"
+            "- Include Callout boxes (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).\n"
+            "- Produce complete, un-truncated textbook chapter content."
+        )
+
+        user_prompt = f"Write a complete, publication-quality university textbook chapter for the topic: '{topic}'"
+        if research_data:
+            user_prompt += f"\n\nExtracted Web Research Knowledge:\n{research_data[:4000]}"
+        if rag_context:
+            user_prompt += f"\n\nUploaded Document Knowledge:\n{rag_context[:3000]}"
+        if custom_instructions:
+            user_prompt += f"\n\nUser Directives:\n{custom_instructions}"
+
+        content = await llm_service.generate(
+            prompt=user_prompt,
+            system_instruction=system_instruction,
+            temperature=0.3,
+            max_output_tokens=8192,
+        )
+
+        return {
+            "title": f"{topic.title()}: Complete Academic Textbook Chapter",
+            "content": content,
+            "citations": rag_citations,
+        }
+
     async def generate_questions(
         self,
         topic: str,
