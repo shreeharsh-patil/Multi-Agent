@@ -20,7 +20,6 @@ import {
   PanelLeftClose,
   PanelLeft,
   Plus,
-  ChevronDown,
   Trash2,
   FolderOpen,
   FileText,
@@ -78,8 +77,6 @@ export function Sidebar() {
   const [conversationSearch, setConversationSearch] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
-  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
-  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([])
   const [activeWorkspace, setActiveWorkspace] = useState('all')
 
   const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/')
@@ -147,18 +144,6 @@ export function Sidebar() {
     return () => window.removeEventListener('refresh-conversations-list', loadSidebarHistory)
   }, [pathname, loadSidebarHistory])
 
-  // Fetch the user's real workspaces for the selector
-  useEffect(() => {
-    if (session) {
-      api.workspaces.list()
-        .then((res) => {
-          if (res.success && res.data) {
-            setWorkspaces(res.data.map(w => ({ id: w.id, name: w.name })))
-          }
-        })
-        .catch(err => console.error("Error loading workspaces", err))
-    }
-  }, [session])
 
   // Ctrl+B shortcut to toggle sidebar collapse
   useEffect(() => {
@@ -371,55 +356,6 @@ export function Sidebar() {
               </button>
             </>
           )}
-        </div>
-
-        {/* Workspace Selector */}
-        <div className={cn(
-          "transition-all duration-300 ease-in-out overflow-hidden",
-          (collapsed && !isMobile) ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-9"
-        )}>
-          <div className="relative">
-            <button
-              onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-[8px] bg-card border border-border text-xs font-semibold text-foreground hover:bg-secondary/40 transition-colors shadow-xs cursor-pointer"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <div className="h-2 w-2 rounded-full bg-[#1f8a65]" />
-                <span className="truncate">
-                  {activeWorkspace === 'all'
-                    ? 'Personal Space'
-                    : workspaces.find((w) => w.id === activeWorkspace)?.name || 'Personal Space'}
-                </span>
-              </div>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground stroke-[1.5]" />
-            </button>
-
-            {showWorkspaceMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowWorkspaceMenu(false)} />
-                <div className="absolute top-full left-0 right-0 mt-1.5 p-1 rounded-[8px] bg-card border border-border shadow-xs z-20 space-y-0.5">
-                  {[{ id: 'all', name: 'Personal Space' }, ...workspaces].map((space) => (
-                    <button
-                      key={space.id}
-                      onClick={() => {
-                        setActiveWorkspace(space.id)
-                        setShowWorkspaceMenu(false)
-                        window.dispatchEvent(new CustomEvent('workspace-changed', { detail: space.id }))
-                      }}
-                      className={cn(
-                        "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
-                        activeWorkspace === space.id
-                          ? "bg-secondary text-[#26251e] font-semibold"
-                          : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
-                      )}
-                    >
-                      {space.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </div>
 
         <button
