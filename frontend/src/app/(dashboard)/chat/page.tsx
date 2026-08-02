@@ -561,9 +561,28 @@ function ChatContent() {
               }))
             )
           }
+        } else {
+          // Conversation not found or invalid: reset ID so next message starts fresh
+          console.warn('Conversation not found or inaccessible, resetting to new chat:', res.error)
+          setConversationId(undefined)
+          setChatTitle('')
+          setMessages([])
+          if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', '/chat')
+          }
         }
       })
-      .catch((err) => console.error('Failed to load chat history:', err))
+      .catch((err) => {
+        console.error('Failed to load chat history:', err)
+        if (!isCancelled) {
+          setConversationId(undefined)
+          setChatTitle('')
+          setMessages([])
+          if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', '/chat')
+          }
+        }
+      })
       .finally(() => {
         if (!isCancelled) setLoadingHistory(false)
       })
