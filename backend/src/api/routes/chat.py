@@ -2,13 +2,15 @@ import asyncio
 import json
 import os
 import re
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
-from src.adk.runner import process_message, process_message_stream
+from src.adk.runner import process_message, process_message_stream, process_fast_message_stream
 from src.orchestrator.base import get_orchestrator
 from src.orchestrator.router import AgentRouter
 from src.orchestrator.dynamic import plan_dynamic
@@ -27,6 +29,20 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 MAX_ATTACHMENT_CONTEXT_CHARS = 30000
 MAX_ATTACHMENT_CHARS = 15000
+
+
+def _chat_log(request_id: str, stage: str, status: str, started_at: float | None = None, **fields):
+    """Emit bounded, correlated diagnostics for one chat request."""
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2) if started_at else None
+    payload = {
+        "request_id": request_id,
+        "stage": stage,
+        "status": status,
+        "elapsed_ms": elapsed_ms,
+        **fields,
+    }
+    level = logger.error if status == "error" else logger.info
+    level("chat_pipeline", extra=payload)
 
 
 async def _word_chunks(text: str):
@@ -635,22 +651,37 @@ async def chat_stream(
     Uses POST to support long messages and avoid URL length limits.
     The client reads the stream and accumulates the response incrementally.
     """
+    request_id = http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request_started_at = time.perf_counter()
+    _chat_log(request_id, "request", "start", input_chars=len(body.message), has_attachments=bool(body.attachments))
     conv_id = body.conversation_id or str(PydanticObjectId())
     is_new = not bool(body.conversation_id)
 
     # Use authenticated user from JWT if available
     auth_user = getattr(http_request.state, "user", None)
     user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
+    _chat_log(request_id, "authentication", "complete", request_started_at, authenticated=bool(auth_user), user_id_present=bool(user_id))
     if body.conversation_id:
         existing = await Conversation.get(body.conversation_id)
         if not existing or not await can_access_conversation(existing, user_id):
             raise HTTPException(status_code=404, detail="Conversation not found")
+    _chat_log(request_id, "conversation", "complete", request_started_at, conversation_id=conv_id, is_new=is_new)
     if body.workspace_id:
         workspace = await Workspace.get(body.workspace_id)
         if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
             raise HTTPException(status_code=404, detail="Workspace not found")
     routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
     automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
+    dynamic_plan = plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)) if automatic_mode else None
+    fast_path = bool(
+        automatic_mode
+        and not body.attachments
+        and not body.workspace_id
+        and not body.conversation_id
+        and len((dynamic_plan or {}).get("steps", [])) <= 1
+        and not re.search(r"(?i)\b(research|latest|current|search|calculate|calendar|drive|file|pdf|web)\b", body.message)
+    )
+    _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=routed_agent_id, automatic=automatic_mode)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
     accumulated_output = ""
@@ -660,13 +691,24 @@ async def chat_stream(
         try:
             # Open the response immediately, then prepare optional context while
             # the client is already showing the active assistant state.
-            yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id})}\n\n"
+            yield f"event: start\ndata: {json.dumps({'conversation_id': conv_id, 'request_id': request_id})}\n\n"
             from src.services.memory.service import memory_service
-            memory_context, attachment_context, history_snippet = await asyncio.gather(
-                memory_service.build_context(user_id, body.message),
-                _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
-                _build_full_conversation_history(body.conversation_id),
-            )
+            context_started_at = time.perf_counter()
+            _chat_log(request_id, "context", "start", fast_path=fast_path)
+            if fast_path:
+                memory_context, attachment_context, history_snippet = "", "", ""
+            else:
+                try:
+                    async with asyncio.timeout(settings.chat_context_timeout_seconds):
+                        memory_context, attachment_context, history_snippet = await asyncio.gather(
+                            memory_service.build_context(user_id, body.message),
+                            _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
+                            _build_full_conversation_history(body.conversation_id),
+                        )
+                except TimeoutError:
+                    _chat_log(request_id, "context", "error", context_started_at, error="context timeout")
+                    memory_context, attachment_context, history_snippet = "", "", ""
+            _chat_log(request_id, "context", "complete", context_started_at, history_chars=len(history_snippet or ""), attachment_chars=len(attachment_context or ""))
             history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
             augmented_message = history_prefix + memory_context + attachment_context + body.message
 
@@ -701,14 +743,15 @@ async def chat_stream(
                 return
 
             if automatic_mode and routed_agent_id != "image":
-                dynamic_plan = plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id))
+                _chat_log(request_id, "orchestration", "start", plan_agents=[step.get("agent_id") for step in dynamic_plan.get("steps", [])])
 
                 # Simple requests should start emitting model tokens as soon
                 # as the provider produces them. The specialist execution
                 # API is intentionally reserved for multi-agent synthesis,
                 # where waiting for parallel findings is necessary.
                 if len(dynamic_plan.get("steps", [])) <= 1:
-                    async for stream_event in process_message_stream(
+                    stream_processor = process_fast_message_stream if fast_path else process_message_stream
+                    async for stream_event in stream_processor(
                         message=augmented_message,
                         user_id=user_id,
                         conversation_id=conv_id,
@@ -720,6 +763,7 @@ async def chat_stream(
                         if event_name == "chunk" and event_data.get("text"):
                             accumulated_output += event_data["text"]
                         if event_name == "complete":
+                            _chat_log(request_id, "stream", "complete", request_started_at, output_chars=len(event_data.get("output") or accumulated_output))
                             final_output = event_data.get("output") or accumulated_output
                             attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
                             await _save_messages(
@@ -744,13 +788,18 @@ async def chat_stream(
                     context=stream_google_context,
                     on_event=on_dynamic_event,
                 ))
+                dynamic_deadline = asyncio.get_running_loop().time() + settings.chat_stream_timeout_seconds
                 while not dynamic_task.done() or event_queue:
                     while event_queue:
                         queued = event_queue.pop(0)
                         yield f"event: {queued['event']}\ndata: {json.dumps(queued['data'], ensure_ascii=False)}\n\n"
                     if not dynamic_task.done():
+                        if asyncio.get_running_loop().time() >= dynamic_deadline:
+                            dynamic_task.cancel()
+                            raise TimeoutError("Automatic orchestration timed out")
                         await asyncio.sleep(0.02)
                 dynamic_result = await dynamic_task
+                _chat_log(request_id, "orchestration", "complete", request_started_at, output_chars=len(dynamic_result.get("output") or ""))
                 accumulated_output = dynamic_result["output"]
                 async for word in _word_chunks(accumulated_output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
@@ -837,6 +886,8 @@ async def chat_stream(
 
                 event_type = sse_event["event"]
                 data = sse_event["data"]
+                if event_type in {"agent", "trace", "complete", "error"}:
+                    _chat_log(request_id, f"stream_{event_type}", "complete", request_started_at, agent_id=data.get("agent_id"))
 
                 # The endpoint has already sent its start event before context
                 # preparation, so avoid sending a duplicate from the runner.
@@ -868,6 +919,7 @@ async def chat_stream(
         except Exception as e:
             friendly_error = _friendly_chat_error(e)
             logger.error(f"Stream error: {e}", exc_info=True)
+            _chat_log(request_id, "request", "error", request_started_at, error=str(e)[:500], output_chars=len(accumulated_output))
             # Still try to save what we have
             if accumulated_output:
                 await _save_messages(
@@ -888,5 +940,6 @@ async def chat_stream(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Request-ID": request_id,
         },
     )

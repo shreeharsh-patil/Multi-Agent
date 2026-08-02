@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     # Optional Obscura CDP endpoint for managed or self-hosted browser scraping.
     obscura_cdp_url: str = ""
     obscura_timeout_seconds: int = 30
+    chat_stream_timeout_seconds: int = 120
+    chat_context_timeout_seconds: int = 45
     deepgram_api_key: str = ""
 
     image_provider: str = "auto"

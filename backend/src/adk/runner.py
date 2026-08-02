@@ -389,6 +389,21 @@ async def process_message_stream(
             yield event
 
 
+async def process_fast_message_stream(
+    message: str,
+    user_id: str = "default",
+    conversation_id: str = "default",
+):
+    """Low-latency stream for ordinary chat with no tool or document needs.
+
+    This intentionally bypasses ADK planning overhead. Requests that need
+    tools, retrieval, attachments, or specialist collaboration use the full
+    orchestrated path instead.
+    """
+    async for event in _fallback_process_message_stream(message, user_id, conversation_id):
+        yield event
+
+
 async def _fallback_process_message_stream(
     message: str,
     user_id: str = "default",

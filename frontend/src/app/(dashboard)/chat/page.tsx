@@ -118,6 +118,8 @@ function ChatContent() {
     id: string
     role: 'user' | 'assistant'
     content: string
+    error?: boolean
+    requestId?: string
     agentId?: string
     attachments?: Array<{ name: string; size: number; documentId?: string; driveFileId?: string; driveWebViewLink?: string }>
     citations?: Array<{
@@ -200,6 +202,7 @@ function ChatContent() {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
+  const [chatDebug, setChatDebug] = useState<{ requestId?: string; status: string; agent?: string; step?: string; startedAt: number; error?: string } | null>(null)
   const [orchestration, setOrchestration] = useState<{ complexity?: string; domain?: string; agents: Array<{ agent_id: string; label: string; reason?: string; status?: 'queued' | 'working' | 'complete' | 'failed' }> } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -845,6 +848,7 @@ function ChatContent() {
     sendingRef.current = true
     setSending(true)
     setOrchestration(null)
+    setChatDebug({ status: 'connecting', step: 'frontend_request', startedAt: Date.now() })
 
     // Attachments already began uploading on select. Await any in-flight
     // upload; only kick off a fresh upload for ones that never started
@@ -896,19 +900,37 @@ function ChatContent() {
 
     // Try SSE streaming first, fall back to non-streaming
     let streamingAttempted = false
+    let streamCompleted = false
+    let streamRequestId = ''
 
     try {
-      const streamResponse = await api.chat.stream({
+      const requestPayload = {
         message: text || `Uploaded ${attachmentCount} file(s)`,
         conversation_id: currentConvId,
         agent_id: currentAgent,
         team_agents: teamMode ? teamAgents as AgentId[] : undefined,
         workspace_id: currentWorkspace,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-      }, googleAccessToken, abortController.signal, googleRefreshToken)
+      }
+      let streamResponse: Response | null = null
+      let lastOpenError: unknown = null
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          streamResponse = await api.chat.stream(requestPayload, googleAccessToken, abortController.signal, googleRefreshToken)
+          if (streamResponse.ok) break
+          lastOpenError = new Error(`HTTP ${streamResponse.status}`)
+          if (streamResponse.status < 500 && streamResponse.status !== 429) break
+        } catch (openError) {
+          lastOpenError = openError
+        }
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * 2 ** attempt))
+      }
 
+      if (!streamResponse) {
+        throw lastOpenError || new Error('Unable to connect to the chat service')
+      }
       if (!streamResponse.ok) {
-        throw new Error(`HTTP ${streamResponse.status}`)
+        throw lastOpenError || new Error(`HTTP ${streamResponse.status}`)
       }
 
       const contentType = streamResponse.headers.get('content-type') || ''
@@ -917,6 +939,7 @@ function ChatContent() {
       }
 
       streamingAttempted = true
+      setChatDebug((current) => current ? { ...current, status: 'connected', step: 'sse_open' } : current)
 
       const reader = streamResponse.body?.getReader()
       if (!reader) throw new Error('No reader available')
@@ -925,6 +948,24 @@ function ChatContent() {
       let buffer = ''
       let accumulatedContent = ''
       let newConvId = currentConvId
+
+      const readWithTimeout = async () => {
+        let timeoutId: ReturnType<typeof setTimeout> | undefined
+        try {
+          return await Promise.race([
+            reader.read(),
+            new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => {
+                const timeout = new Error('The chat response timed out while waiting for data.')
+                timeout.name = 'StreamTimeout'
+                reject(timeout)
+              }, 45000)
+            }),
+          ])
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId)
+        }
+      }
 
       // Accumulate content in a ref and flush to React state at ~60 fps
       // to avoid hundreds of re-renders per second during streaming.
@@ -944,7 +985,7 @@ function ChatContent() {
       }
 
       while (true) {
-        const { done, value } = await reader.read()
+        const { done, value } = await readWithTimeout()
         if (done) break
 
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
@@ -967,7 +1008,11 @@ function ChatContent() {
           try {
             const data = JSON.parse(dataLines.join('\n'))
 
-            if (currentEvent === 'chunk' && data.text) {
+            if (currentEvent === 'start' && data.request_id) {
+                streamRequestId = data.request_id
+                setChatDebug((current) => current ? { ...current, requestId: data.request_id, status: 'streaming', step: 'api_start' } : current)
+            } else if (currentEvent === 'chunk' && data.text) {
+                setChatDebug((current) => current ? { ...current, status: 'streaming', step: 'response_chunk' } : current)
                 accumulatedContent += data.text
                 // Schedule a single visual update per frame
                 if (frameId === null) {
@@ -980,16 +1025,19 @@ function ChatContent() {
                   agents: data.agents.map((agent: any) => ({ ...agent, status: 'queued' })),
                 })
             } else if (currentEvent === 'agent_started' && data.agent_id) {
+                setChatDebug((current) => current ? { ...current, agent: data.agent_id, step: 'agent_started' } : current)
                 setOrchestration((current) => current ? {
                   ...current,
                   agents: current.agents.map((agent) => agent.agent_id === data.agent_id ? { ...agent, status: 'working' } : agent),
                 } : current)
             } else if (currentEvent === 'agent_complete' && data.agent_id) {
+                setChatDebug((current) => current ? { ...current, agent: data.agent_id, step: 'agent_complete' } : current)
                 setOrchestration((current) => current ? {
                   ...current,
                   agents: current.agents.map((agent) => agent.agent_id === data.agent_id ? { ...agent, status: data.success ? 'complete' : 'failed' } : agent),
                 } : current)
             } else if (currentEvent === 'agent' && data.agent_id) {
+                setChatDebug((current) => current ? { ...current, agent: data.agent_id, step: 'agent' } : current)
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -998,6 +1046,8 @@ function ChatContent() {
                   ),
                 )
             } else if (currentEvent === 'complete' && data.conversation_id) {
+                setChatDebug((current) => current ? { ...current, status: 'complete', step: 'response_complete' } : current)
+                streamCompleted = true
                 newConvId = data.conversation_id
                 // Mark this id as locally created so we don't refetch it
                 locallyCreatedIds.current.add(data.conversation_id)
@@ -1012,6 +1062,7 @@ function ChatContent() {
                   ),
                 )
             } else if (currentEvent === 'error' && data.error) {
+                setChatDebug((current) => current ? { ...current, status: 'error', step: 'server_error', error: data.error } : current)
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -1021,10 +1072,19 @@ function ChatContent() {
                   ),
                 )
             }
-          } catch {
-            // Ignore a malformed event without interrupting the stream.
+          } catch (parseError) {
+            console.error('[chat] malformed SSE event', { parseError, block })
           }
         }
+      }
+
+      // A clean network close without a completion event is not a successful
+      // response. Treat it as a failure so the assistant bubble never stays blank.
+      if (!streamCompleted) {
+        throw new Error(`Chat stream closed before completion${streamRequestId ? ` (request ${streamRequestId})` : ''}.`)
+      }
+      if (!accumulatedContent.trim()) {
+        throw new Error('The model returned an empty response.')
       }
 
       // Cancel any remaining frame and apply the final state
@@ -1051,6 +1111,8 @@ function ChatContent() {
         )
         return
       }
+      const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'
+      setChatDebug((current) => current ? { ...current, status: 'error', step: 'request_error', error: errorMessage } : current)
       if (!streamingAttempted) {
         // Fall back to non-streaming API
         try {
@@ -1072,6 +1134,7 @@ function ChatContent() {
                   ? {
                       ...msg,
                       content: res.data!.output,
+                      error: false,
                       agentId: res.data!.agent_traces?.[0]?.agent_id,
                       citations: res.data!.citations || msg.citations,
                     }
@@ -1082,7 +1145,7 @@ function ChatContent() {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantId
-                  ? { ...msg, content: res.error || 'Request failed' }
+                  ? { ...msg, content: res.error || 'Request failed. Please retry.', error: true }
                   : msg,
               ),
             )
@@ -1091,7 +1154,7 @@ function ChatContent() {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantId
-                ? { ...msg, content: 'Network error. Ensure the backend is running on port 8000.' }
+                ? { ...msg, content: `Network error: ${errorMessage}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
                 : msg,
             ),
           )
@@ -1100,7 +1163,7 @@ function ChatContent() {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantId
-              ? { ...msg, content: 'Connection interrupted during streaming.' }
+              ? { ...msg, content: `The response was interrupted: ${errorMessage}\n\nPlease retry.`, error: true, requestId: streamRequestId || undefined }
               : msg,
           ),
         )
@@ -1425,6 +1488,19 @@ function ChatContent() {
           </div>
         )}
 
+        {process.env.NODE_ENV === 'development' && chatDebug && (
+          <details className="mx-3 sm:mx-6 mt-3 rounded-lg border border-dashed border-border bg-card/60 px-3 py-2 text-[10px] text-muted-foreground">
+            <summary className="cursor-pointer font-medium">Chat diagnostics · {chatDebug.status}</summary>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
+              <span>Step: {chatDebug.step || '—'}</span>
+              <span>Agent: {chatDebug.agent || '—'}</span>
+              <span>Request: {chatDebug.requestId || '—'}</span>
+              <span>Elapsed: {Math.max(0, Date.now() - chatDebug.startedAt)} ms</span>
+              {chatDebug.error && <span className="col-span-2 text-destructive">Error: {chatDebug.error}</span>}
+            </div>
+          </details>
+        )}
+
 
         {/* Message Feeds Scroll Area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
@@ -1669,6 +1745,19 @@ function ChatContent() {
                               >
                                 {repairMermaidMarkdown(preprocessLaTeX(msg.content))}
                               </ReactMarkdown>
+                              {msg.error && (
+                                <button
+                                  type="button"
+                                  disabled={sending}
+                                  onClick={() => {
+                                    const previousUser = [...messages].slice(0, idx).reverse().find((candidate) => candidate.role === 'user')
+                                    if (previousUser?.content) handleSend(previousUser.content)
+                                  }}
+                                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/30 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+                                >
+                                  <RefreshCw className="h-3 w-3" /> Retry
+                                </button>
+                              )}
                             </div>
                           )}
                           {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
