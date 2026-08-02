@@ -428,7 +428,7 @@ export default function QuizPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Bloom's Taxonomy</label>
+                  <label className="text-sm font-medium">Bloom&apos;s Taxonomy</label>
                   <Select value={bloomsLevel} onValueChange={setBloomsLevel}>
                     <SelectTrigger>
                       <SelectValue />

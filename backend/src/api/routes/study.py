@@ -192,3 +192,64 @@ async def get_workspace_references(
     except Exception as e:
         logger.error(f"Reference extraction failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to extract references: {e}")
+
+
+class ExportStudyDocumentRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    content: str = Field(min_length=1)
+    format: str = "pdf"  # pdf | docx | markdown
+    scope: str = "complete"  # complete | notes | exam | revision | questions | answers | formulas | diagrams | tables | references
+    subject: str = "Academic Learning System"
+    author: str = "AI Study Agent"
+
+
+@router.post("/export")
+async def export_study_document(http_request: Request, body: ExportStudyDocumentRequest):
+    """Generate and return a publication-quality PDF or editable DOCX textbook document."""
+    from fastapi.responses import Response
+    from src.services.notes.exporter import publication_exporter
+
+    fmt = body.format.lower().strip()
+    safe_title = "".join(c if c.isalnum() else "_" for c in body.title)[:40]
+
+    try:
+        if fmt == "pdf":
+            file_bytes = await publication_exporter.export_pdf(
+                title=body.title,
+                content=body.content,
+                scope=body.scope,
+                author=body.author,
+                subject=body.subject,
+            )
+            media_type = "application/pdf"
+            filename = f"{safe_title}_{body.scope}.pdf"
+        elif fmt in {"docx", "doc", "word"}:
+            file_bytes = await publication_exporter.export_docx(
+                title=body.title,
+                content=body.content,
+                scope=body.scope,
+                author=body.author,
+                subject=body.subject,
+            )
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            filename = f"{safe_title}_{body.scope}.docx"
+        else:
+            file_bytes = await publication_exporter.export_markdown(
+                title=body.title,
+                content=body.content,
+                scope=body.scope,
+            )
+            media_type = "text/markdown"
+            filename = f"{safe_title}_{body.scope}.md"
+
+        return Response(
+            content=file_bytes,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+    except Exception as e:
+        logger.error(f"Publication export failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Document export failed: {e}")

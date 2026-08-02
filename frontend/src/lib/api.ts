@@ -767,5 +767,28 @@ export const api = {
       fetchApi<{ mermaid: string; nodes: Array<{ id: string; label: string; type: string; description: string }> }>('/api/study/concept-graph', { method: 'POST', body: JSON.stringify(data) }),
     references: (workspaceId?: string) =>
       fetchApi<{ references: Array<{ reference: string; sourceDocument: string; pageNumber?: string; context: string }>; count: number }>(`/api/study/references${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`),
+    exportDocument: async (data: { title: string; content: string; format?: string; scope?: string; subject?: string; author?: string }): Promise<{ success: boolean; blob?: Blob; fileName?: string; error?: string }> => {
+      try {
+        const token = getAccessToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch(`${BACKEND_URL}/api/study/export`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(data),
+        })
+        if (!res.ok) throw new Error(`Export failed with HTTP ${res.status}`)
+        const blob = await res.blob()
+        let fileName = `${data.title}_${data.scope || 'document'}.${data.format || 'pdf'}`
+        const disposition = res.headers.get('Content-Disposition')
+        if (disposition && disposition.includes('filename=')) {
+          const match = disposition.match(/filename="?([^";]+)"?/)
+          if (match && match[1]) fileName = match[1]
+        }
+        return { success: true, blob, fileName }
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Export failed' }
+      }
+    },
   },
 }

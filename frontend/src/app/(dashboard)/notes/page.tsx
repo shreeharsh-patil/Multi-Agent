@@ -434,20 +434,28 @@ export default function NotesPage() {
     }
   }
 
+  const [exportScope, setExportScope] = useState<string>('complete')
+
   const handleExport = async (format: 'pdf' | 'docx' | 'markdown') => {
     if (!selectedNote) return
     setExportingFormat(format)
     setError(null)
     try {
-      const result = await api.notes.export(selectedNote.id, format)
-      if (!result.success || !result.data) {
+      const result = await api.study.exportDocument({
+        title: selectedNote.title,
+        content: selectedNote.content || formContent || '',
+        format,
+        scope: exportScope,
+        subject: 'Academic Learning System',
+      })
+      if (!result.success || !result.blob) {
         setError(result.error || 'Export failed')
         return
       }
-      const url = URL.createObjectURL(result.data.blob)
+      const url = URL.createObjectURL(result.blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = result.data.fileName
+      link.download = result.fileName || `${selectedNote.title}.${format}`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -651,8 +659,26 @@ export default function NotesPage() {
                     <div className="flex items-center justify-between mb-3 text-muted-foreground">
                       <h3 className="font-semibold text-xs flex items-center gap-2 uppercase tracking-wider">
                         <Download className="h-4 w-4 text-primary" />
-                        Export Note
+                        Publication Document Export
                       </h3>
+                      <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                        <span className="text-[11px] text-muted-foreground">Scope:</span>
+                        <select
+                          value={exportScope}
+                          onChange={(e) => setExportScope(e.target.value)}
+                          className="text-xs bg-background border border-border rounded-[6px] px-2 py-1 focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer font-medium"
+                        >
+                          <option value="complete">Entire Document</option>
+                          <option value="notes">Only Notes</option>
+                          <option value="exam">Exam Notes (High-Yield)</option>
+                          <option value="revision">1-Page Revision</option>
+                          <option value="questions">Question Bank & Q&A</option>
+                          <option value="formulas">Formula Handbook</option>
+                          <option value="diagrams">Diagram & Flowchart Book</option>
+                          <option value="tables">Comparison Tables Only</option>
+                          <option value="references">Bibliography & References</option>
+                        </select>
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <Button
