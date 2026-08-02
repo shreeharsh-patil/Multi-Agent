@@ -9,8 +9,8 @@ class AgentRouter:
             (r"(?i)\b(generate|create|draw|make|design|render|paint|show|produce)\b.*\b(image|picture|photo|photograph|illustration|drawing|artwork|poster|logo|icon|graphic|banner|vector|avatar)\b", "image"),
             (r"(?i)\b(image|picture|photo|drawing|illustration)\b\s+(of|for|with|showing|featuring)\b", "image"),
             (r"(?i)\b(logo|icon|avatar)\b\s+(for|of|with|showing|featuring)\b", "image"),
-            # Contacts: catch contact/phone/email/who-is lookups before calendar
-            (r"(?i)\b(contact|contacts|phone\s*book|address\s*book|phone\s*number|cell\s*number|mobile\s*number|email\s*address|who\s+is|find\s+contact|get\s+number|contact\s+info)\b", "contacts"),
+            # Contacts: catch explicit contact/phone/email lookups before calendar
+            (r"(?i)\b(contact|contacts|phone\s*book|address\s*book|phone\s*number|cell\s*number|mobile\s*number|email\s*address|who\s+is\s+in\s+my\s+contacts|find\s+contact|get\s+number|contact\s+info)\b", "contacts"),
             (r"(?i)\b(number\s+of|phone\s+of|mobile\s+of|email\s+of|contact\s+details|number\s+for|phone\s+for)\b", "contacts"),
             # Calendar: catch all natural calendar/scheduling requests
             (r"(?i)\b(calendar|calender|calander)\b", "calendar"),
@@ -36,3 +36,28 @@ class AgentRouter:
                 logger.info(f"Routed to agent: {agent_id}", extra={"input": user_input[:100]})
                 return agent_id
         return None
+
+    def route_smart(self, user_input: str, requested_agent_id: Optional[str] = None) -> str:
+        """Dynamically select the best agent for a user prompt, auto-correcting misaligned dropdown selections."""
+        # 1. Pattern rule match takes priority for specific actions (images, calendar, contacts, etc.)
+        matched = self.route(user_input)
+        if matched:
+            return matched
+
+        input_lower = user_input.lower().strip()
+
+        # 2. If requested_agent_id is provided, validate it against the prompt nature
+        if requested_agent_id and requested_agent_id != "auto":
+            if requested_agent_id == "coding":
+                coding_keywords = ["code", "script", "python", "javascript", "typescript", "html", "css", "sql", "java", "c++", "c#", "rust", "go", "function", "class", "algorithm", "debug", "error", "exception", "bug", "program", "api", "refactor", "syntax"]
+                if not any(k in input_lower for k in coding_keywords):
+                    # Query is general explanation/concept, route to knowledge agent
+                    return "knowledge"
+            return requested_agent_id
+
+        # 3. For general explanations, questions, or concepts, default to knowledge agent
+        explanation_keywords = ["explain", "what is", "define", "how does", "why", "tell me about", "concept", "meaning", "overview", "difference between"]
+        if any(k in input_lower for k in explanation_keywords):
+            return "knowledge"
+
+        return "auto"

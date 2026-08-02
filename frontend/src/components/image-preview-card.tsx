@@ -9,7 +9,7 @@ interface ImagePreviewCardProps {
   alt?: string
 }
 
-export function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewCardProps) {
+export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewCardProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -100,4 +100,4 @@ export function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewC
       )}
     </>
   )
-}
+})

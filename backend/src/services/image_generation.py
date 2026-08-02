@@ -147,6 +147,43 @@ async def _generate_cloudflare(prompt: str) -> tuple[bytes, str | None]:
     raise RuntimeError(f"All configured Cloudflare key pairs failed. Last error: {last_error}")
 
 
+import re
+
+
+async def _enhance_image_prompt(prompt: str) -> str:
+    """Clean raw user request into a clear, detailed, unambiguous visual prompt for image generation models."""
+    raw = prompt.strip()
+    clean = re.sub(
+        r"(?i)^(generate|create|draw|make|design|render|paint|show|produce)\s+(me\s+)?(a|an|some)?\s*(image|picture|photo|photograph|illustration|drawing|artwork)?\s*(of|showing|featuring)?\s*",
+        "",
+        raw,
+    ).strip()
+
+    if not clean:
+        clean = raw
+
+    # Disambiguate ambiguous terms (e.g. medical injection vs car fuel injection)
+    if clean.lower() in {"injection", "an injection", "the injection", "syringe"}:
+        return "a medical syringe injection, healthcare doctor vaccine needle, clear clinical setting, high quality photograph"
+
+    # Use LLM to expand short prompts into detailed visual descriptions if needed
+    if len(clean.split()) <= 4:
+        try:
+            from src.services.llm import llm_service
+            expanded = await llm_service.generate(
+                prompt=f"Convert this image request into a clear, detailed 1-sentence visual description for AI image generation (avoid automotive confusion unless specified): '{clean}'",
+                system_instruction="You are an AI image prompt enhancer. Output ONLY the 1-sentence prompt text with no quotes or prefixes.",
+                max_output_tokens=60,
+            )
+            expanded_clean = expanded.strip().strip('"\'`')
+            if expanded_clean and len(expanded_clean) > 5:
+                return expanded_clean
+        except Exception as err:
+            logger.warning(f"Prompt enhancement failed: {err}")
+
+    return clean
+
+
 async def generate_and_store_image(
     prompt: str,
     user_id: str,
@@ -155,11 +192,13 @@ async def generate_and_store_image(
     drive_access_token: str | None = None,
     drive_refresh_token: str | None = None,
 ) -> GeneratedImage:
-    clean_prompt = prompt.strip()
-    if not clean_prompt:
+    raw_prompt = prompt.strip()
+    if not raw_prompt:
         raise ValueError("An image prompt is required")
-    if len(clean_prompt) > 4000:
+    if len(raw_prompt) > 4000:
         raise ValueError("Image prompts are limited to 4000 characters")
+
+    clean_prompt = await _enhance_image_prompt(raw_prompt)
 
     provider = settings.image_provider.lower()
     if provider == "auto":

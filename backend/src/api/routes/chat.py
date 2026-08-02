@@ -510,8 +510,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             workspace = await Workspace.get(body.workspace_id)
             if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
                 raise HTTPException(status_code=404, detail="Workspace not found")
-        detected_agent_id = AgentRouter().route(body.message)
-        routed_agent_id = detected_agent_id or body.agent_id or "auto"
+        routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
@@ -621,8 +620,7 @@ async def chat_stream(
         workspace = await Workspace.get(body.workspace_id)
         if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
             raise HTTPException(status_code=404, detail="Workspace not found")
-    detected_agent_id = AgentRouter().route(body.message)
-    routed_agent_id = detected_agent_id or body.agent_id or "auto"
+    routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
     accumulated_output = ""
