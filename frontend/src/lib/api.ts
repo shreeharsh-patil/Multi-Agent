@@ -753,4 +753,19 @@ export const api = {
     delete: (id: string) => fetchApi<{ success: boolean }>(`/api/workflows/${id}`, { method: 'DELETE' }),
     runs: (id: string) => fetchApi<Array<{ id: string; status: string; prompt: string; nodeCount: number; startedAt: string }>>(`/api/workflows/${id}/runs`),
   },
+
+  study: {
+    learningModes: () => fetchApi<{ modes: Array<{ id: string; name: string; description: string }> }>('/api/study/learning-modes'),
+    noteStyles: () => fetchApi<{ styles: Array<{ id: string; name: string; description: string }> }>('/api/study/note-styles'),
+    notes: (data: { topic: string; style?: string; workspace_id?: string; save_as_note?: boolean; custom_instructions?: string }) =>
+      fetchApi<{ title: string; content: string; style: string; citations: Array<{ file_name: string; page_number?: string; snippet: string }>; noteId?: string }>('/api/study/notes', { method: 'POST', body: JSON.stringify(data) }),
+    quiz: (data: { topic: string; count?: number; blooms_level?: string; question_types?: string[]; workspace_id?: string }) =>
+      fetchApi<{ topic: string; count: number; questions: Array<{ id: string; question: string; type: string; bloomsLevel: string; options: string[]; correctAnswer: string; explanation: string; formulaDerivation?: string; memoryTrick?: string; commonMistakes?: string }> }>('/api/study/quiz', { method: 'POST', body: JSON.stringify(data) }),
+    formula: (data: { formula: string; workspace_id?: string }) =>
+      fetchApi<{ formula: string; breakdown: string; citations: Array<unknown> }>('/api/study/formula', { method: 'POST', body: JSON.stringify(data) }),
+    conceptGraph: (data: { topic: string; workspace_id?: string }) =>
+      fetchApi<{ mermaid: string; nodes: Array<{ id: string; label: string; type: string; description: string }> }>('/api/study/concept-graph', { method: 'POST', body: JSON.stringify(data) }),
+    references: (workspaceId?: string) =>
+      fetchApi<{ references: Array<{ reference: string; sourceDocument: string; pageNumber?: string; context: string }>; count: number }>(`/api/study/references${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`),
+  },
 }

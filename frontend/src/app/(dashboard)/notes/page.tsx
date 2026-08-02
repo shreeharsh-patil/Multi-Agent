@@ -459,17 +459,26 @@ export default function NotesPage() {
     }
   }
 
+  const [aiStyle, setAiStyle] = useState<'beginner' | 'exam' | 'detailed' | 'revision' | 'cheatsheet'>('detailed')
+
   const handleGenerateWithAI = async () => {
     setSaving(true)
     setError(null)
     try {
-      const res = await api.chat.send({
-        message: `Create structured notes on the following topic. Include sections, bullet points, key concepts, definitions, and examples: ${formTitle || 'General notes'}`,
+      const topicToUse = formTitle.trim() || 'Core Study Subject'
+      const res = await api.study.notes({
+        topic: topicToUse,
+        style: aiStyle,
+        workspace_id: selectedWorkspace === 'personal' ? undefined : selectedWorkspace,
+        save_as_note: false,
       })
       if (res.success && res.data) {
-        const aiOutput = res.data!.output
+        const aiOutput = res.data.content
         const combined = formContent ? formContent + '\n\n---\n\n' + aiOutput : aiOutput
         setFormContent(combined)
+        if (!formTitle) {
+          setFormTitle(res.data.title)
+        }
         
         // Sync to Yjs if active
         if (ydocRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -768,8 +777,8 @@ export default function NotesPage() {
                         value={formTags}
                         onChange={(e) => setFormTags(e.target.value)}
                       />
-                      <div className="flex gap-2 pt-2">
-                        <Button onClick={handleSave} className="gap-2 shadow-sm" disabled={saving || !formTitle.trim()}>
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <Button onClick={handleSave} className="gap-2 shadow-sm rounded-[8px]" disabled={saving || !formTitle.trim()}>
                           {saving ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
@@ -777,15 +786,29 @@ export default function NotesPage() {
                           )}
                           Save
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="gap-2 shadow-sm"
-                          onClick={handleGenerateWithAI}
-                          disabled={saving}
-                        >
-                          <Sparkles className="h-4 w-4 text-primary" />
-                          Generate with AI
-                        </Button>
+                        <div className="flex items-center gap-1.5 bg-secondary/50 p-1 rounded-[8px] border border-border/60">
+                          <select
+                            value={aiStyle}
+                            onChange={(e) => setAiStyle(e.target.value as any)}
+                            className="text-xs bg-background border border-border rounded-[6px] px-2 py-1 focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer font-medium"
+                          >
+                            <option value="detailed">Exhaustive Notes</option>
+                            <option value="beginner">Beginner Notes</option>
+                            <option value="exam">Exam Notes (High-Yield)</option>
+                            <option value="revision">1-Page Revision</option>
+                            <option value="cheatsheet">Cheat Sheet</option>
+                          </select>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="gap-1.5 shadow-sm text-xs rounded-[6px]"
+                            onClick={handleGenerateWithAI}
+                            disabled={saving}
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Generate AI Notes
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : selectedNote ? (

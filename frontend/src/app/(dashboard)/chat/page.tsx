@@ -16,7 +16,7 @@ import { Send, Bot, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mi
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
-import { FileCode, Globe, Play, Code as CodeIcon } from 'lucide-react'
+import { FileCode, Globe, Play, Code as CodeIcon, GraduationCap } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -1426,6 +1426,35 @@ function ChatContent() {
                   <p className="text-xs sm:text-sm text-muted-foreground/80 max-w-md mx-auto leading-relaxed font-sans">
                     Ask anything, analyze documents, or delegate tasks to specialized AI agents in this collaborative workspace.
                   </p>
+                </div>
+
+                {/* AI Study Learning Modes Bar */}
+                <div className="w-full px-2 space-y-2">
+                  <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground font-medium mb-1">
+                    <GraduationCap className="h-4 w-4 text-primary" />
+                    <span>AI Study Learning Modes:</span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {[
+                      { name: 'Teach Me', prefix: 'Teach me step-by-step with examples and diagrams: ' },
+                      { name: 'ELI10', prefix: 'Explain like I am 10 years old with simple analogies: ' },
+                      { name: 'Professor Mode', prefix: 'Provide a rigorous academic explanation with KaTeX formulas, proofs, and definitions: ' },
+                      { name: 'Research Mode', prefix: 'Provide a research-grade analysis with citations, trade-offs, and open problems: ' },
+                      { name: 'Exam Mode', prefix: 'Format as high-scoring exam points (2/5/10 mark pattern) with formulas and common traps: ' },
+                      { name: 'Revision Mode', prefix: 'Create a 1-page rapid revision guide with bullet points and mnemonics: ' },
+                      { name: 'Interview Mode', prefix: 'Format as technical interview questions with complexity analysis and code dry-runs: ' },
+                    ].map((mode) => (
+                      <button
+                        key={mode.name}
+                        onClick={() => {
+                          setInput(mode.prefix)
+                        }}
+                        className="text-xs bg-secondary/80 hover:bg-primary/10 hover:border-primary/40 border border-border text-foreground px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer font-medium shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                      >
+                        {mode.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Central quick suggestion buttons as premium cards */}

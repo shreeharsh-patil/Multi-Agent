@@ -102,6 +102,7 @@ export default function QuizPage() {
   const [topic, setTopic] = useState('')
   const [difficulty, setDifficulty] = useState('intermediate')
   const [questionCount, setQuestionCount] = useState('5')
+  const [bloomsLevel, setBloomsLevel] = useState('all')
 
   // Active quiz
   const [quizId, setQuizId] = useState<string | null>(null)
@@ -412,7 +413,7 @@ export default function QuizPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Difficulty</label>
                   <Select value={difficulty} onValueChange={setDifficulty}>
@@ -423,6 +424,23 @@ export default function QuizPage() {
                       <SelectItem value="beginner">Beginner</SelectItem>
                       <SelectItem value="intermediate">Intermediate</SelectItem>
                       <SelectItem value="advanced">Advanced</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Bloom's Taxonomy</label>
+                  <Select value={bloomsLevel} onValueChange={setBloomsLevel}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Cognitive Levels</SelectItem>
+                      <SelectItem value="remember">1. Remember (Facts)</SelectItem>
+                      <SelectItem value="understand">2. Understand (Concepts)</SelectItem>
+                      <SelectItem value="apply">3. Apply (Problem Solving)</SelectItem>
+                      <SelectItem value="analyze">4. Analyze (Trade-offs)</SelectItem>
+                      <SelectItem value="evaluate">5. Evaluate (Critique)</SelectItem>
+                      <SelectItem value="create">6. Create (Synthesis)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
