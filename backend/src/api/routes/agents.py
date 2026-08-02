@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
+import json
 import uuid
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from src.models.agent import AgentConfig
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
@@ -14,6 +16,10 @@ class CustomAgentInput(BaseModel):
     system_instruction: str
     tools: list[str] = []
     enabled: bool = True
+
+
+class AgentRunRequest(BaseModel):
+    message: str = Field(min_length=1)
 
 
 def resolved_user(request: Request) -> str:
@@ -111,3 +117,82 @@ async def get_agent(agent_id: str, request: Request) -> dict:
     if custom_agent:
         return serialize_custom(custom_agent)
     raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+
+
+@router.post("/{agent_id}/run")
+async def run_custom_agent(agent_id: str, request: Request, body: AgentRunRequest) -> StreamingResponse:
+    user_id = resolved_user(request)
+    agent = await AgentConfig.find_one(
+        AgentConfig.agent_id == agent_id,
+        AgentConfig.user_id == user_id,
+        AgentConfig.custom == True,
+        AgentConfig.enabled == True,
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Custom agent '{agent_id}' not found")
+
+    from src.services.llm import llm_service
+    from src.utils.logger import logger
+
+    async def gen():
+        def sse(event: str, data: dict) -> str:
+            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+        yield sse("agent_run_start", {"agent_id": agent_id, "name": agent.name})
+
+        tools = agent.tools or []
+        extra = ""
+        used_tools: list[str] = []
+        try:
+            if "web_search" in tools:
+                from src.adk.tools import web_search
+
+                res = await web_search(body.message, for_research=True)
+                if res and "No search results" not in res:
+                    extra += f"\n\nWEB SEARCH RESULTS:\n{res}"
+                    used_tools.append("web search")
+            if "knowledge_search" in tools or "knowledge" in tools:
+                from src.adk.tools import knowledge_search
+
+                res = await knowledge_search(body.message, user_id=user_id)
+                if res and "No relevant documents" not in res:
+                    extra += f"\n\nKNOWLEDGE BASE RESULTS:\n{res}"
+                    used_tools.append("knowledge base")
+            if "google_drive" in tools:
+                from src.adk.tools import drive_list
+
+                res = await drive_list(user_id=user_id)
+                if res and "connect Google Drive" not in res and "empty" not in res:
+                    extra += f"\n\nGOOGLE DRIVE FILES:\n{res}"
+                    used_tools.append("Google Drive")
+        except Exception as e:
+            logger.warning(f"Custom agent tool run failed for {agent_id}: {e}")
+
+        system = agent.system_instruction
+        if extra:
+            system += (
+                "\n\nYou have access to tool results below. Use them as evidence when relevant, "
+                "and mention the source (e.g. 'per web search') when you cite them."
+            )
+        full_prompt = body.message + extra
+
+        tokens: list[str] = []
+        try:
+            async for chunk in llm_service.generate_stream(
+                prompt=full_prompt,
+                system_instruction=system,
+                temperature=0.5,
+            ):
+                tokens.append(chunk)
+                yield sse("agent_run_token", {"token": chunk})
+        except Exception as e:
+            logger.error(f"Custom agent execution error for {agent_id}: {e}")
+            tokens.append(f"\n[Agent error: {e}]")
+            yield sse("agent_run_token", {"token": f"\n[Agent error: {e}]"})
+
+        yield sse("agent_run_complete", {"output": "".join(tokens), "tools": used_tools})
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })

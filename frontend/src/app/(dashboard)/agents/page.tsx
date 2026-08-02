@@ -21,8 +21,11 @@ import {
   Plus,
   Trash2,
   Workflow,
+  Send,
+  X,
 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { getAccessToken } from '@/lib/auth-store'
 import Link from 'next/link'
 
 const iconMap: Record<string, import('lucide-react').LucideIcon> = {
@@ -77,6 +80,11 @@ export default function AgentsPage() {
   const [builderOpen, setBuilderOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState({ name: '', description: '', icon: 'Bot', system_instruction: '', tools: [] as string[] })
+  const [testFor, setTestFor] = useState<{ id: string; name: string } | null>(null)
+  const [testMessage, setTestMessage] = useState('')
+  const [testOutput, setTestOutput] = useState('')
+  const [testRunning, setTestRunning] = useState(false)
+  const [testTools, setTestTools] = useState<string[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -127,6 +135,74 @@ export default function AgentsPage() {
     else setError(res.error || 'Could not delete agent')
   }
 
+  const startTest = (id: string, name: string, tools: string[] = []) => {
+    setTestFor({ id, name })
+    setTestMessage('')
+    setTestOutput('')
+    setTestRunning(false)
+    setTestTools(tools)
+  }
+
+  const runTest = async () => {
+    if (!testFor || !testMessage.trim() || testRunning) return
+    setTestRunning(true)
+    setTestOutput('')
+    setTestTools([])
+
+    const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      const token = getAccessToken()
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const response = await fetch(`${API_BASE}/api/agents/${testFor.id}/run`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: testMessage }),
+      })
+      if (!response.body) throw new Error('No response body')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let streamed = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const blocks = buffer.split('\n\n')
+        buffer = blocks.pop() || ''
+        for (const block of blocks) {
+          let event = 'message'
+          const dataLines: string[] = []
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event:')) event = line.slice(6).trim()
+            if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+          }
+          if (!dataLines.length) continue
+          try {
+            const data = JSON.parse(dataLines.join('\n'))
+            if (event === 'agent_run_token') {
+              streamed += data.token || ''
+              setTestOutput(streamed)
+            } else if (event === 'agent_run_complete') {
+              setTestOutput(data.output || streamed)
+              setTestTools(data.tools || [])
+            }
+          } catch (err) {
+            console.error('SSE parse error', err, block)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Agent test error', err)
+      setTestOutput('Network error. Ensure the backend is running on port 8000.')
+    } finally {
+      setTestRunning(false)
+    }
+  }
+
   const renderAgentList = () => {
     return agents.map((agent) => {
       const Icon = iconMap[agent.icon] || Bot
@@ -156,15 +232,26 @@ export default function AgentsPage() {
               ))}
             </div>
             {agent.custom && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => deleteAgent(agent.id)} 
-                className="gap-1.5 text-xs text-[#c64545] hover:bg-[#c64545]/10 h-8 px-2 rounded-[8px]"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> 
-                Delete
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => startTest(agent.id, agent.name, agent.tools || [])} 
+                  className="gap-1.5 text-xs h-8 px-2 rounded-[8px]"
+                >
+                  <Send className="h-3.5 w-3.5" /> 
+                  Test
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => deleteAgent(agent.id)} 
+                  className="gap-1.5 text-xs text-[#c64545] hover:bg-[#c64545]/10 h-8 px-2 rounded-[8px]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> 
+                  Delete
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -217,6 +304,48 @@ export default function AgentsPage() {
             Dismiss
           </Button>
         </div>
+      )}
+
+      {testFor && (
+        <Card className="border-primary/30 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle className="font-sans font-normal tracking-[-0.02em] text-lg">
+                  Test agent — {testFor.name}
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  {testTools.length > 0 && (
+                    <span className="text-xs">Tools used: {testTools.join(', ')}</span>
+                  )}
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setTestFor(null)} className="h-7 w-7 p-0">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-end gap-2">
+              <Textarea
+                placeholder="Send a message to this agent..."
+                value={testMessage}
+                onChange={(e) => setTestMessage(e.target.value)}
+                className="min-h-16 flex-1"
+                disabled={testRunning}
+              />
+              <Button onClick={runTest} disabled={!testMessage.trim() || testRunning} className="shrink-0 gap-2">
+                {testRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {testRunning ? 'Running…' : 'Run'}
+              </Button>
+            </div>
+            {testOutput && (
+              <div className="rounded-[10px] border border-border bg-background p-4">
+                <p className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">{testOutput}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {builderOpen && (
