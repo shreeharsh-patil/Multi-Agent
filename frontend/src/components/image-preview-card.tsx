@@ -98,9 +98,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
               setHasError(true)
             }}
             onClick={() => setIsOpen(true)}
-            className={`w-full h-auto max-h-[420px] object-cover cursor-pointer transition-transform duration-300 group-hover:scale-[1.02] ${
-              isLoading ? 'opacity-0' : 'opacity-100'
-            }`}
+            className="w-full h-auto max-h-[420px] object-cover cursor-pointer transition-transform duration-300 group-hover:scale-[1.02] rounded-xl block"
           />
         )}
 
