@@ -139,6 +139,29 @@ class CalendarAgent(BaseAgent):
                     **list_kwargs,
                 )
                 if not events:
+                    # Check if query or user_input asks for contact details (phone, number, email, contact name)
+                    target_query = query or user_input
+                    if any(w in user_input.lower() for w in ["phone", "number", "email", "contact", "who is", "mobile", "address"]):
+                        try:
+                            from src.services.contacts.service import contacts_service
+                            clean_q = re.sub(r"(?i)\b(find|get|what|is|the|phone|number|of|for|contact|details)\b", "", target_query).strip()
+                            contacts = await contacts_service.list_contacts(token, refresh_token=refresh_token, query=clean_q or target_query)
+                            if contacts:
+                                heading = f'I didn\'t find a calendar event for "{query or clean_q}", but I found matching Google Contacts:\n'
+                                lines = [heading]
+                                for c in contacts:
+                                    details = [f"- **{c['name']}**"]
+                                    if c.get("email"):
+                                        details.append(f"  - **Email:** `{c['email']}`")
+                                    if c.get("phone"):
+                                        details.append(f"  - **Phone:** `{c['phone']}`")
+                                    if c.get("company"):
+                                        details.append(f"  - **Company:** {c['company']}")
+                                    lines.append("\n".join(details))
+                                return AgentResult(success=True, output="\n\n".join(lines))
+                        except Exception as c_err:
+                            logger.warning(f"Cross-agent contacts lookup failed: {c_err}")
+
                     message = f'I could not find a calendar event matching "{query}".' if query else "You have no events in that time range."
                     return AgentResult(success=True, output=message)
                 heading = f'Matching event details for "{query}":' if (action == "details" or query) else "Upcoming calendar events:"
