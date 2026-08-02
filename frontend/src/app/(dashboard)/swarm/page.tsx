@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Sparkles, Users, CheckCircle2, Play, RefreshCw } from "lucide-react";
+import { Sparkles, Users, Network, CheckCircle2, Play, RefreshCw } from "lucide-react";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 interface SwarmAgent {
@@ -146,6 +146,88 @@ export default function SwarmPage() {
               </>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* Live Collaboration Graph */}
+      <div className="bg-card border rounded-xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Network className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Collaboration Flow</h2>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Idle
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-amber-500" /> Working
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" /> Done
+            </span>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <svg viewBox="0 0 1000 200" className="w-full min-w-[720px] h-48">
+            <defs>
+              <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8" />
+              </marker>
+            </defs>
+            {agents.slice(0, -1).map((_, i) => {
+              const next = agents[i + 1]!;
+              const x1 = 140 + i * 240;
+              const x2 = 140 + (i + 1) * 240;
+              const active = next?.status === "running";
+              const done = next?.status === "completed";
+              const stroke = done ? "#10b981" : active ? "#f54e00" : "#cbd5e1";
+              return (
+                <g key={`edge-${i}`}>
+                  <line
+                    x1={x1 + 40}
+                    y1={90}
+                    x2={x2 - 42}
+                    y2={90}
+                    stroke={stroke}
+                    strokeWidth={active ? 2.5 : 1.5}
+                    markerEnd="url(#arrowhead)"
+                  />
+                  {active && (
+                    <circle cx={(x1 + x2) / 2} cy={90} r={4} fill="#f54e00">
+                      <animate attributeName="r" values="3;7;3" dur="1.2s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite" />
+                    </circle>
+                  )}
+                </g>
+              );
+            })}
+            {agents.map((agent, i) => {
+              const cx = 140 + i * 240;
+              const status = agent.status;
+              const ring = status === "running" ? "#f54e00" : status === "completed" ? "#10b981" : "#cbd5e1";
+              return (
+                <g key={agent.id}>
+                  {status === "running" && (
+                    <circle cx={cx} cy={90} r={34} fill="none" stroke="#f54e00" strokeWidth={2}>
+                      <animate attributeName="r" values="32;46;32" dur="1.4s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.7;0;0.7" dur="1.4s" repeatCount="indefinite" />
+                    </circle>
+                  )}
+                  <circle cx={cx} cy={90} r={32} fill="white" stroke={ring} strokeWidth={status === "running" ? 3 : 2} />
+                  <text x={cx} y={90} textAnchor="middle" dominantBaseline="central" fontSize="20">
+                    {agent.avatar}
+                  </text>
+                  <text x={cx} y={138} textAnchor="middle" fontSize="12" fontWeight="600" fill="#26251e">
+                    {agent.name}
+                  </text>
+                  <text x={cx} y={154} textAnchor="middle" fontSize="9.5" fill="#77756e">
+                    {agent.role}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
         </div>
       </div>
 
