@@ -25,7 +25,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import { preprocessLaTeX } from '@/lib/latex'
 import { ImagePreviewCard } from '@/components/image-preview-card'
-import { MermaidWorkspace } from '@/components/mermaid-workspace'
+import { MermaidWorkspace, repairMermaidMarkdown } from '@/components/mermaid-workspace'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -1477,7 +1477,7 @@ function ChatContent() {
             </div>
           ) : (
             <ScrollArea ref={scrollRef} className="h-full px-3 sm:px-6 py-3 sm:py-6">
-              <div className="space-y-6 max-w-3xl mx-auto">
+              <div className="space-y-6 w-full max-w-none mx-auto">
                 {messages.map((msg, idx) => (
                   <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
@@ -1485,7 +1485,7 @@ function ChatContent() {
                         <Image src="/developer-avatar.png" alt="AI" width={28} height={28} className="h-full w-full object-contain" />
                       </div>
                     )}
-                    <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`w-full max-w-[92%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
                         <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-secondary border-border text-muted-foreground">
                           {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name || msg.agentId}
@@ -1649,7 +1649,7 @@ function ChatContent() {
                                   },
                                 }}
                               >
-                                {preprocessLaTeX(msg.content)}
+                                {repairMermaidMarkdown(preprocessLaTeX(msg.content))}
                               </ReactMarkdown>
                             </div>
                           )}
@@ -1807,7 +1807,7 @@ function ChatContent() {
 
         {/* Anchored bottom input block */}
         <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-border bg-background shrink-0">
-          <div className="max-w-3xl mx-auto space-y-2">
+          <div className="w-full max-w-none mx-auto space-y-2">
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pb-2">
                 {attachments.map((att) => (
@@ -1829,7 +1829,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-card border border-border rounded-[16px] min-h-[56px] p-2 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 shadow-xs w-full max-w-3xl mx-auto transition-all duration-200">
+            <div className="relative flex items-center bg-card border border-border rounded-[16px] min-h-[56px] p-2 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 shadow-xs w-full transition-all duration-200">
               <input
                 ref={fileInputRef}
                 type="file"

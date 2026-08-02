@@ -32,15 +32,31 @@ const DEFAULT_MINDMAP = `mindmap
       Explain
       Review`
 
-function extractMermaid(content?: string) {
-  const match = content?.match(/```mermaid\s*([\s\S]*?)```/i)
-  let source = match?.[1]?.trim() || ''
-  // Chat responses occasionally forget to close the diagram before continuing
-  // with prose. Keep the valid Mermaid section in that case.
+function normalizeMermaidSource(input: string) {
+  let source = input.replace(/```mermaid\s*/gi, '').replace(/```/g, '').trim()
+  source = source.replace(/^raph\b/i, 'graph')
   source = source.replace(/\s+(?=(?:where\b|\*\s+\*\*))/i, '\n')
   source = source.split(/\n\s*(?:where\b|\*\s+\*\*)/i)[0] || ''
-  // Be forgiving of the common missing `g` typo in pasted flowcharts.
-  return source.replace(/^raph\b/i, 'graph')
+  // Mermaid accepts semicolons, but removing terminal ones avoids parser issues
+  // when a model concatenates a diagram statement with following prose.
+  return source.split('\n').map((line) => line.trimEnd().replace(/;\s*$/, '')).join('\n').trim()
+}
+
+function extractMermaid(content?: string) {
+  const match = content?.match(/```mermaid\s*([\s\S]*?)```/i)
+  return normalizeMermaidSource(match?.[1] || '')
+}
+
+/** Repairs chat responses where prose was accidentally left inside a Mermaid fence. */
+export function repairMermaidMarkdown(content: string) {
+  return content.replace(/```mermaid\s*([\s\S]*?)(```|$)/gi, (full, body: string, closing: string) => {
+    const marker = body.search(/\s+(?:where\b|\*\s+\*\*)/i)
+    if (marker < 0) return closing ? full : `${full}\n\`\`\``
+
+    const diagram = body.slice(0, marker).trim().replace(/^raph\b/i, 'graph')
+    const trailing = `${body.slice(marker).trim()}${closing ? '' : ''}`.trim()
+    return `\`\`\`mermaid\n${diagram}\n\`\`\`\n\n${trailing}`
+  })
 }
 
 export function MermaidWorkspace({ content, title = 'Visual study map' }: { content?: string; title?: string }) {
@@ -63,12 +79,14 @@ export function MermaidWorkspace({ content, title = 'Visual study map' }: { cont
       if (!diagramRef.current || activeTab !== 'diagram') return
       try {
         const mermaid = (await import('mermaid')).default
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables: {
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', themeVariables: {
           primaryColor: '#fff1e9', primaryTextColor: '#26251e', primaryBorderColor: '#f54e00',
           lineColor: '#8c877d', secondaryColor: '#f4f3ee', tertiaryColor: '#ffffff', fontFamily: 'system-ui'
         }})
         const id = `mermaid-${Date.now()}`
-        const { svg } = await mermaid.render(id, code)
+        const normalizedCode = normalizeMermaidSource(code)
+        await mermaid.parse(normalizedCode)
+        const { svg } = await mermaid.render(id, normalizedCode)
         if (!cancelled && diagramRef.current) {
           diagramRef.current.innerHTML = svg
           const svgElement = diagramRef.current.querySelector('svg')
@@ -81,7 +99,10 @@ export function MermaidWorkspace({ content, title = 'Visual study map' }: { cont
           setRenderError(null)
         }
       } catch (error) {
-        if (!cancelled) setRenderError(error instanceof Error ? error.message : 'Could not render this diagram')
+        if (!cancelled) {
+          if (diagramRef.current) diagramRef.current.innerHTML = ''
+          setRenderError('This diagram has invalid Mermaid syntax. Open Mermaid code to edit it.')
+        }
       }
     }
     render()
@@ -96,7 +117,7 @@ export function MermaidWorkspace({ content, title = 'Visual study map' }: { cont
     try {
       const response = await api.study.conceptGraph({ topic: topic.trim() })
       if (response.success && response.data?.mermaid) {
-        setCode(response.data.mermaid)
+        setCode(normalizeMermaidSource(response.data.mermaid))
         setActiveTab('diagram')
       }
     } finally {

@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { MermaidWorkspace } from '@/components/mermaid-workspace'
+import { downloadSecureFile } from '@/lib/download'
 
 interface Report {
   id: string
@@ -133,9 +134,7 @@ export default function ResearchPage() {
         const data = await response.json()
         const downloadUrl = data.data?.downloadUrl || data.downloadUrl
         if (downloadUrl) {
-          const fullUrl = downloadUrl.startsWith('http') ? downloadUrl : `${BACKEND_URL}${downloadUrl}`
-          window.open(fullUrl, '_blank')
-          setExportingPdf(false)
+          await downloadSecureFile(downloadUrl, `${currentReport.query.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'research-report'}.pdf`)
           return
         }
       }
