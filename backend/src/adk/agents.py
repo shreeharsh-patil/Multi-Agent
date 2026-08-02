@@ -64,6 +64,9 @@ def create_orchestrator_agent() -> LlmAgent:
     engineer = create_engineer_agent()
     pharmacologist = create_pharmacologist_agent()
     doctor = create_doctor_agent()
+    finance = create_finance_agent()
+    accountant = create_accountant_agent()
+    economics = create_economics_agent()
 
     sub_agents = [
         knowledge,
@@ -79,6 +82,9 @@ def create_orchestrator_agent() -> LlmAgent:
         engineer,
         pharmacologist,
         doctor,
+        finance,
+        accountant,
+        economics,
     ]
 
     return LlmAgent(
@@ -103,7 +109,10 @@ def create_orchestrator_agent() -> LlmAgent:
             "- contacts: Google Contacts search, emails, phone numbers\n"
             "- engineer: Systems design, software/hardware engineering\n"
             "- pharmacologist: Drugs, pharmacology, medication interactions\n"
-            "- doctor: Symptoms, medical conditions, health education\n\n"
+            "- doctor: Symptoms, medical conditions, health education\n"
+            "- finance: Financial statements, valuation, markets, investing\n"
+            "- accountant: Accounting, audit, taxation, GST (CA)\n"
+            "- economics: Micro and macro economics\n\n"
 
             "Analyze the user's request and transfer to the best agent. "
             "If the request spans multiple domains, handle it step by step. "
@@ -301,14 +310,61 @@ def create_doctor_agent() -> LlmAgent:
     return LlmAgent(
         name="doctor",
         model=MODEL,
-instruction=(
-            "You are the Doctor Agent — a medical study tutor for medical/pre-med students. Teach anatomy, "
-            "physiology, pathology, and clinical reasoning the way a professor would: explain first principles, "
-            "then high-yield clinical details, using headings, tables, bullet points, and bold for exam points. "
-            "Give exam-style notes and summaries. If a student shares a personal-health symptom, answer "
-            "educationally and end with one short note to consult a doctor for personal care. Use the web for "
-            "up-to-date health information where helpful."
+        instruction=(
+            "You are the Doctor Agent — a medical study tutor for pre-medical/pre-clinical students. Teach "
+            "anatomy, physiology, pathology, and clinical reasoning the way a professor would — explain, first "
+            "principles first, then high-yield clinical details, using headings, tables, bullet points, and "
+            "bold for high-yield points. Give exam-ready notes and mnemonics. If a student asks a personal health "
+            "question, answer educationally and add a short note to see a doctor for personal care. Use the web "
+            "for up-to-date health topics where helpful."
         ),
         tools=[web_search_tool],
-        description="Explains symptoms, medical conditions, and preventive health in plain language.",
+        description="Explains medical subjects and clinical reasoning for medical students.",
+    )
+
+
+def create_finance_agent() -> LlmAgent:
+    return LlmAgent(
+        name="finance",
+        model=MODEL,
+        instruction=(
+            "You are the Finance Agent — a finance study tutor. Teach financial statements, valuation, corporate "
+            "finance, capital markets, and investing clearly: concept and first principles first, then practical "
+            "application. Use formulas, worked examples, headings, tables, bullet points, and bold for high-yield "
+            "points; add exam-style notes and mnemonics. Use the web for up-to-date finance topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Finance study tutor: statements, valuation, markets, investing.",
+    )
+
+
+def create_accountant_agent() -> LlmAgent:
+    return LlmAgent(
+        name="accountant",
+        model=MODEL,
+        instruction=(
+            "You are the Accountant (CA) Agent — an accounting and CA study tutor. Cover financial accounting, "
+            "journal/ledger entries, final accounts, cost/management accounting, auditing, taxation (income tax, "
+            "GST), and company standards. Explain the principle first, then work through journal entries and "
+            "examples, with headings, tables, bullet points, bold high-yield points, and step-by-step methods "
+            "for exam problems. Use the web for up-to-date tax topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Accounting and taxation study tutor for CA/commerce students.",
+    )
+
+
+def create_economics_agent() -> LlmAgent:
+    return LlmAgent(
+        name="economics",
+        model=MODEL,
+        instruction=(
+            "You are the Economics Agent — an economics study tutor for economics and commerce students. Cover "
+            "microeconomics (demand/supply, market structures), macroeconomics (GDP, inflation, fiscal/monetary "
+            "policy), and international trade. Explain concepts and models clearly, and use headings, bullet "
+            "points, and tables to illustrate shifts; add exam-style notes and mnemonics. Use the web for "
+            "up-to-date economic topics when helpful."
+        ),
+        tools=[web_search_tool],
+        description="Economics study tutor for micro, macro, and trade.",
     )

@@ -18,6 +18,12 @@ class AgentRouter:
             (r"(?i)\b(pharmacol|drug interaction|drug\b|drugs?|medication|medicine|dosage|dose\b|prescription|pharmaceutical|contraindication|antibiotic|paracetamol|ibuprofen|antidepressant|antibiotic|insulin|statins?|vaccine|opioid|adverse reaction)\b", "pharmacologist"),
             # Engineer: engineering, system design, architecture, circuits, code review
             (r"(?i)\b(engineering|engineer|system architecture|microservice|api design|circuit|embedded|mechanical|electrical design|code review|refactor|scalabilit|performance optimization|load balancer|ci/cd|deployment pipeline|database design|softw are design)\b", "engineer"),
+            # Finance: statements, valuation, markets, investing (before calendar/research)
+            (r"(?i)\b(finance|financial|valuation|eps\b|ebitda|pe\s+ratio|dividend|stock|shares?|equity|bond|yield|mutual\s+fund|portfolio|investing\b|discounted\s+cash\s+flow|dcf|working\s+capital|capital\s+structure|financial\s+statements?)\b", "finance"),
+            # Accountant / CA: accounting, entries, audit, taxation
+            (r"(?i)\b(accounting|accountant|chartered\s+accountant|journal\s+entry|ledger|trial\s+balance|final\s+accounts|debit|credit|audit|gst|income\s+tax|direct\s+tax|indirect\s+tax|depreciation|bad\s+debts|provision|cash\s+book|tally)\b", "accountant"),
+            # Economics: micro/macro concepts
+            (r"(?i)\b(economics|economy|microeconomic|macroeconomic|supply\s+and\s+demand|elasticity|opportunity\s+cost|inflation\s+rate\b|gdp\b|monetary\s+policy|fiscal\s+policy|central\s+bank|market\s+structure|consumer\s+surplus|producer\s+surplus)\b", "economics"),
             # Calendar: catch all natural calendar/scheduling requests
             (r"(?i)\b(calendar|calender|calander)\b", "calendar"),
             (r"(?i)\b(meeting|appointment|event|availability|free\s*time|reschedule|book\s+(a\s+)?(slot|time|meeting)|add\s+to\s+(my\s+)?calendar|what.s\s+on\s+my|my\s+agenda|my\s+schedule|upcoming\s+events?|today.s\s+events?|tomorrow.s\s+events?|check\s+(my\s+)?schedule|show\s+(my\s+)?events?|list\s+(my\s+)?events?|delete\s+(the\s+)?(event|meeting|appointment)|cancel\s+(the\s+)?(event|meeting|appointment)|create\s+(a\s+)?(meeting|event|appointment)|schedule\s+(a\s+)?(meeting|call|event|appointment))\b", "calendar"),
