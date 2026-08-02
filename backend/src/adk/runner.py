@@ -433,6 +433,25 @@ async def _fallback_process_message_stream(
     now_utc = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
 
     accumulated = ""
+    system_instruction = (
+        f"Current Real-Time System Date & Time: {now_utc}.\n"
+        "You are an AI Assistant for the Agentic Multi-Agent Workspace platform. "
+        "Answer accurately, concisely, and helpfully using clear Markdown when useful."
+    )
+
+    async def recover_empty_stream() -> str:
+        try:
+            recovery = await llm_service.generate(
+                prompt=prompt_with_context,
+                system_instruction=system_instruction,
+                temperature=0.7,
+                max_output_tokens=4096,
+            )
+            return (recovery or "").strip()
+        except Exception as recovery_error:
+            logger.error("Fast chat recovery failed: %s", recovery_error)
+            return ""
+
     try:
         async for chunk in llm_service.generate_stream(
             prompt=prompt_with_context,
@@ -453,15 +472,26 @@ async def _fallback_process_message_stream(
             if chunk:
                 accumulated += chunk
                 yield {"event": "chunk", "data": {"text": chunk}}
-        yield {
-            "event": "complete",
-            "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []},
-        }
+        if not accumulated.strip():
+            accumulated = await recover_empty_stream()
+        if accumulated.strip():
+            yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+        else:
+            yield {"event": "error", "data": {"error": "The model returned an empty response.", "conversation_id": conversation_id}}
+            yield {"event": "complete", "data": {"output": "", "conversation_id": conversation_id, "citations": []}}
     except Exception as e:
+        if not accumulated.strip():
+            accumulated = await recover_empty_stream()
+            if accumulated.strip():
+                yield {"event": "chunk", "data": {"text": accumulated}}
+                yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                return
         if accumulated:
             yield {"event": "chunk", "data": {"text": "\n\n[Error during streaming, partial response returned]"}}
-        error_msg = f"I encountered an error: {e}"
-        yield {"event": "chunk", "data": {"text": error_msg}}
+        error_msg = f"Model unavailable: {e}"
+        yield {"event": "error", "data": {"error": error_msg, "conversation_id": conversation_id}}
+        if accumulated:
+            yield {"event": "chunk", "data": {"text": error_msg}}
         yield {
             "event": "complete",
             "data": {"output": accumulated + error_msg, "conversation_id": conversation_id, "citations": []},
