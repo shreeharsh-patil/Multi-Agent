@@ -25,7 +25,7 @@ export default function SettingsPage() {
   const [name, setName] = useState('')
   const [preferences, setPreferences] = useState({
     theme: 'light',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-2.5-flash',
     notifications: true,
     language: 'en',
     useOpendocumentsRag: false,
@@ -39,7 +39,7 @@ export default function SettingsPage() {
           setName(res.data.name || '')
           setPreferences({
             theme: res.data.preferences?.theme ?? 'light',
-            defaultModel: res.data.preferences?.defaultModel ?? 'gemini-2.0-flash',
+            defaultModel: res.data.preferences?.defaultModel ?? 'gemini-2.5-flash',
             notifications: res.data.preferences?.notifications ?? true,
             language: res.data.preferences?.language ?? 'en',
             useOpendocumentsRag: res.data.preferences?.useOpendocumentsRag ?? false,

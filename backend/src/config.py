@@ -35,11 +35,11 @@ class Settings(BaseSettings):
     llm_provider: str = "aiand"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     embedding_model: str = "text-embedding-004"
 
     openrouter_api_key: str = ""
-    openrouter_model: str = "openai/gpt-oss-120b:free"
+    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     openrouter_base_url: str = "https://api.openrouter.ai/api/v1"
 
     nararouter_api_key: str = ""
@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     mistral_base_url: str = "https://api.mistral.ai/v1"
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "openai/gpt-oss-20b"
 
     aiand_api_key: str = ""
     aiand_model: str = "qwen/qwen3.6-27b"
@@ -162,7 +162,10 @@ if settings.gemini_api_key:
     first_key = next((k.strip() for k in settings.gemini_api_key.split(",") if k.strip()), "")
     if first_key:
         os.environ["GEMINI_API_KEY"] = first_key
-        os.environ["GOOGLE_API_KEY"] = first_key
+        # google-genai prioritizes GOOGLE_API_KEY when both variables exist.
+        # Keep only the explicitly configured Gemini key so an inherited or
+        # stale Google key cannot override the selected credential.
+        os.environ.pop("GOOGLE_API_KEY", None)
 
 if settings.openrouter_api_key:
     first_key = next((k.strip() for k in settings.openrouter_api_key.split(",") if k.strip()), "")

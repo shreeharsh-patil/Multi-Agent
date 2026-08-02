@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Callable, Any
 from google import genai
 from google.genai import types
@@ -23,6 +24,11 @@ class GeminiClientRotator:
         
         for key in self.keys:
             try:
+                # The SDK gives GOOGLE_API_KEY precedence over GEMINI_API_KEY.
+                # This service owns Gemini credentials, so prevent a stale
+                # process/host variable from silently overriding this key.
+                os.environ.pop("GOOGLE_API_KEY", None)
+                os.environ["GEMINI_API_KEY"] = key
                 client = genai.Client(
                     api_key=key,
                     http_options=types.HttpOptions(api_version='v1')

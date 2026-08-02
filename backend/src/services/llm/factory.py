@@ -30,10 +30,17 @@ def _build_providers() -> list[BaseLLMProvider]:
     providers: list[BaseLLMProvider] = []
 
     if settings.groq_api_key:
+        groq_model = settings.groq_model
+        # Older deployments commonly retained this model after Groq removed
+        # it. Upgrade at runtime so an unchanged Render environment cannot
+        # take down the entire provider chain.
+        if groq_model in {"mixtral-8x7b-32768", "llama3-8b-8192"}:
+            logger.warning("GROQ_MODEL %s is retired; using openai/gpt-oss-20b instead", groq_model)
+            groq_model = "openai/gpt-oss-20b"
         providers.append(OpenAICompatibleProvider(
             name="Groq",
             api_key=settings.groq_api_key,
-            model=settings.groq_model,
+            model=groq_model,
             base_url="https://api.groq.com/openai/v1",
             timeout_seconds=10,
         ))

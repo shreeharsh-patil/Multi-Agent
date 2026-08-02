@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class UserPreferences(BaseModel):
     theme: str = "system"
-    default_model: str = "gemini-2.0-flash"
+    default_model: str = "gemini-2.5-flash"
     notifications: bool = True
     language: str = "en"
     use_opendocuments_rag: bool = False
