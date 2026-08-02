@@ -9,6 +9,7 @@ from src.models.memory import MemoryItem
 from src.models.user import User
 from src.services.rag.embeddings import embedding_service
 from src.services.vector_store.factory import get_vector_store
+from src.utils.db import get_motor_collection
 from src.utils.logger import logger
 
 
@@ -164,7 +165,7 @@ class MemoryService:
         ids = [r["id"] for r in active if PydanticObjectId.is_valid(r.get("id", ""))]
         if ids:
             now = datetime.now(timezone.utc)
-            await MemoryItem.get_motor_collection().update_many(
+            await get_motor_collection(MemoryItem).update_many(
                 {"_id": {"$in": [PydanticObjectId(i) for i in ids]}, "user_id": user_id},
                 {"$inc": {"access_count": 1}, "$set": {"last_accessed_at": now}},
             )
@@ -310,6 +311,87 @@ Assistant: {assistant_message[:1000]}"""
             "completeness": min(100, round(len({i.category for i in items}) / 6 * 100)) if items else 0,
             "memoryCount": len(items),
             "highConfidenceCount": sum(1 for item in items if item.confidence >= 0.8),
+        }
+
+    async def consolidate(self, user_id: str) -> dict[str, Any]:
+        """Merge groups of memories per category into one durable summary.
+
+        Each category with enough memories is summarized by the LLM, stored as a
+        pinned high-confidence summary memory, and the originals are archived.
+        """
+        from src.services.llm import llm_service
+
+        items = await self.list_items(user_id, limit=250)
+        active = [i for i in items if i.status == "active"]
+        if len(active) < 3:
+            return {
+                "consolidated": [],
+                "archived": 0,
+                "message": "Not enough active memories to consolidate yet.",
+            }
+
+        now = datetime.now(timezone.utc)
+        by_category: dict[str, list[MemoryItem]] = {}
+        for item in active:
+            by_category.setdefault(item.category, []).append(item)
+
+        consolidated: list[dict[str, Any]] = []
+        archived = 0
+
+        for category, cat_items in by_category.items():
+            if len(cat_items) < 3:
+                continue
+            text = "\n".join(f"- {it.content}" for it in cat_items)
+            prompt = (
+                f"Consolidate these stored memories about one user into a single durable first-person "
+                f"summary for the '{category}' category. Merge redundant facts, drop trivial details, "
+                f"and keep it under 60 words.\n\nMemories:\n{text}\n\nSummary:"
+            )
+            try:
+                summary = await llm_service.generate(
+                    prompt=prompt,
+                    system_instruction=(
+                        "You write concise first-person memory summaries. Output only the summary text."
+                    ),
+                    temperature=0.2,
+                    max_output_tokens=200,
+                )
+            except Exception as exc:
+                logger.warning("Memory consolidation failed for category %s: %s", category, exc)
+                continue
+            if not summary.strip():
+                continue
+
+            memory = await self.store(
+                user_id=user_id,
+                key=f"{category}_summary",
+                content=summary.strip(),
+                type="semantic",
+                category=category,
+                confidence=0.95,
+                evidence="Consolidated from stored memories",
+                pinned=True,
+            )
+            consolidated.append({
+                "id": str(memory.id),
+                "key": memory.key,
+                "content": memory.content,
+                "category": memory.category,
+            })
+
+            for it in cat_items:
+                if str(it.id) == str(memory.id):
+                    continue
+                it.status = "archived"
+                it.updated_at = now
+                await it.save()
+                await get_vector_store().delete(self.collection, [str(it.id)])
+                archived += 1
+
+        return {
+            "consolidated": consolidated,
+            "archived": archived,
+            "message": f"Consolidated {len(consolidated)} category summaries and archived {archived} individual memories.",
         }
 
 
