@@ -28,6 +28,7 @@ import {
   Pencil,
   BrainCircuit,
   Workflow,
+  ListChecks,
   GalleryVerticalEnd,
   LibraryBig,
   BarChart2,
@@ -42,6 +43,7 @@ import { openCommandPalette } from '@/components/command-palette'
 const navigation = [
   { name: 'Workspace', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Agent Swarm', href: '/swarm', icon: Users },
+  { name: 'Task Runner', href: '/task-runner', icon: ListChecks },
   { name: 'Search', href: '/research', icon: Search },
   { name: 'Library', href: '/documents', icon: BookOpen },
   { name: 'Drive', href: '/drive', icon: HardDrive },
@@ -341,10 +343,11 @@ export function Sidebar() {
       )}
       <aside 
         className={cn(
-          "flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out shrink-0 overflow-hidden overflow-x-hidden",
-          "hidden lg:flex relative z-40",
-          collapsed ? "lg:w-[68px]" : "lg:w-[280px]",
-          mobileMenuOpen ? "!flex fixed inset-y-0 left-0 z-50 w-[280px] animate-in slide-in-from-left duration-200 shadow-lg" : ""
+          "flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out shrink-0 overflow-hidden overflow-x-hidden relative z-40",
+          mobileMenuOpen
+            ? "flex! fixed! inset-y-0 left-0 z-50 w-[280px] h-full animate-in slide-in-from-left duration-200 shadow-2xl"
+            : "hidden lg:flex",
+          collapsed ? "lg:w-[68px]" : "lg:w-[280px]"
         )}
       >
       {/* Top Header Section */}
