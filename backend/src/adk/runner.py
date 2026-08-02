@@ -356,6 +356,7 @@ async def process_message_stream(
                     "data": {
                         "output": final_output,
                         "conversation_id": conversation_id,
+                        "citations": [],
                     },
                 }
                 return
@@ -365,6 +366,7 @@ async def process_message_stream(
             "data": {
                 "output": accumulated_content,
                 "conversation_id": conversation_id,
+                "citations": [],
             },
         }
     except Exception as e:
@@ -415,7 +417,7 @@ async def _fallback_process_message_stream(
                 yield {"event": "chunk", "data": {"text": chunk}}
         yield {
             "event": "complete",
-            "data": {"output": accumulated, "conversation_id": conversation_id},
+            "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []},
         }
     except Exception as e:
         if accumulated:
@@ -424,5 +426,5 @@ async def _fallback_process_message_stream(
         yield {"event": "chunk", "data": {"text": error_msg}}
         yield {
             "event": "complete",
-            "data": {"output": accumulated + error_msg, "conversation_id": conversation_id},
+            "data": {"output": accumulated + error_msg, "conversation_id": conversation_id, "citations": []},
         }

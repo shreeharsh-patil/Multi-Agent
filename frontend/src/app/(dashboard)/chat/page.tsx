@@ -108,6 +108,16 @@ function ChatContent() {
     content: string
     agentId?: string
     attachments?: Array<{ name: string; size: number; documentId?: string }>
+    citations?: Array<{
+      file_name?: string
+      page_number?: number
+      section?: string
+      text?: string
+      score?: number
+      document_id?: string
+      chunk_id?: string
+      chunk_index?: number
+    }>
   }>>([])
   const [input, setInput] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<string>('auto')
@@ -530,6 +540,7 @@ function ChatContent() {
                 content: m.content || '',
                 agentId: m.agentId,
                 attachments: m.metadata?.attachments,
+                citations: m.citations,
               }))
             )
           }
@@ -739,6 +750,7 @@ function ChatContent() {
           content: m.content,
           agentId: m.agentId,
           attachments: (m.metadata as { attachments?: Array<{ name: string; size: number; documentId?: string }> } | undefined)?.attachments,
+          citations: m.citations,
         })))
       } else {
         console.error('Failed to load conversation:', res.error)
@@ -963,7 +975,7 @@ function ChatContent() {
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
-                      ? { ...msg, content: data.output || accumulatedContent }
+                      ? { ...msg, content: data.output || accumulatedContent, citations: data.citations || msg.citations }
                       : msg,
                   ),
                 )
@@ -1029,6 +1041,7 @@ function ChatContent() {
                       ...msg,
                       content: res.data!.output,
                       agentId: res.data!.agent_traces?.[0]?.agent_id,
+                      citations: res.data!.citations || msg.citations,
                     }
                   : msg,
               ),
@@ -1656,6 +1669,31 @@ function ChatContent() {
                               >
                                 {preprocessLaTeX(msg.content)}
                               </ReactMarkdown>
+                            </div>
+                          )}
+                          {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                            <div className="mt-3 border-t border-border/50 pt-2.5">
+                              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                                Sources
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {msg.citations.map((cit, ci) => (
+                                  <button
+                                    key={`${cit.document_id || cit.file_name || 'cit'}-${ci}`}
+                                    type="button"
+                                    onClick={() => {
+                                      if (cit.document_id) window.open(`/documents?doc=${encodeURIComponent(cit.document_id)}`, '_blank', 'noopener,noreferrer')
+                                    }}
+                                    title={cit.text || undefined}
+                                    className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors max-w-full"
+                                  >
+                                    <FileText className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{cit.file_name || 'Document'}</span>
+                                    {cit.page_number ? <span className="opacity-70 shrink-0">· p.{cit.page_number}</span> : null}
+                                    {typeof cit.score === 'number' ? <span className="opacity-70 shrink-0">· {(cit.score * 100).toFixed(0)}%</span> : null}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>

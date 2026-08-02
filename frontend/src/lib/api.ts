@@ -392,6 +392,16 @@ export const api = {
           role: string
           content: string
           agentId?: string
+          citations?: Array<{
+            file_name?: string
+            page_number?: number
+            section?: string
+            text?: string
+            score?: number
+            document_id?: string
+            chunk_id?: string
+            chunk_index?: number
+          }>
           metadata?: Record<string, unknown>
         }>
         createdAt: string

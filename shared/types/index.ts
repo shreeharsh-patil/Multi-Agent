@@ -64,10 +64,15 @@ export interface Message {
 
 export interface Citation {
   fileName: string
+  file_name?: string
   pageNumber?: number
+  page_number?: number
   section?: string
   text: string
   score?: number
+  document_id?: string
+  chunk_id?: string
+  chunk_index?: number
 }
 
 export interface ToolCall {

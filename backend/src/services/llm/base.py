@@ -40,10 +40,19 @@ class BaseLLMProvider(ABC):
         context: list[dict],
         system_instruction: Optional[str] = None,
     ) -> tuple[str, list[dict]]:
+        def _meta(c: dict) -> dict:
+            return c.get("metadata") or {}
+
+        def _get(c: dict, key: str, default=None):
+            val = c.get(key)
+            if val is None:
+                val = _meta(c).get(key)
+            return val if val is not None else default
+
         context_block = "\n\n".join(
-            f"[Source: {c.get('file_name', 'Unknown')}"
-            + (f", Page {c.get('page_number')}" if c.get('page_number') else "")
-            + (f", Section: {c.get('section')}" if c.get('section') else "")
+            f"[Source: {_get(c, 'file_name', 'Unknown')}"
+            + (f", Page {_get(c, 'page_number')}" if _get(c, "page_number") else "")
+            + (f", Section: {_get(c, 'section')}" if _get(c, "section") else "")
             + f"]\n{c.get('content', '')}"
             for c in context
         )
@@ -62,10 +71,14 @@ Answer based on the context above. Include citations using [Source: filename, Pa
 
         citations = [
             {
-                "file_name": c.get("file_name", "Unknown"),
-                "page_number": c.get("page_number"),
-                "section": c.get("section"),
-                "text": c.get("content", "")[:200],
+                "file_name": _get(c, "file_name", "Unknown"),
+                "document_id": _get(c, "document_id"),
+                "chunk_id": c.get("id"),
+                "chunk_index": _get(c, "chunk_index"),
+                "page_number": _get(c, "page_number"),
+                "section": _get(c, "section"),
+                "score": c.get("score"),
+                "text": (c.get("content") or "")[:200],
             }
             for c in context
         ]

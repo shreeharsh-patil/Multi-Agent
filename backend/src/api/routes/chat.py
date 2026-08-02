@@ -13,7 +13,7 @@ from src.orchestrator.base import get_orchestrator
 from src.orchestrator.router import AgentRouter
 from src.agents.custom import CustomAgent
 from src.models.agent import AgentConfig
-from src.models.conversation import Conversation, Message
+from src.models.conversation import Conversation, Message, Citation
 from src.utils.logger import logger
 from beanie import PydanticObjectId
 from src.models.workspace import Workspace
@@ -296,6 +296,7 @@ async def _save_messages(
     is_new: bool = False,
     attachments: Optional[list[dict]] = None,
     workspace_id: Optional[str] = None,
+    citations: Optional[list[dict]] = None,
 ):
     """Save user and assistant messages to the Conversation in MongoDB with LLM topic generation."""
     try:
@@ -314,6 +315,7 @@ async def _save_messages(
             role="assistant",
             content=agent_message,
             agent_id=agent_id,
+            citations=[Citation(**c) for c in citations] if citations else [],
         )
 
         conv = await Conversation.get(conv_id)
@@ -579,6 +581,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             is_new=is_new,
             attachments=attachments_data,
             workspace_id=body.workspace_id,
+            citations=result.get("citations"),
         )
 
         return ChatResponse(
@@ -714,8 +717,8 @@ async def chat_stream(
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=routed_agent_id, is_new=is_new, workspace_id=body.workspace_id)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=routed_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                 return
 
             if body.workspace_id:
@@ -729,8 +732,8 @@ async def chat_stream(
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
+                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                 return
 
             async for sse_event in process_message_stream(
@@ -763,6 +766,7 @@ async def chat_stream(
                         is_new=is_new,
                         attachments=attachments_data,
                         workspace_id=body.workspace_id,
+                        citations=data.get("citations"),
                     )
 
                 yield f"event: {event_type}\n"

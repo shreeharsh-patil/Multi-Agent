@@ -5,11 +5,14 @@ from pydantic import BaseModel, Field
 
 
 class Citation(BaseModel):
-    file_name: str
+    file_name: str = "Unknown"
     page_number: Optional[int] = None
     section: Optional[str] = None
-    text: str
+    text: str = ""
     score: Optional[float] = None
+    document_id: Optional[str] = None
+    chunk_id: Optional[str] = None
+    chunk_index: Optional[int] = None
 
 
 class ToolCall(BaseModel):
