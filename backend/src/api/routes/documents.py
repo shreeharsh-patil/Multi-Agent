@@ -356,14 +356,17 @@ async def download_document(document_id: str, http_request: Request, download: b
         if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
             raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
-    # Only redirect to Drive preview if this is an inline view request and not an explicit file download
-    if doc.drive_web_view_link and not download:
+    # Image formats must be served directly as binary image bytes for <img> tags
+    is_image = doc.file_type.lower() in {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+
+    # Only redirect non-image documents to Drive preview if this is an inline view request and not a download
+    if doc.drive_web_view_link and not download and not is_image:
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=doc.drive_web_view_link)
 
     file_path = doc.file_path
     if not file_path or not os.path.exists(file_path):
-        if doc.drive_web_view_link:
+        if doc.drive_web_view_link and not is_image:
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url=doc.drive_web_view_link)
         raise HTTPException(status_code=404, detail="File not found on disk")

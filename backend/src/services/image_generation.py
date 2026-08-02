@@ -22,6 +22,8 @@ class GeneratedImage:
     download_url: str
     provider: str
     revised_prompt: str | None = None
+    drive_file_id: str | None = None
+    drive_web_view_link: str | None = None
 
 
 def _openai_options(size: str) -> tuple[str, str]:
