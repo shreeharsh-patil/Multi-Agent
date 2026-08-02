@@ -337,7 +337,7 @@ export const api = {
       }),
   },
   auth: {
-    login: (data: { email: string; name: string; image?: string; google_id?: string; access_token?: string }) =>
+    login: (data: { email: string; name: string; image?: string; google_id?: string; access_token?: string; refresh_token?: string }) =>
       fetchApi<{ access_token: string; token_type: string; user: { id: string; email: string; name: string; avatar?: string } }>(
         '/api/auth/login',
         { method: 'POST', body: JSON.stringify(data) },

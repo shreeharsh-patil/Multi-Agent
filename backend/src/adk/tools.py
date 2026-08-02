@@ -955,12 +955,38 @@ async def refresh_user_google_token(user) -> str:
 
 
 async def find_user_access_token(user_id: str) -> str:
-    """Retrieve the user's Google Drive access token from the database.
+    """Retrieve the user's Google access token from the database.
 
     Tries by MongoDB ObjectId first, then by email as fallback.
     Automatically refreshes expired access tokens if a refresh token is present.
     """
     from src.models.user import User
+
+    async def _resolve_token(user) -> str:
+        """Given a User, return a valid access token, refreshing if possible."""
+        if user.access_token and user.refresh_token:
+            # Proactively try to validate the token with a lightweight Google call.
+            # If it fails, refresh it. This avoids returning stale expired tokens.
+            try:
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        "https://www.googleapis.com/oauth2/v1/tokeninfo",
+                        params={"access_token": user.access_token},
+                        timeout=5.0,
+                    )
+                    if resp.status_code == 200:
+                        return user.access_token
+                    # Token is invalid/expired — refresh it
+                    return await refresh_user_google_token(user)
+            except Exception:
+                # Network error — return what we have
+                return user.access_token
+        if user.access_token:
+            return user.access_token
+        if user.refresh_token:
+            return await refresh_user_google_token(user)
+        return ""
 
     # Try by MongoDB _id first (most common case)
     try:
@@ -968,10 +994,7 @@ async def find_user_access_token(user_id: str) -> str:
         PydanticObjectId(user_id)
         user = await User.get(user_id)
         if user:
-            if user.access_token:
-                return user.access_token
-            if user.refresh_token:
-                return await refresh_user_google_token(user)
+            return await _resolve_token(user)
     except Exception:
         pass
 
@@ -979,10 +1002,7 @@ async def find_user_access_token(user_id: str) -> str:
     try:
         user = await User.find_one(User.email == user_id)
         if user:
-            if user.access_token:
-                return user.access_token
-            if user.refresh_token:
-                return await refresh_user_google_token(user)
+            return await _resolve_token(user)
     except Exception:
         pass
 

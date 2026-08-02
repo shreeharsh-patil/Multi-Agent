@@ -125,19 +125,27 @@ async def jwt_auth_middleware(request: Request, call_next):
         # Authenticated via JWT
         request.state.user = user_payload
 
-        # Capture and persist Google OAuth access token to database so ADK agent tools can access it.
+        # Capture and persist Google OAuth access token and refresh token to database so ADK agent tools can access it.
         google_token = request.headers.get("X-Google-Access-Token") or request.headers.get("X-Drive-Access-Token")
-        if google_token and user_payload.get("sub"):
+        google_refresh = request.headers.get("X-Google-Refresh-Token") or request.headers.get("X-Drive-Refresh-Token")
+        if (google_token or google_refresh) and user_payload.get("sub"):
             try:
                 from beanie import PydanticObjectId
                 from src.models.user import User
                 user_id = user_payload["sub"]
                 if PydanticObjectId.is_valid(user_id):
                     user = await User.get(user_id)
-                    if user and user.access_token != google_token:
-                        user.access_token = google_token
-                        await user.save()
-                        logger.info(f"Updated Google access token in database for user: {user.email}")
+                    if user:
+                        changed = False
+                        if google_token and user.access_token != google_token:
+                            user.access_token = google_token
+                            changed = True
+                        if google_refresh and user.refresh_token != google_refresh:
+                            user.refresh_token = google_refresh
+                            changed = True
+                        if changed:
+                            await user.save()
+                            logger.info(f"Updated Google tokens in database for user: {user.email}")
             except Exception:
                 pass
 
@@ -152,15 +160,23 @@ async def jwt_auth_middleware(request: Request, call_next):
             request.state.user = {"sub": user_id, "email": "dev@localhost", "name": "Developer"}
 
             google_token = request.headers.get("X-Google-Access-Token") or request.headers.get("X-Drive-Access-Token")
-            if google_token:
+            google_refresh = request.headers.get("X-Google-Refresh-Token") or request.headers.get("X-Drive-Refresh-Token")
+            if google_token or google_refresh:
                 try:
                     from beanie import PydanticObjectId
                     from src.models.user import User
                     if PydanticObjectId.is_valid(user_id):
                         user = await User.get(user_id)
-                        if user and user.access_token != google_token:
-                            user.access_token = google_token
-                            await user.save()
+                        if user:
+                            changed = False
+                            if google_token and user.access_token != google_token:
+                                user.access_token = google_token
+                                changed = True
+                            if google_refresh and user.refresh_token != google_refresh:
+                                user.refresh_token = google_refresh
+                                changed = True
+                            if changed:
+                                await user.save()
                 except Exception:
                     pass
 

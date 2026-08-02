@@ -20,6 +20,7 @@ class User(BeanieDocument):
     avatar: Optional[str] = None
     google_id: Optional[str] = None
     access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
