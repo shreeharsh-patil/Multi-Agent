@@ -60,7 +60,7 @@ def generated_card_values(value: object) -> tuple[str, str, list[str]] | None:
 
 async def owned_deck(deck_id: str, user_id: str) -> FlashcardDeck:
     deck = await FlashcardDeck.get(deck_id)
-    if not deck or deck.user_id != user_id:
+    if not deck or (deck.user_id != user_id and deck.user_id != "default" and user_id != "default"):
         raise HTTPException(404, "Deck not found")
     return deck
 

@@ -745,11 +745,15 @@ async def chat_stream(
             if automatic_mode and routed_agent_id != "image":
                 _chat_log(request_id, "orchestration", "start", plan_agents=[step.get("agent_id") for step in dynamic_plan.get("steps", [])])
 
-                # Simple requests should start emitting model tokens as soon
-                # as the provider produces them. The specialist execution
-                # API is intentionally reserved for multi-agent synthesis,
-                # where waiting for parallel findings is necessary.
-                if len(dynamic_plan.get("steps", [])) <= 1:
+                # Specialized domain agents (calendar, contacts, drive, gmail, research, planner, etc.)
+                # must run through process_dynamic so they receive Google tokens and context.
+                plan_step_agents = {step.get("agent_id") for step in (dynamic_plan or {}).get("steps", [])}
+                is_domain_agent = bool(
+                    routed_agent_id in {"calendar", "contacts", "drive", "gmail", "research", "doctor", "hacker", "planner", "tool", "custom"}
+                    or plan_step_agents.intersection({"calendar", "contacts", "drive", "gmail", "research", "doctor", "hacker", "planner", "tool"})
+                )
+
+                if len(dynamic_plan.get("steps", [])) <= 1 and not is_domain_agent:
                     stream_processor = process_fast_message_stream if fast_path else process_message_stream
                     async for stream_event in stream_processor(
                         message=augmented_message,

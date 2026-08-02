@@ -172,7 +172,11 @@ class MemoryService:
         return active
 
     async def build_context(self, user_id: str, query: str, top_k: int = 5) -> str:
-        memories = await self.search(user_id, query, top_k)
+        try:
+            async with asyncio.timeout(0.5):
+                memories = await self.search(user_id, query, top_k)
+        except Exception:
+            return ""
         if not memories:
             return ""
         lines = []

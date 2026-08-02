@@ -368,8 +368,10 @@ export const api = {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
       }
-      if (googleAccessToken) headers['X-Google-Access-Token'] = googleAccessToken
-      if (googleRefreshToken) headers['X-Google-Refresh-Token'] = googleRefreshToken
+      const gAccessToken = googleAccessToken || (typeof window !== 'undefined' ? (localStorage.getItem('google_access_token') || localStorage.getItem('google_token') || '') : '')
+      const gRefreshToken = googleRefreshToken || (typeof window !== 'undefined' ? (localStorage.getItem('google_refresh_token') || '') : '')
+      if (gAccessToken) headers['X-Google-Access-Token'] = gAccessToken
+      if (gRefreshToken) headers['X-Google-Refresh-Token'] = gRefreshToken
       return fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
         headers,
