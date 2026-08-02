@@ -2,6 +2,7 @@
 
 import { signIn } from 'next-auth/react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
@@ -43,7 +44,14 @@ export default function LoginPage() {
       </div>
 
       <p className="text-center text-xs text-muted-foreground mt-8 leading-relaxed">
-        By signing in, you agree to our Terms of Service<br />and Privacy Policy
+        By signing in, you agree to our{' '}
+        <Link href="/terms" target="_blank" className="underline underline-offset-2 hover:text-foreground transition-colors font-medium">
+          Terms of Service
+        </Link>{' '}
+        and{' '}
+        <Link href="/privacy" target="_blank" className="underline underline-offset-2 hover:text-foreground transition-colors font-medium">
+          Privacy Policy
+        </Link>
       </p>
     </div>
   )
