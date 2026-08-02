@@ -18,7 +18,7 @@ class AgentRouter:
             (r"(?i)\b(summarize|summarise|summary|extract|what is|explain|tell me about|find|search)\b.*\b(document|pdf|file|knowledge|upload|note|article|paper)\b", "knowledge"),
             (r"(?i)\b(google\s+drive|gdrive|drive)\b", "drive"),
             (r"(?i)\b(drive|google drive|upload|download|sync|folder|file)\b.*\b(document|file|folder|upload|download)\b", "drive"),
-            (r"(?i)\b(note|notes|flashcards?|revision|study note|anki)\b", "notes"),
+            (r"(?i)\b(note|notes|flashcards?|revision|study note|anki|pdf|export pdf|generate pdf|create pdf|make pdf)\b", "notes"),
             (r"(?i)\b(quiz|mcq|multiple choice|exam|practice question|test)\b", "quiz"),
             (r"(?i)\b(google\s+task|google\s+tasks|tasks|to-do list|checklist)\b", "tasks"),
             (r"(?i)\b(plan|deadline|remind|task\s+list)\b", "planner"),
