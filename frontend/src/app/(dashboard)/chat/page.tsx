@@ -903,6 +903,7 @@ function ChatContent() {
     let streamingAttempted = false
     let streamCompleted = false
     let streamRequestId = ''
+    let accumulatedContent = ''
 
     try {
       const requestPayload = {
@@ -947,7 +948,6 @@ function ChatContent() {
 
       const decoder = new TextDecoder()
       let buffer = ''
-      let accumulatedContent = ''
       let newConvId = currentConvId
 
       const readWithTimeout = async () => {

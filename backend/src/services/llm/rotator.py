@@ -178,7 +178,7 @@ class RotatingProvider(BaseLLMProvider):
                         self._current_idx = idx
 
                     async for chunk in gen:
-                        if chunk and str(chunk).strip():
+                        if chunk:
                             emitted = True
                             yield chunk
 

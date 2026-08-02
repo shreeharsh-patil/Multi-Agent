@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     mistral_base_url: str = "https://api.mistral.ai/v1"
 
     groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-20b"
+    groq_model: str = "llama-3.3-70b-versatile"
 
     aiand_api_key: str = ""
     aiand_model: str = "qwen/qwen3.6-27b"
@@ -65,8 +65,8 @@ class Settings(BaseSettings):
     # Optional Obscura CDP endpoint for managed or self-hosted browser scraping.
     obscura_cdp_url: str = ""
     obscura_timeout_seconds: int = 30
-    chat_stream_timeout_seconds: int = 120
-    chat_context_timeout_seconds: int = 45
+    chat_stream_timeout_seconds: int = 45
+    chat_context_timeout_seconds: int = 3
     deepgram_api_key: str = ""
 
     image_provider: str = "auto"
