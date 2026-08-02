@@ -27,6 +27,7 @@ class AgentRouter:
             (r"(?i)\b(remember|memory|recall|what did i|my name|my preference)\b", "memory"),
             (r"(?i)\b(gmail|email|inbox|mail|message|messages)\b", "gmail"),
             (r"(?i)\b(youtube|video|videos|yt)\b", "youtube"),
+            (r"(?i)\b(weather|temperature|forecast|rain|humidity|climate|news|headlines|breaking news)\b", "weather_news"),
             (r"(?i)\b(calculate|math|calculator|api|integration)\b", "tool"),
         ]
 

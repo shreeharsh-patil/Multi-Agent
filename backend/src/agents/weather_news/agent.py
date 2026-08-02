@@ -48,7 +48,107 @@ NEWS_FEEDS: dict[str, list[str]] = {
 }
 DEFAULT_CATEGORY = "World"
 MAX_ARTICLES = 10
-HTTP_TIMEOUT = 10.0
+HTTP_TIMEOUT = 3.5
+
+WMO_WEATHER_CODES = {
+    0: "Clear sky ☀️",
+    1: "Mainly clear 🌤",
+    2: "Partly cloudy ⛅",
+    3: "Overcast ☁️",
+    45: "Fog 🌫",
+    48: "Depositing rime fog 🌫",
+    51: "Light drizzle 🌧",
+    53: "Moderate drizzle 🌧",
+    55: "Dense drizzle 🌧",
+    61: "Slight rain 🌧",
+    63: "Moderate rain 🌧",
+    65: "Heavy rain 🌧",
+    71: "Slight snow ❄️",
+    73: "Moderate snow ❄️",
+    75: "Heavy snow ❄️",
+    80: "Slight rain showers 🌦",
+    81: "Moderate rain showers 🌦",
+    82: "Violent rain showers ⛈",
+    95: "Thunderstorm 🌩",
+    96: "Thunderstorm with slight hail ⛈",
+    99: "Thunderstorm with heavy hail ⛈",
+}
+
+
+async def _fetch_open_meteo_weather(city: str) -> Optional[str]:
+    """Fetch live weather from Open-Meteo (100% Free, zero key, ultra-fast sub-second response)."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
+            geo_resp = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": city, "count": 1, "language": "en", "format": "json"},
+            )
+            if geo_resp.status_code != 200:
+                return None
+            geo_data = geo_resp.json()
+            results = geo_data.get("results", [])
+            if not results:
+                return None
+
+            loc = results[0]
+            lat = loc.get("latitude")
+            lon = loc.get("longitude")
+            location_name = f"{loc.get('name', city)}, {loc.get('country', '')}".strip(", ")
+
+            w_resp = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current_weather": "true",
+                    "daily": "weathercode,temperature_2m_max,temperature_2m_min",
+                    "timezone": "auto",
+                },
+            )
+            if w_resp.status_code != 200:
+                return None
+            w_data = w_resp.json()
+            cur = w_data.get("current_weather", {})
+            temp_c = cur.get("temperature", "N/A")
+            wind = cur.get("windspeed", "N/A")
+            code = cur.get("weathercode", 0)
+            condition = WMO_WEATHER_CODES.get(code, "Clear")
+
+            daily = w_data.get("daily", {})
+            dates = daily.get("time", [])
+            maxs = daily.get("temperature_2m_max", [])
+            mins = daily.get("temperature_2m_min", [])
+            codes = daily.get("weathercode", [])
+
+            forecast_lines = []
+            for i in range(min(3, len(dates))):
+                d_code = codes[i] if i < len(codes) else 0
+                d_cond = WMO_WEATHER_CODES.get(d_code, "Clear")
+                forecast_lines.append(
+                    f"| {dates[i]} | {d_cond} | {mins[i]}°C – {maxs[i]}°C |"
+                )
+
+            forecast_table = (
+                "| Date | Condition | Temp Range |\n"
+                "|------|-----------|------------|\n"
+                + "\n".join(forecast_lines)
+            ) if forecast_lines else ""
+
+            return f"""## 🌤 Current Weather — {location_name}
+
+| Metric | Value |
+|--------|-------|
+| **Condition** | {condition} |
+| **Temperature** | {temp_c}°C |
+| **Wind Speed** | {wind} km/h |
+
+### 📅 3-Day Forecast
+
+{forecast_table}
+"""
+    except Exception as err:
+        logger.warning(f"Open-Meteo weather fetch failed for {city}: {err}")
+        return None
 
 
 # ── Fetch helpers ─────────────────────────────────────────────────────────
@@ -57,7 +157,7 @@ async def _fetch_weather_json(city: str) -> Optional[dict]:
     """Fetch full weather JSON from wttr.in."""
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=3.5, follow_redirects=True, headers=headers) as client:
             r = await client.get(WEATHER_URL.format(city=city.replace(" ", "+")))
             r.raise_for_status()
             return r.json()
@@ -70,7 +170,7 @@ async def _fetch_weather_brief(city: str) -> str:
     """Single-line weather summary as fallback."""
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=3.5, follow_redirects=True, headers=headers) as client:
             r = await client.get(WTTR_BRIEF_URL.format(city=city.replace(" ", "+")))
             r.raise_for_status()
             return r.text.strip()
@@ -282,11 +382,19 @@ class WeatherNewsAgent(BaseAgent):
         sections: list[str] = []
 
         if wants_weather:
-            if weather_data:
-                sections.append(_parse_weather(weather_data, city))
-            else:
-                brief = await _fetch_weather_brief(city)
-                sections.append(f"## 🌤 Weather — {city}\n\n{brief}")
+            # 1. Try Open-Meteo API first (sub-second, 100% free, zero key)
+            weather_text = await _fetch_open_meteo_weather(city)
+            if not weather_text:
+                # 2. Fallback to wttr.in JSON
+                w_json = await _fetch_weather_json(city)
+                if w_json:
+                    weather_text = _parse_weather(w_json, city)
+                else:
+                    # 3. Fallback to wttr.in brief summary
+                    brief = await _fetch_weather_brief(city)
+                    weather_text = f"## 🌤 Weather — {city}\n\n{brief}"
+            if weather_text:
+                sections.append(weather_text)
 
         if wants_news and news_articles:
             sections.append(_format_news(news_articles, category))
