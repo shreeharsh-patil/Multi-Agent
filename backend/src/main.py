@@ -11,7 +11,7 @@ from src.api.middleware import (
     error_handler_middleware,
     jwt_auth_middleware,
 )
-from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates, data_analysis as data_analysis_route, workflows as workflows_route, weather_news as weather_news_route, swarm, study, task_runner
+from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates, data_analysis as data_analysis_route, workflows as workflows_route, weather_news as weather_news_route, swarm, study, task_runner, code_agent
 
 
 @asynccontextmanager
@@ -104,7 +104,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"ADK orchestrator initialization warning: {e}")
 
+    # --- Start background scheduler for automated workflows ---
+    try:
+        from src.services.scheduler import start_scheduler
+        await start_scheduler()
+    except Exception as e:
+        logger.warning(f"Workflow scheduler start warning: {e}")
+
     yield
+
+    try:
+        from src.services.scheduler import stop_scheduler
+        await stop_scheduler()
+    except Exception as e:
+        logger.warning(f"Workflow scheduler stop warning: {e}")
 
     logger.info("Shutting down")
 
@@ -151,6 +164,7 @@ app.include_router(weather_news_route.router)
 app.include_router(swarm.router)
 app.include_router(study.router)
 app.include_router(task_runner.router)
+app.include_router(code_agent.router)
 
 
 @app.get("/api/health")

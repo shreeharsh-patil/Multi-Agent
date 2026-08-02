@@ -30,6 +30,10 @@ class WorkflowDAG(BeanieDocument):
     nodes: list[WorkflowNodeModel] = Field(default_factory=list)
     edges: list[WorkflowEdgeModel] = Field(default_factory=list)
     prompt: str = ""
+    schedule_enabled: bool = False
+    schedule_cron: str = ""
+    next_run_at: Optional[datetime] = None
+    last_run_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

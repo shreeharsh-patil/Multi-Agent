@@ -72,6 +72,10 @@ def _serialize(wf: WorkflowDAG) -> dict:
         "prompt": wf.prompt,
         "nodes": [{"id": n.id, "agentId": n.agent_id, "label": n.label, "x": n.x, "y": n.y} for n in wf.nodes],
         "edges": [e.model_dump() for e in wf.edges],
+        "scheduleEnabled": wf.schedule_enabled,
+        "scheduleCron": wf.schedule_cron,
+        "nextRunAt": wf.next_run_at.isoformat() if wf.next_run_at else None,
+        "lastRunAt": wf.last_run_at.isoformat() if wf.last_run_at else None,
         "createdAt": wf.created_at.isoformat(),
         "updatedAt": wf.updated_at.isoformat(),
     }
@@ -100,11 +104,31 @@ class WorkflowIn(BaseModel):
     prompt: str = ""
     nodes: list[NodeIn] = []
     edges: list[EdgeIn] = []
+    scheduleEnabled: bool = False
+    scheduleCron: str = ""
 
 
 class RunRequest(BaseModel):
     prompt: Optional[str] = None
     user_id: Optional[str] = "default"
+
+
+class ScheduleIn(BaseModel):
+    enabled: bool = False
+    cron: str = ""
+
+
+async def _apply_schedule(wf: WorkflowDAG) -> WorkflowDAG:
+    """Compute next_run_at for an enabled schedule; disable on invalid cron."""
+    from src.services.scheduler import compute_next_run
+
+    if wf.schedule_enabled and wf.schedule_cron.strip():
+        wf.next_run_at = await compute_next_run(wf.schedule_cron.strip(), datetime.now(timezone.utc))
+        if wf.next_run_at is None:
+            wf.schedule_enabled = False
+    else:
+        wf.next_run_at = None
+    return wf
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -133,7 +157,10 @@ async def create_workflow(request: Request, body: WorkflowIn) -> dict:
         prompt=body.prompt,
         nodes=nodes,
         edges=edges,
+        schedule_enabled=body.scheduleEnabled,
+        schedule_cron=body.scheduleCron.strip(),
     )
+    await _apply_schedule(wf)
     await wf.insert()
     return _serialize(wf)
 
@@ -172,6 +199,9 @@ async def update_workflow(workflow_id: str, request: Request, body: WorkflowIn) 
     wf.prompt = body.prompt
     wf.nodes = nodes
     wf.edges = edges
+    wf.schedule_enabled = body.scheduleEnabled
+    wf.schedule_cron = body.scheduleCron.strip()
+    await _apply_schedule(wf)
     wf.updated_at = datetime.now(timezone.utc)
     await wf.save()
     return _serialize(wf)
@@ -189,6 +219,29 @@ async def delete_workflow(workflow_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Workflow not found")
     await wf.delete()
     return {"success": True}
+
+
+@router.put("/{workflow_id}/schedule")
+async def update_schedule(workflow_id: str, request: Request, body: ScheduleIn) -> dict:
+    user_id = _resolved_user(request)
+    try:
+        from beanie import PydanticObjectId
+        wf = await WorkflowDAG.get(PydanticObjectId(workflow_id))
+    except Exception:
+        wf = None
+    if not wf or wf.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf.schedule_enabled = body.enabled
+    wf.schedule_cron = body.cron.strip()
+    await _apply_schedule(wf)
+    wf.updated_at = datetime.now(timezone.utc)
+    await wf.save()
+    return {
+        "enabled": wf.schedule_enabled,
+        "cron": wf.schedule_cron,
+        "nextRunAt": wf.next_run_at.isoformat() if wf.next_run_at else None,
+        "lastRunAt": wf.last_run_at.isoformat() if wf.last_run_at else None,
+    }
 
 
 @router.post("/{workflow_id}/run")

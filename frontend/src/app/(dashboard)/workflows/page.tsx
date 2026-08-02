@@ -16,7 +16,7 @@ import { useSession } from 'next-auth/react'
 import {
   AlertCircle, BarChart2, Bot, BookOpen, Brain, BrainCircuit,
   Calendar, CalendarDays, Check, ChevronRight, CircleStop,
-  FileCode, FilePlus2, GraduationCap, HardDrive, Image as ImageIcon,
+  Clock, FileCode, FilePlus2, GraduationCap, HardDrive, Image as ImageIcon,
   Loader2, Play, Plus, Puzzle, RotateCcw, Save, Search,
   StickyNote, Trash2, Workflow, X, ZoomIn, ZoomOut,
 } from 'lucide-react'
@@ -57,6 +57,10 @@ interface Workflow {
   prompt: string
   nodes: WFNode[]
   edges: WFEdge[]
+  scheduleEnabled?: boolean
+  scheduleCron?: string
+  nextRunAt?: string
+  lastRunAt?: string
 }
 
 type RunStatus = 'idle' | 'running' | 'complete' | 'error'
@@ -289,6 +293,13 @@ export default function WorkflowsPage() {
   const [saveMsg, setSaveMsg] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
+  // schedule panel
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleEnabled, setScheduleEnabled] = useState(false)
+  const [scheduleCron, setScheduleCron] = useState('')
+  const [nextRunAt, setNextRunAt] = useState<string | null>(null)
+  const [savingSchedule, setSavingSchedule] = useState(false)
+
   // selected agent info for inspector
   const selectedNode = workflow.nodes.find(n => n.id === selectedNodeId)
   const agentById = useMemo(() => new Map(agents.map(a => [a.id, a])), [agents])
@@ -450,6 +461,8 @@ export default function WorkflowsPage() {
         prompt: workflow.prompt,
         nodes: workflow.nodes,
         edges: workflow.edges,
+        scheduleEnabled: scheduleEnabled,
+        scheduleCron: scheduleCron,
       }
       let result: Workflow & { id?: string }
       if (savedId) {
@@ -470,7 +483,7 @@ export default function WorkflowsPage() {
       setSaving(false)
       setTimeout(() => setSaveMsg(''), 2000)
     }
-  }, [workflow, savedId, loadList])
+  }, [workflow, savedId, loadList, scheduleEnabled, scheduleCron])
 
   const saveWorkflow = useCallback(async () => {
     await persistWorkflow()
@@ -560,6 +573,25 @@ export default function WorkflowsPage() {
     setRunStatus('idle')
   }, [])
 
+  const saveSchedule = useCallback(async () => {
+    setSavingSchedule(true)
+    try {
+      let id = savedId
+      if (!id) id = await persistWorkflow()
+      if (!id) return
+      const res = await wfFetch<{ enabled: boolean; cron: string; nextRunAt: string | null; lastRunAt: string | null }>(
+        `/api/workflows/${id}/schedule`,
+        { method: 'PUT', body: JSON.stringify({ enabled: scheduleEnabled, cron: scheduleCron }) },
+      )
+      setNextRunAt(res.nextRunAt)
+      loadList()
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : 'Could not save schedule')
+    } finally {
+      setSavingSchedule(false)
+    }
+  }, [savedId, persistWorkflow, scheduleEnabled, scheduleCron, loadList])
+
   // ── Load saved workflow ────────────────────────────────────────────────
 
   function loadWorkflow(wf: Workflow & { id?: string }) {
@@ -570,6 +602,9 @@ export default function WorkflowsPage() {
     setRunOutput('')
     setNodeStatuses({})
     setSelectedNodeId(null)
+    setScheduleEnabled(wf.scheduleEnabled ?? false)
+    setScheduleCron(wf.scheduleCron ?? '')
+    setNextRunAt(wf.nextRunAt ?? null)
   }
 
   function newWorkflow() {
@@ -579,6 +614,9 @@ export default function WorkflowsPage() {
     setRunOutput('')
     setNodeStatuses({})
     setSelectedNodeId(null)
+    setScheduleEnabled(false)
+    setScheduleCron('')
+    setNextRunAt(null)
   }
 
   // ── Filtered agent list ─────────────────────────────────────────────────
@@ -622,6 +660,13 @@ export default function WorkflowsPage() {
           className="flex items-center gap-1.5 h-8 px-3 text-xs text-[#6c6a64] border border-[#d8d8d2] rounded hover:border-[#aaa9a1] hover:bg-[#f7f7f4] transition-colors"
         >
           <RotateCcw className="w-3.5 h-3.5" /> New
+        </button>
+
+        <button
+          onClick={() => setScheduleOpen(true)}
+          className={`flex items-center gap-1.5 h-8 px-3 text-xs border border-[#d8d8d2] rounded hover:border-[#aaa9a1] hover:bg-[#f7f7f4] transition-colors ${scheduleEnabled ? 'text-[#1f8a65] font-semibold' : 'text-[#6c6a64]'}`}
+        >
+          <Clock className="w-3.5 h-3.5" /> Schedule
         </button>
 
         <button
@@ -893,8 +938,94 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* ── Saved workflows list modal ──────────────────────────────────── */}
-      {showList && (
+      {/* ── Schedule panel ───────────────────────────────────────────────── */}
+      {scheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setScheduleOpen(false)}>
+          <div className="bg-white border border-[#d8d8d2] rounded-lg shadow-2xl w-[520px] max-w-[90vw] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#e5e5df]">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#1f8a65]" /> Schedule — {workflow.name || 'Untitled Workflow'}
+              </h3>
+              <button onClick={() => setScheduleOpen(false)} className="text-[#aaa9a1] hover:text-[#26251e] transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-sm font-medium text-[#26251e]">Automatically run this workflow</span>
+                <button
+                  onClick={() => setScheduleEnabled(v => !v)}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${scheduleEnabled ? 'bg-[#1f8a65]' : 'bg-[#d8d8d2]'}`}
+                  role="switch"
+                  aria-checked={scheduleEnabled}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${scheduleEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+                </button>
+              </label>
+
+              {scheduleEnabled && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#65635d] mb-1.5">Cron expression (UTC)</label>
+                    <input
+                      value={scheduleCron}
+                      onChange={e => setScheduleCron(e.target.value)}
+                      placeholder="*/5 * * * *"
+                      className="w-full h-9 text-xs font-mono border border-[#d8d8d2] rounded px-3 focus:border-[#1877a8] outline-none bg-[#fbfbf8]"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {( [
+                        ['Every 5 minutes', '*/5 * * * *'],
+                        ['Every hour', '0 * * * *'],
+                        ['Daily at 9am', '0 9 * * *'],
+                        ['Every Monday 8am', '0 8 * * 1'],
+                      ] as Array<[string, string]> ).map(([label, expr]) => (
+                        <button
+                          key={expr}
+                          onClick={() => setScheduleCron(expr)}
+                          className="text-[10px] px-2 py-1 border border-[#deded8] rounded bg-[#f7f7f4] text-[#65635d] hover:border-[#1877a8] hover:text-[#1877a8] transition-colors"
+                        >
+                          {label} — {expr}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-[#aaa9a1] mt-2">5-field cron: minute hour day-of-month month day-of-week.</p>
+                  </div>
+
+                  {nextRunAt && (
+                    <div className="rounded border border-[#1f8a65]/25 bg-[#1f8a65]/5 px-3 py-2 text-xs text-[#1f8a65]">
+                      Next run: {new Date(nextRunAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!scheduleEnabled && (
+                <p className="text-xs text-[#aaa9a1]">Enable scheduling to have this workflow execute automatically on a timer.</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-[#e5e5df]">
+              <button
+                onClick={() => setScheduleOpen(false)}
+                className="h-8 px-3 text-xs text-[#6c6a64] border border-[#d8d8d2] rounded hover:bg-[#f7f7f4] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveSchedule}
+                disabled={savingSchedule}
+                className="h-8 px-4 text-xs bg-[#f54e00] text-white rounded font-medium hover:bg-[#d94300] transition-colors disabled:opacity-50"
+              >
+                {savingSchedule ? 'Saving…' : 'Save schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Saved workflows list modal ──────────────────────────────────── */}      {showList && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowList(false)}>
           <div className="bg-white border border-[#d8d8d2] rounded-lg shadow-2xl w-[480px] max-h-[60vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#e5e5df]">
