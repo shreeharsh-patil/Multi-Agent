@@ -58,6 +58,13 @@ def create_orchestrator_agent() -> LlmAgent:
     tool_agent = create_tool_agent()
     contacts = create_contacts_agent()
 
+    from src.agents.engineer.agent import EngineerAgent
+    from src.agents.pharmacologist.agent import PharmacologistAgent
+    from src.agents.doctor.agent import DoctorAgent
+    engineer = create_engineer_agent()
+    pharmacologist = create_pharmacologist_agent()
+    doctor = create_doctor_agent()
+
     sub_agents = [
         knowledge,
         drive,
@@ -69,6 +76,9 @@ def create_orchestrator_agent() -> LlmAgent:
         memory,
         tool_agent,
         contacts,
+        engineer,
+        pharmacologist,
+        doctor,
     ]
 
     return LlmAgent(
@@ -90,7 +100,10 @@ def create_orchestrator_agent() -> LlmAgent:
             "- coding: Code writing, debugging, documentation\n"
             "- memory: Long-term memory, preferences, recall\n"
             "- tool: Calculator, web search, API tools\n"
-            "- contacts: Google Contacts search, emails, phone numbers\n\n"
+            "- contacts: Google Contacts search, emails, phone numbers\n"
+            "- engineer: Systems design, software/hardware engineering\n"
+            "- pharmacologist: Drugs, pharmacology, medication interactions\n"
+            "- doctor: Symptoms, medical conditions, health education\n\n"
 
             "Analyze the user's request and transfer to the best agent. "
             "If the request spans multiple domains, handle it step by step. "
@@ -249,4 +262,50 @@ def create_tool_agent() -> LlmAgent:
         ),
         tools=[calculator_tool, web_search_tool, scrape_page_tool],
         description="Executes tools: calculator, web search, scraping, and external API integrations.",
+    )
+
+
+def create_engineer_agent() -> LlmAgent:
+    return LlmAgent(
+        name="engineer",
+        model=MODEL,
+        instruction=(
+            "You are the Engineer Agent — a senior engineering consultant across software and hardware. "
+            "Help with system architecture, microservices, API design, algorithms, clean code, code review, "
+            "CI/CD, performance/scalability, circuits, embedded systems, and mechanical/electrical design. "
+            "Give structured, practical answers with design trade-offs and working code in language-tagged blocks."
+        ),
+        tools=[web_search_tool],
+        description="Systems design, software architecture, circuits, and engineering expertise.",
+    )
+
+
+def create_pharmacologist_agent() -> LlmAgent:
+    return LlmAgent(
+        name="pharmacologist",
+        model=MODEL,
+        instruction=(
+            "You are the Pharmacologist Agent with expertise in drug mechanisms, pharmacokinetics, dosing, "
+            "indications, contraindications, and drug-drug interactions. Provide educational pharmacology "
+            "information only, never dosing for a specific person. Always note you are not a substitute for a "
+            "licensed professional and tell users to consult a doctor/pharmacist for real medication decisions "
+            "and emergency services for emergencies."
+        ),
+        tools=[web_search_tool],
+        description="Drug information, pharmacology, and medication interaction education.",
+    )
+
+
+def create_doctor_agent() -> LlmAgent:
+    return LlmAgent(
+        name="doctor",
+        model=MODEL,
+        instruction=(
+            "You are the Doctor Agent — you explain health topics and symptoms in clear, evidence-based, "
+            "educational language, but you do NOT diagnose, prescribe, or treat individuals. Provide "
+            "red-flag warnings for emergencies, encourage users to see a professional for concerning or "
+            "persistent symptoms, and use the web for up-to-date health information where helpful."
+        ),
+        tools=[web_search_tool],
+        description="Explains symptoms, medical conditions, and preventive health in plain language.",
     )

@@ -12,6 +12,12 @@ class AgentRouter:
             # Contacts: catch explicit contact/phone/email lookups before calendar
             (r"(?i)\b(contact|contacts|phone\s*book|address\s*book|phone\s*number|cell\s*number|mobile\s*number|email\s*address|who\s+is\s+in\s+my\s+contacts|find\s+contact|get\s+number|contact\s+info)\b", "contacts"),
             (r"(?i)\b(number\s+of|phone\s+of|mobile\s+of|email\s+of|contact\s+details|number\s+for|phone\s+for)\b", "contacts"),
+            # Doctor: symptoms, conditions, general health inquiries (before research/knowledge)
+            (r"(?i)\b(symptom|symptoms|diagnos|medical condition|medical advice|disease|infection|fever|cough|cold|headache|migraine|chest pain|shortness of breath|rash|nausea|vomiting|diarrhea|blood pressure|blood sugar|diabetes|flu|allergy|surgery|injury|first aid|bp|cholesterol|why do i feel|what is wrong with me)\b", "doctor"),
+            # Pharmacologist: drugs, medicines, interactions, doses
+            (r"(?i)\b(pharmacol|drug interaction|drug\b|drugs?|medication|medicine|dosage|dose\b|prescription|pharmaceutical|contraindication|antibiotic|paracetamol|ibuprofen|antidepressant|antibiotic|insulin|statins?|vaccine|opioid|adverse reaction)\b", "pharmacologist"),
+            # Engineer: engineering, system design, architecture, circuits, code review
+            (r"(?i)\b(engineering|engineer|system architecture|microservice|api design|circuit|embedded|mechanical|electrical design|code review|refactor|scalabilit|performance optimization|load balancer|ci/cd|deployment pipeline|database design|softw are design)\b", "engineer"),
             # Calendar: catch all natural calendar/scheduling requests
             (r"(?i)\b(calendar|calender|calander)\b", "calendar"),
             (r"(?i)\b(meeting|appointment|event|availability|free\s*time|reschedule|book\s+(a\s+)?(slot|time|meeting)|add\s+to\s+(my\s+)?calendar|what.s\s+on\s+my|my\s+agenda|my\s+schedule|upcoming\s+events?|today.s\s+events?|tomorrow.s\s+events?|check\s+(my\s+)?schedule|show\s+(my\s+)?events?|list\s+(my\s+)?events?|delete\s+(the\s+)?(event|meeting|appointment)|cancel\s+(the\s+)?(event|meeting|appointment)|create\s+(a\s+)?(meeting|event|appointment)|schedule\s+(a\s+)?(meeting|call|event|appointment))\b", "calendar"),
