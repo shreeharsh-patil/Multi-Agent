@@ -1768,6 +1768,7 @@ function ChatContent() {
                                   disabled={sending}
                                   onClick={() => {
                                     const previousUser = [...messages].slice(0, idx).reverse().find((candidate) => candidate.role === 'user')
+                                    setMessages((prev) => prev.filter((m) => m.id !== msg.id))
                                     if (previousUser?.content) handleSend(previousUser.content)
                                   }}
                                   className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/30 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50"

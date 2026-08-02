@@ -60,7 +60,10 @@ export const metadata: Metadata = {
     description: 'Chat with multiple specialized AI agents, research the web, query documents with RAG, and more.',
   },
   icons: {
-    icon: '/favicon.png',
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
   },
 }
 
