@@ -6,7 +6,8 @@ from src.utils.logger import logger
 class AgentRouter:
     def __init__(self):
         self.routing_rules = [
-            (r"(?i)\b(generate|create|draw|make|design|render)\b.*\b(image|picture|illustration|poster|logo|artwork|icon|banner|avatar|graphic|vector)\b", "image"),
+            (r"(?i)\b(generate|create|draw|make|design|render|paint|show|produce)\b.*\b(image|picture|photo|photograph|illustration|drawing|artwork|poster|logo|icon|graphic|banner|vector|avatar)\b", "image"),
+            (r"(?i)\b(image|picture|photo|drawing|illustration)\b\s+(of|for|with|showing|featuring)\b", "image"),
             (r"(?i)\b(logo|icon|avatar)\b\s+(for|of|with|showing|featuring)\b", "image"),
             # Contacts: catch contact/phone/email/who-is lookups before calendar
             (r"(?i)\b(contact|contacts|phone\s*book|address\s*book|phone\s*number|cell\s*number|mobile\s*number|email\s*address|who\s+is|find\s+contact|get\s+number|contact\s+info)\b", "contacts"),
