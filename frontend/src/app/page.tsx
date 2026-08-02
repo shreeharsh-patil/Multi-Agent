@@ -140,9 +140,9 @@ export default function LandingPage() {
 
           <div className="flex gap-8 sm:gap-12">
             {[
-              { value: "10K+", label: "Active users" },
-              { value: "50+", label: "Specialized agents" },
-              { value: "500K+", label: "Tasks completed" },
+              { value: "25+", label: "Domain Specialists" },
+              { value: "4", label: "Google Workspace Apps" },
+              { value: "100%", label: "Local Data Control" },
             ].map((stat, i) => (
               <div
                 key={i}
@@ -327,12 +327,12 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-6">
-              <p className="text-sm text-black/45 leading-relaxed">Every action is logged, every decision is traceable. Built for teams that need compliance without compromise.</p>
+              <p className="text-sm text-black/45 leading-relaxed">Built with strict authentication, local workspace isolation, and zero third-party data tracking. Every request is scoped to your account.</p>
               <div className="space-y-4">
                 {[
-                  { label: "SOC 2 Type II", desc: "Independently audited security controls" },
-                  { label: "Full Audit Trail", desc: "Every decision logged with full traceability" },
-                  { label: "Real-time Observability", desc: "Monitor, debug, and replay any execution" },
+                  { label: "Google OAuth 2.0 PKCE", desc: "Secure token exchange for Calendar, Drive, Contacts, and Gmail" },
+                  { label: "Workspace Data Isolation", desc: "User-scoped documents, notes, vectors, and memory items" },
+                  { label: "SSRF & Input Defense", desc: "Outbound URL validation preventing unauthorized internal requests" },
                 ].map((item) => (
                   <div key={item.label} className="flex gap-4">
                     <div className="w-1 bg-black/10 rounded-full shrink-0" />
@@ -344,7 +344,7 @@ export default function LandingPage() {
                 ))}
               </div>
               <div className="pt-4 flex flex-col gap-2">
-                {["SOC 2", "GDPR", "HIPAA Ready", "ISO 27001"].map((badge) => (
+                {["JWT Authentication", "AES Storage Security", "SSRF Sanitization", "Local Control"].map((badge) => (
                   <div key={badge} className="flex items-center gap-2 text-xs text-black/25">
                     <span className="w-1 h-1 rounded-full bg-black/25" />{badge}
                   </div>
