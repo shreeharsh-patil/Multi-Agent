@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  Shrink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -146,6 +147,20 @@ export default function MemoryPage() {
     setSaving(false)
   }
 
+  async function consolidate() {
+    setSaving(true)
+    const response = await api.memory.consolidate()
+    if (response.success) {
+      if (response.data?.archived) {
+        toast.success(response.data.message || `Archived ${response.data.archived} memories`)
+      } else {
+        toast.info(response.data?.message || 'Nothing to consolidate yet')
+      }
+      await load()
+    } else toast.error(response.error || 'Could not consolidate memory')
+    setSaving(false)
+  }
+
   return (
     <div className="mx-auto max-w-6xl pb-14 animate-fade-in">
       <header className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -158,9 +173,14 @@ export default function MemoryPage() {
             Review the durable preferences and context used to personalize future conversations.
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)} className="gap-2 self-start sm:self-auto">
-          <Plus className="h-4 w-4" /> Add memory
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button variant="outline" onClick={consolidate} disabled={saving} className="gap-2">
+            <Shrink className="h-4 w-4" /> Consolidate
+          </Button>
+          <Button onClick={() => setAddOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" /> Add memory
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-8 pt-7 lg:grid-cols-[240px_minmax(0,1fr)]">

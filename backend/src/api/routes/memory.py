@@ -117,6 +117,15 @@ async def clear_memories(request: Request) -> dict:
     return {"deleted": await memory_service.clear(resolve_user_id(request))}
 
 
+@router.post("/consolidate")
+async def consolidate_memories(request: Request) -> dict:
+    user_id = resolve_user_id(request)
+    if not PydanticObjectId.is_valid(user_id):
+        raise HTTPException(404, "User not found")
+    result = await memory_service.consolidate(user_id)
+    return result
+
+
 @router.put("/settings/preferences")
 async def update_memory_settings(body: MemorySettingsRequest, request: Request) -> dict:
     user_id = resolve_user_id(request)

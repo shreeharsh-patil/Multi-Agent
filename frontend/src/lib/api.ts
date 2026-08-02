@@ -325,6 +325,11 @@ export const api = {
     delete: (id: string) =>
       fetchApi<{ deleted: boolean }>(`/api/memory/${id}`, { method: 'DELETE' }),
     clear: () => fetchApi<{ deleted: number }>('/api/memory', { method: 'DELETE' }),
+    consolidate: () =>
+      fetchApi<{ consolidated: Array<{ id: string; key: string; content: string; category: string }>; archived: number; message: string }>(
+        '/api/memory/consolidate',
+        { method: 'POST' },
+      ),
     settings: (data: { enabled?: boolean; autoExtract?: boolean }) =>
       fetchApi<{ enabled: boolean; autoExtract: boolean }>('/api/memory/settings/preferences', {
         method: 'PUT',
