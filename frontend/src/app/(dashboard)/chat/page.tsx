@@ -25,6 +25,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import { preprocessLaTeX } from '@/lib/latex'
 import { ImagePreviewCard } from '@/components/image-preview-card'
+import { MermaidWorkspace } from '@/components/mermaid-workspace'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -1607,6 +1608,10 @@ function ChatContent() {
                                   ) : null,
                                   code: ({ className, children, ...props }) => {
                                     const isInline = !className
+                                    if (className?.includes('language-mermaid')) {
+                                      const source = String(children).replace(/\n$/, '')
+                                      return <MermaidWorkspace content={`\`\`\`mermaid\n${source}\n\`\`\``} title="Diagram" />
+                                    }
                                     return isInline ? (
                                       <code className="bg-muted/60 px-1.5 py-0.5 rounded-md text-xs font-mono text-foreground/80" {...props}>{children}</code>
                                     ) : (

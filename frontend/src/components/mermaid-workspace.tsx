@@ -34,7 +34,11 @@ const DEFAULT_MINDMAP = `mindmap
 
 function extractMermaid(content?: string) {
   const match = content?.match(/```mermaid\s*([\s\S]*?)```/i)
-  const source = match?.[1]?.trim() || ''
+  let source = match?.[1]?.trim() || ''
+  // Chat responses occasionally forget to close the diagram before continuing
+  // with prose. Keep the valid Mermaid section in that case.
+  source = source.replace(/\s+(?=(?:where\b|\*\s+\*\*))/i, '\n')
+  source = source.split(/\n\s*(?:where\b|\*\s+\*\*)/i)[0] || ''
   // Be forgiving of the common missing `g` typo in pasted flowcharts.
   return source.replace(/^raph\b/i, 'graph')
 }
