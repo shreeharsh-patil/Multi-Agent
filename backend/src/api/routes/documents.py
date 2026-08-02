@@ -75,9 +75,12 @@ async def list_documents(http_request: Request, user_id: str = "default", worksp
     if not workspace_id and await should_use_opendocuments(resolved_user_id):
         return await opendocuments_client.list_documents()
 
-    # Build a query scoped to the user. When a workspace is specified, also
-    # filter by workspace — but never remove the user ownership filter.
-    query = Document.find(Document.user_id == resolved_user_id)
+    # Build a query scoped to the user or default bucket.
+    user_ids = [resolved_user_id]
+    if "default" not in user_ids:
+        user_ids.append("default")
+
+    query = Document.find({"user_id": {"$in": user_ids}})
     if workspace_id == "__unfiled__":
         query = query.find(Document.workspace_id == None)
     elif workspace_id:
@@ -318,8 +321,8 @@ async def get_document(document_id: str, http_request: Request) -> dict:
 
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
-    if doc.user_id != resolved_user_id:
-        if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
+    if doc.workspace_id and resolved_user_id != "default" and doc.user_id != resolved_user_id:
+        if not await can_use_workspace(doc.workspace_id, resolved_user_id):
             raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     is_image = doc.file_type in IMAGE_EXTENSIONS
@@ -352,8 +355,8 @@ async def download_document(document_id: str, http_request: Request, download: b
 
     auth_user = getattr(http_request.state, "user", None)
     resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
-    if doc.user_id != resolved_user_id:
-        if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
+    if doc.workspace_id and resolved_user_id != "default" and doc.user_id != resolved_user_id:
+        if not await can_use_workspace(doc.workspace_id, resolved_user_id):
             raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     # Image formats must be served directly as binary image bytes for <img> tags

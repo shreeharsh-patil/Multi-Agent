@@ -141,8 +141,9 @@ async def _build_attachment_context(
             continue
 
         if doc and user_id and doc.user_id != user_id and doc.user_id != "default":
-            sections.append(f"## {name}\nThe uploaded document is not available to the current user.")
-            continue
+            if doc.workspace_id and not await can_use_workspace(doc.workspace_id, user_id):
+                sections.append(f"## {name}\nThe uploaded document is not available to the current user.")
+                continue
 
         is_image = doc.file_type in IMAGE_EXTENSIONS if doc else False
         content = await _load_attachment_text(doc)
