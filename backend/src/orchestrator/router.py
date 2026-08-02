@@ -39,23 +39,35 @@ class AgentRouter:
 
     def route_smart(self, user_input: str, requested_agent_id: Optional[str] = None) -> str:
         """Dynamically select the best agent for a user prompt, auto-correcting misaligned dropdown selections."""
-        # 1. Pattern rule match takes priority for specific actions (images, calendar, contacts, etc.)
+        # 1. Pattern rule match takes priority for explicit actions (images, calendar, contacts, etc.)
         matched = self.route(user_input)
         if matched:
             return matched
 
         input_lower = user_input.lower().strip()
+        cleaned_words = re.sub(r"[^\w\s]", "", input_lower).strip()
 
-        # 2. If requested_agent_id is provided, validate it against the prompt nature
+        # 2. Greetings and general conversational chat should always route to general assistant (auto)
+        greetings = {
+            "hello", "hi", "hey", "whats up", "what's up", "whast up", "how are you",
+            "good morning", "good afternoon", "good evening", "thanks", "thank you",
+            "ok", "okay", "cool", "great", "awesome", "sup"
+        }
+        if cleaned_words in greetings or any(cleaned_words.startswith(g) for g in ["hello", "hi ", "hey ", "whats up", "what's up", "whast up", "how are you"]):
+            return "auto"
+
+        # 3. If requested_agent_id is provided, validate it against the prompt nature
         if requested_agent_id and requested_agent_id != "auto":
+            if requested_agent_id == "image":
+                # Image agent should only execute when user explicitly requests image generation
+                return "auto"
             if requested_agent_id == "coding":
                 coding_keywords = ["code", "script", "python", "javascript", "typescript", "html", "css", "sql", "java", "c++", "c#", "rust", "go", "function", "class", "algorithm", "debug", "error", "exception", "bug", "program", "api", "refactor", "syntax"]
                 if not any(k in input_lower for k in coding_keywords):
-                    # Query is general explanation/concept, route to knowledge agent
                     return "knowledge"
             return requested_agent_id
 
-        # 3. For general explanations, questions, or concepts, default to knowledge agent
+        # 4. For general explanations, questions, or concepts, default to knowledge agent
         explanation_keywords = ["explain", "what is", "define", "how does", "why", "tell me about", "concept", "meaning", "overview", "difference between"]
         if any(k in input_lower for k in explanation_keywords):
             return "knowledge"
