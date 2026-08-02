@@ -306,7 +306,7 @@ export default function WorkflowsPage() {
 
   // Load agents
   useEffect(() => {
-    api.agents.list().then(r => { if (r.success && r.data) setAgents(r.data.filter(a => !a.custom)) })
+    api.agents.list().then(r => { if (r.success && r.data) setAgents(r.data.filter(a => !a.custom)) }).catch(() => {})
   }, [])
 
   // Load saved workflows list

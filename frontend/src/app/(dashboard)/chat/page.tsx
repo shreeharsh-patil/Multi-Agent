@@ -754,14 +754,14 @@ function ChatContent() {
       } else {
         console.warn('Failed to load workspaces:', res.error)
       }
-    })
+    }).catch(() => {})
     api.agents.list().then((res) => {
       if (res.success && res.data) {
         setCustomAgents(res.data.filter((agent) => agent.custom).map((agent) => ({ id: agent.id, name: agent.name })))
       } else {
         console.warn('Failed to load agents:', res.error)
       }
-    })
+    }).catch(() => {})
   }, [fetchConversations])
 
   // Ref to prevent stale resets when searchParams changes during navigation

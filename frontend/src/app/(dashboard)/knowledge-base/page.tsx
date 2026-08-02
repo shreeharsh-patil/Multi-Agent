@@ -77,7 +77,7 @@ export default function KnowledgeBasePage() {
     fetchHistory()
     api.workspaces.list().then((res) => {
       if (res.success && res.data) setWorkspaces(res.data)
-    })
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
