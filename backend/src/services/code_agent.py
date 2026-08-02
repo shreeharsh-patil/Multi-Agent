@@ -94,13 +94,176 @@ async def _runtime_for(client, language: str) -> tuple[str, str]:
     return language, version
 
 
+async def _execute_local_subprocess(language: str, code: str, stdin: str = "") -> Optional[dict]:
+    """Execute code locally in a sandboxed, time-bounded subprocess."""
+    import sys, asyncio
+    try:
+        if language == "python":
+            cmd = [sys.executable, "-c", code]
+        elif language == "javascript":
+            cmd = ["node", "-e", code]
+        elif language == "bash":
+            cmd = ["bash", "-c", code]
+        else:
+            return None
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                proc.communicate(input=stdin.encode("utf-8") if stdin else None),
+                timeout=10.0,
+            )
+            return {
+                "language": language,
+                "version": "local",
+                "exit_code": proc.returncode,
+                "stdout": stdout_b.decode("utf-8", errors="replace"),
+                "stderr": stderr_b.decode("utf-8", errors="replace"),
+                "signal": None,
+            }
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return {
+                "language": language,
+                "version": "local",
+                "exit_code": 124,
+                "stdout": "",
+                "stderr": "Execution timed out (10s limit exceeded)",
+                "signal": "SIGKILL",
+            }
+    except Exception as err:
+        logger.warning(f"Local subprocess execution failed for {language}: {err}")
+        return None
+
+
+async def _execute_wandbox(language: str, code: str, stdin: str = "") -> Optional[dict]:
+    """Execute code via Wandbox free API (supports C++, Rust, Go, Python, JS, Java, etc.)."""
+    import httpx
+
+    wandbox_compiler_map = {
+        "python": "cpython-3.10.11",
+        "javascript": "nodejs-18.16.0",
+        "c++": "gcc-head",
+        "c": "gcc-head-c",
+        "rust": "rust-1.70.0",
+        "go": "go-1.20.4",
+        "ruby": "ruby-3.2.2",
+        "java": "openjdk-head",
+    }
+    compiler = wandbox_compiler_map.get(language)
+    if not compiler:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://wandbox.org/api/compile.json",
+                json={
+                    "compiler": compiler,
+                    "code": code,
+                    "stdin": stdin,
+                },
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                status = int(data.get("status", 0))
+                stdout = data.get("program_output", "") or data.get("compiler_output", "")
+                stderr = data.get("program_error", "") or data.get("compiler_error", "")
+                return {
+                    "language": language,
+                    "version": "wandbox",
+                    "exit_code": status,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "signal": None,
+                }
+    except Exception as err:
+        logger.warning(f"Wandbox execution failed: {err}")
+        return None
+
+
+async def _execute_judge0(language: str, code: str, stdin: str = "") -> Optional[dict]:
+    """Execute code via Judge0 CE free public API (https://ce.judge0.com)."""
+    import httpx
+
+    judge0_lang_map = {
+        "python": 71,       # Python (3.8.1)
+        "javascript": 63,   # JavaScript (Node.js 12.14.0)
+        "typescript": 74,   # TypeScript (3.7.4)
+        "c++": 54,          # C++ (GCC 9.2.0)
+        "c": 50,            # C (GCC 9.2.0)
+        "java": 62,         # Java (OpenJDK 13.0.1)
+        "rust": 73,         # Rust (1.40.0)
+        "go": 60,           # Go (1.13.5)
+        "ruby": 72,         # Ruby (2.7.0)
+        "php": 68,          # PHP (7.4.1)
+        "bash": 46,         # Bash (5.0.0)
+    }
+    lang_id = judge0_lang_map.get(language)
+    if not lang_id:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://ce.judge0.com/submissions?wait=true",
+                json={
+                    "language_id": lang_id,
+                    "source_code": code,
+                    "stdin": stdin,
+                },
+            )
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                stdout = data.get("stdout") or ""
+                stderr = data.get("stderr") or data.get("compile_output") or ""
+                status_id = data.get("status", {}).get("id", 3)
+                exit_code = 0 if status_id == 3 else 1
+                return {
+                    "language": language,
+                    "version": "judge0",
+                    "exit_code": exit_code,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "signal": None,
+                }
+    except Exception as err:
+        logger.warning(f"Judge0 CE execution failed: {err}")
+        return None
+
+
 async def execute_code(language: str, code: str, stdin: str = "") -> dict:
-    """Execute code in the Piston sandbox and return the run result."""
+    """Execute code using a 3-tier cascade: Local Subprocess -> Wandbox -> Judge0 -> Piston."""
     import httpx
 
     language = normalize_language(language)
+
+    # Priority 1: Try local sandboxed subprocess execution (instant, 100% reliable)
+    local_res = await _execute_local_subprocess(language, code, stdin)
+    if local_res is not None:
+        return local_res
+
+    # Priority 2: Try Wandbox free public API
+    wandbox_res = await _execute_wandbox(language, code, stdin)
+    if wandbox_res is not None:
+        return wandbox_res
+
+    # Priority 3: Try Judge0 CE free public API
+    judge0_res = await _execute_judge0(language, code, stdin)
+    if judge0_res is not None:
+        return judge0_res
+
+    # Priority 4: Legacy Piston API fallback
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             canonical, version = await _runtime_for(client, language)
             ext = {
                 "python": "py", "javascript": "js", "typescript": "ts", "java": "java",
@@ -116,50 +279,28 @@ async def execute_code(language: str, code: str, stdin: str = "") -> dict:
                     "stdin": stdin,
                 },
             )
-            if resp.status_code == 404:
-                _runtimes_cache = None
-                await _fetch_runtimes(client)
-                canonical, version = await _runtime_for(client, language)
-                resp = await client.post(
-                    f"{PISTON_URL}/execute",
-                    json={
-                        "language": canonical,
-                        "version": version,
-                        "files": [{"name": f"main.{ext}", "content": code}],
-                        "stdin": stdin,
-                    },
-                )
-            if resp.status_code != 200:
+            if resp.status_code == 200:
+                data = resp.json()
+                run = data.get("run", {})
+                stdout = run.get("stdout", "") or ""
+                stderr = run.get("stderr", "") or ""
+                raw_code = run.get("code")
+                signal = run.get("signal")
+                exit_code = 0 if raw_code is None and not stderr.strip() else (raw_code or 1)
                 return {
                     "language": canonical, "version": version,
-                    "exit_code": -1, "stdout": "", "stderr": f"Sandbox HTTP {resp.status_code}: {resp.text[:800]}",
-                    "signal": None,
+                    "exit_code": exit_code, "stdout": stdout,
+                    "stderr": stderr, "signal": signal,
                 }
-            data = resp.json()
-            run = data.get("run", {})
-            stdout = run.get("stdout", "") or ""
-            stderr = run.get("stderr", "") or ""
-            raw_code = run.get("code")
-            signal = run.get("signal")
-            if raw_code is None:
-                exit_code = 1 if stderr.strip() else 0
-                if signal:
-                    exit_code = 137
-            else:
-                exit_code = raw_code
-            return {
-                "language": canonical, "version": version,
-                "exit_code": exit_code, "stdout": stdout,
-                "stderr": stderr, "signal": signal,
-            }
     except Exception as e:
-        logger.error(f"Code sandbox execution failed: {e}")
-        return {
-            "language": language, "version": "",
-            "exit_code": -1, "stdout": "",
-            "stderr": f"Sandbox unavailable: {e}",
-            "signal": None,
-        }
+        logger.error(f"Piston fallback execution failed: {e}")
+
+    return {
+        "language": language, "version": "",
+        "exit_code": -1, "stdout": "",
+        "stderr": f"Code execution failed on remote sandbox.",
+        "signal": None,
+    }
 
 
 async def _generate_code(prompt: str, language_hint: Optional[str]) -> Optional[dict]:

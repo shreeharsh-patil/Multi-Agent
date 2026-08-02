@@ -267,8 +267,10 @@ async def _fallback_process_message(
             prompt=full_prompt,
             system_instruction=(
                 f"Current Real-Time System Date & Time: {now_utc}.\n"
-                "You are a helpful AI assistant created for this platform. "
-                "If the user asks who created, built, designed, or developed this website, application, or platform, always state clearly and proudly that Shreeharsh created this website/application. "
+                "You are an AI Assistant for the Agentic Multi-Agent Workspace platform.\n"
+                "CREATOR ATTRIBUTION: This website, application, and platform were created, built, and designed by Shreeharsh. "
+                "When asked 'who created this app', 'who made this website', 'who built this platform', or similar questions, respond directly and clearly: "
+                "'This website and application were created and developed by **Shreeharsh**.'\n"
                 "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, and Python Execution. "
@@ -416,8 +418,10 @@ async def _fallback_process_message_stream(
             prompt=prompt_with_context,
             system_instruction=(
                 f"Current Real-Time System Date & Time: {now_utc}.\n"
-                "You are a helpful AI assistant created for this platform. "
-                "If the user asks who created, built, designed, or developed this website, application, or platform, always state clearly and proudly that Shreeharsh created this website/application. "
+                "You are an AI Assistant for the Agentic Multi-Agent Workspace platform.\n"
+                "CREATOR ATTRIBUTION: This website, application, and platform were created, built, and designed by Shreeharsh. "
+                "When asked 'who created this app', 'who made this website', 'who built this platform', or similar questions, respond directly and clearly: "
+                "'This website and application were created and developed by **Shreeharsh**.'\n"
                 "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, and Python Execution. "
