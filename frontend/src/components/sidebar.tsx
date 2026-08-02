@@ -49,7 +49,7 @@ const navigation = [
   { name: 'Search', href: '/research', icon: Search },
   { name: 'Library', href: '/documents', icon: BookOpen },
   { name: 'Drive', href: '/drive', icon: HardDrive },
-  { name: 'Agents', href: '/agents', icon: Bot },
+  { name: 'Agentic', href: '/agents', icon: Bot },
   { name: 'Workflows', href: '/workflows', icon: Workflow },
   { name: 'Data Analysis', href: '/data-analysis', icon: BarChart2 },
   { name: 'Weather & News', href: '/weather-news', icon: CloudSun },
@@ -352,10 +352,10 @@ export function Sidebar() {
             <>
               <Link href="/dashboard" className="flex items-center gap-2.5 group">
                 <div className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-xs shrink-0">
-                  <Image src="/logo.png" alt="Agents Logo" width={24} height={24} className="h-6 w-6 object-contain" />
+                  <Image src="/logo.png" alt="Agentic Logo" width={24} height={24} className="h-6 w-6 object-contain" />
                 </div>
                 <span className="font-sans font-normal text-lg tracking-[-0.03em] text-[#26251e]">
-                  Agents
+                  Agentic
                 </span>
               </Link>
               <button
