@@ -1,14 +1,13 @@
-"""Publication-Quality Document Exporter (PDF & DOCX).
+"""Clean Publication Document Exporter (PDF & DOCX).
 
-Generates textbook-grade PDFs and editable Microsoft Word (DOCX) documents:
-- Academic Cover Page (Subject, Chapter, Date, Branding)
-- Running Headers & Footers with Page Numbers
-- Hyperlinked Table of Contents with section numbering
+Generates clean, textbook-quality PDFs and editable Microsoft Word (DOCX) documents:
+- Clean page layout starting directly with Document Title & Content
+- Page numbering in footer
 - Styled Callout Boxes (Exam Tips, Definitions, Important Warnings, Notes)
 - Clean Academic Tables with header shading & alternating row background
 - Rendered Mathematical Equations & Symbol Normalization (KaTeX)
 - Dark Monospace Code & Diagram Blocks
-- Flexible Scope Filtering (Complete, Notes, Exam, Questions, Answers, Formulas, Diagrams, Tables, References)
+- Flexible Scope Filtering (Complete, Notes, Exam, Revision, Questions, Answers, Formulas, Diagrams, Tables, References)
 """
 
 import asyncio
@@ -51,7 +50,6 @@ def filter_content_by_scope(content: str, scope: str) -> str:
 
     if scope_lower in {"formulas", "math"}:
         filtered_lines.append("# Formula Handbook & Derivations\n")
-        in_formula = False
         for line in lines:
             if "$" in line or "Formula" in line or "=" in line or "Derivation" in line:
                 filtered_lines.append(line)
@@ -112,87 +110,33 @@ class PublicationDocumentExporter:
         author: str = "AI Study Agent",
         subject: str = "Academic Learning System",
     ) -> bytes:
-        """Generate a textbook-quality PDF with cover page, TOC, headers, and callouts."""
+        """Generate a clean, high-quality PDF document starting directly with content."""
         try:
             from fpdf import FPDF
 
-            class AcademicPDF(FPDF):
+            class CleanPDF(FPDF):
                 def header(self):
-                    if self.page_no() > 1:
-                        self.set_font("Helvetica", "I", 9)
-                        self.set_text_color(100, 116, 139)
-                        self.cell(0, 8, pdf_safe_text(f"{title} · {subject}"), 0, 0, "R")
-                        self.ln(10)
-                        self.set_draw_color(226, 232, 240)
-                        self.line(10, 18, 200, 18)
+                    pass
 
                 def footer(self):
-                    if self.page_no() > 1:
-                        self.set_y(-15)
-                        self.set_font("Helvetica", "", 9)
-                        self.set_text_color(148, 163, 184)
-                        self.cell(0, 10, pdf_safe_text("AI Study Agent — Academic Publication Edition"), 0, 0, "L")
-                        self.cell(0, 10, f"Page {self.page_no()}", 0, 0, "R")
+                    self.set_y(-12)
+                    self.set_font("Helvetica", "", 9)
+                    self.set_text_color(148, 163, 184)
+                    self.cell(0, 10, f"Page {self.page_no()}", 0, 0, "R")
 
             def _build_pdf():
                 filtered_md = filter_content_by_scope(content, scope)
-                pdf = AcademicPDF(orientation="P", unit="mm", format="A4")
-                pdf.set_auto_page_break(auto=True, margin=18)
-
-                # --- COVER PAGE ---
+                pdf = CleanPDF(orientation="P", unit="mm", format="A4")
+                pdf.set_auto_page_break(auto=True, margin=15)
                 pdf.add_page()
-                pdf.set_fill_color(30, 41, 59)  # Dark slate header bar
-                pdf.rect(0, 0, 210, 45, "F")
 
-                pdf.set_y(15)
-                pdf.set_font("Helvetica", "B", 14)
-                pdf.set_text_color(255, 255, 255)
-                pdf.cell(0, 10, pdf_safe_text("AI STUDY AGENT · ACADEMIC EDITION"), 0, 1, "C")
-
-                pdf.set_y(65)
-                pdf.set_font("Helvetica", "B", 22)
-                pdf.set_text_color(30, 41, 59)
-                pdf.multi_cell(0, 12, pdf_safe_text(title), align="C")
-
-                pdf.set_font("Helvetica", "I", 12)
-                pdf.set_text_color(71, 85, 105)
-                pdf.cell(0, 10, pdf_safe_text(f"Subject: {subject} | Scope: {scope.title()}"), 0, 1, "C")
-
-                pdf.set_y(140)
-                pdf.set_draw_color(37, 99, 235)
-                pdf.set_line_width(0.8)
-                pdf.line(40, 140, 170, 140)
-
-                pdf.set_y(160)
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(100, 116, 139)
-                pdf.cell(0, 6, pdf_safe_text(f"Prepared by: {author}"), 0, 1, "C")
-                pdf.cell(0, 6, pdf_safe_text("Generated for University & Research Use"), 0, 1, "C")
-
-                # --- TABLE OF CONTENTS ---
-                pdf.add_page()
-                pdf.set_font("Helvetica", "B", 16)
-                pdf.set_text_color(30, 41, 59)
-                pdf.cell(0, 10, pdf_safe_text("Table of Contents"), 0, 1, "L")
-                pdf.ln(4)
-
-                headings = []
-                for l in filtered_md.split("\n"):
-                    if l.startswith("# "):
-                        headings.append((1, l[2:]))
-                    elif l.startswith("## "):
-                        headings.append((2, l[3:]))
-
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(51, 65, 85)
-                for idx, (lvl, htext) in enumerate(headings[:15], 1):
-                    indent = "   " * (lvl - 1)
-                    dots = ". " * (35 - len(htext[:30]))
-                    pdf.cell(0, 7, pdf_safe_text(f"{indent}{idx}. {htext[:35]} {dots}"), 0, 1, "L")
-
-                pdf.ln(8)
-                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-                pdf.ln(6)
+                # Document Title
+                clean_title = pdf_safe_text(title)
+                if clean_title and clean_title != "AI Response":
+                    pdf.set_font("Helvetica", "B", 18)
+                    pdf.set_text_color(30, 41, 59)
+                    pdf.multi_cell(0, 10, clean_title)
+                    pdf.ln(4)
 
                 # --- CONTENT PARSING ---
                 pdf.set_font("Helvetica", "", 10)
@@ -286,14 +230,11 @@ class PublicationDocumentExporter:
         author: str = "AI Study Agent",
         subject: str = "Academic Learning System",
     ) -> bytes:
-        """Generate an editable Microsoft Word (DOCX) textbook document."""
+        """Generate a clean editable Microsoft Word (DOCX) document."""
         try:
             from docx import Document
             from docx.shared import Pt, Inches, RGBColor
             from docx.enum.text import WD_ALIGN_PARAGRAPH
-            from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
-            from docx.oxml import OxmlElement
-            from docx.oxml.ns import qn
 
             def _build_docx():
                 filtered_md = filter_content_by_scope(content, scope)
@@ -307,26 +248,15 @@ class PublicationDocumentExporter:
                     s.left_margin = Inches(1)
                     s.right_margin = Inches(1)
 
-                # --- COVER PAGE ---
-                p_title = doc.add_paragraph()
-                p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p_title.paragraph_format.space_before = Pt(36)
-                p_title.paragraph_format.space_after = Pt(12)
-                run_title = p_title.add_run(title)
-                run_title.font.name = "Calibri"
-                run_title.font.size = Pt(24)
-                run_title.font.bold = True
-                run_title.font.color.rgb = RGBColor(30, 41, 59)
-
-                p_sub = doc.add_paragraph()
-                p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p_sub.paragraph_format.space_after = Pt(24)
-                run_sub = p_sub.add_run(f"Subject: {subject} | Scope: {scope.title()}")
-                run_sub.font.size = Pt(12)
-                run_sub.font.italic = True
-                run_sub.font.color.rgb = RGBColor(71, 85, 105)
-
-                doc.add_page_break()
+                # Document Title
+                if title and title.strip() and title != "AI Response":
+                    p_title = doc.add_paragraph()
+                    p_title.paragraph_format.space_after = Pt(12)
+                    run_title = p_title.add_run(title)
+                    run_title.font.name = "Calibri"
+                    run_title.font.size = Pt(20)
+                    run_title.font.bold = True
+                    run_title.font.color.rgb = RGBColor(30, 41, 59)
 
                 # --- CONTENT PARSING ---
                 for line in filtered_md.split("\n"):
@@ -375,7 +305,7 @@ class PublicationDocumentExporter:
     async def export_markdown(self, title: str, content: str, scope: str = "complete") -> bytes:
         """Export filtered note content as a Markdown document."""
         filtered_md = filter_content_by_scope(content, scope)
-        md_content = f"# {title}\n\n{filtered_md}\n"
+        md_content = f"# {title}\n\n{filtered_md}\n" if title and title != "AI Response" else f"{filtered_md}\n"
         return md_content.encode("utf-8")
 
 

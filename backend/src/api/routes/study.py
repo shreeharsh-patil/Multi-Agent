@@ -199,8 +199,8 @@ class ExportStudyDocumentRequest(BaseModel):
     content: str = Field(min_length=1)
     format: str = "pdf"  # pdf | docx | markdown
     scope: str = "complete"  # complete | notes | exam | revision | questions | answers | formulas | diagrams | tables | references
-    subject: str = "Academic Learning System"
-    author: str = "AI Study Agent"
+    subject: str = ""
+    author: str = ""
 
 
 @router.post("/export")

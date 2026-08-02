@@ -63,8 +63,8 @@ class NotesAgent(BaseAgent):
                 title=title,
                 content=content,
                 scope="complete",
-                author="AI Study Agent",
-                subject="Academic Learning System",
+                author="",
+                subject="",
             )
             file_name = f"notes-{uuid4().hex[:12]}.pdf"
             file_path = UPLOAD_DIR / file_name
