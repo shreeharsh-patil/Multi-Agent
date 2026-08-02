@@ -519,6 +519,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
         google_agent_context = {
             "user_id": user_id,
+            "workspace_id": body.workspace_id,
             "google_access_token": google_access_token,
             "google_refresh_token": google_refresh_token,
             "current_datetime": now_str,
@@ -642,6 +643,7 @@ async def chat_stream(
             now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
             stream_google_context = {
                 "user_id": user_id,
+                "workspace_id": body.workspace_id,
                 "google_access_token": http_request.headers.get("X-Google-Access-Token", ""),
                 "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", ""),
                 "current_datetime": now_str,
