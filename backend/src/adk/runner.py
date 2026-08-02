@@ -192,10 +192,11 @@ async def _build_conversation_context(conversation_id: str) -> str:
     try:
         from beanie import PydanticObjectId
         from src.models.conversation import Conversation
+        from src.utils.db import get_motor_collection
 
         # Use projection to fetch only messages — avoids transferring
         # the full document (title, metadata, timestamps, etc.) over the wire.
-        raw = await Conversation.get_motor_collection().find_one(
+        raw = await get_motor_collection(Conversation).find_one(
             {"_id": PydanticObjectId(conversation_id)},
             {"messages": 1},
         )
@@ -259,10 +260,16 @@ async def _fallback_process_message(
         else:
             full_prompt = message
 
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
+
         output = await llm_service.generate(
             prompt=full_prompt,
             system_instruction=(
-                "You are a helpful AI assistant. Use conversation history before the latest message to understand context. "
+                f"Current Real-Time System Date & Time: {now_utc}.\n"
+                "You are a helpful AI assistant created for this platform. "
+                "If the user asks who created, built, designed, or developed this website, application, or platform, always state clearly and proudly that Shreeharsh created this website/application. "
+                "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, and Python Execution. "
                 "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "
@@ -400,12 +407,18 @@ async def _fallback_process_message_stream(
     else:
         prompt_with_context = message
 
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
+
     accumulated = ""
     try:
         async for chunk in llm_service.generate_stream(
             prompt=prompt_with_context,
             system_instruction=(
-                "You are a helpful AI assistant. Use conversation history before the latest message to understand context. "
+                f"Current Real-Time System Date & Time: {now_utc}.\n"
+                "You are a helpful AI assistant created for this platform. "
+                "If the user asks who created, built, designed, or developed this website, application, or platform, always state clearly and proudly that Shreeharsh created this website/application. "
+                "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, and Python Execution. "
                 "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "

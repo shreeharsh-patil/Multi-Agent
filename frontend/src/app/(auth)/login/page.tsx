@@ -13,12 +13,12 @@ export default function LoginPage() {
       <div className="text-center space-y-6 mb-8">
         <div className="flex justify-center">
           <div className="h-12 w-12 rounded-[8px] border border-border bg-secondary flex items-center justify-center transition-transform hover:scale-105 duration-300 shadow-xs">
-            <Image src="/logo.png" alt="Agents Logo" width={24} height={24} className="h-6 w-6 object-contain" />
+            <Image src="/logo.png" alt="Agentic Logo" width={24} height={24} className="h-6 w-6 object-contain" />
           </div>
         </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-foreground">
-            Agents
+            Agentic
           </h1>
           <p className="text-sm text-muted-foreground">
             An elegant, editorial workspace for collaborative AI agents.
