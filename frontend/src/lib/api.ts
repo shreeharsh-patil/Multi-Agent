@@ -426,7 +426,7 @@ export const api = {
   documents: {
     list: (workspaceId?: string) => fetchApi<DocumentInfo[]>(`/api/documents${workspaceId ? `?workspace_id=${workspaceId === 'unfiled' ? '__unfiled__' : workspaceId}` : ''}`),
     storage: () => fetchApi<{ used: number }>('/api/documents/storage'),
-    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void, workspaceId?: string, driveAccessToken?: string) => {
+    upload: (file: File, userId = 'default', onProgress?: (progress: number) => void, workspaceId?: string, driveAccessToken?: string, driveRefreshToken?: string) => {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('user_id', userId)
@@ -434,6 +434,9 @@ export const api = {
       const headers: Record<string, string> = {}
       if (driveAccessToken) {
         headers['X-Drive-Access-Token'] = driveAccessToken
+      }
+      if (driveRefreshToken) {
+        headers['X-Drive-Refresh-Token'] = driveRefreshToken
       }
       return xhrUploadWithRetry<DocumentInfo & { chunks?: number; imageUrl?: string; driveFileId?: string; driveWebViewLink?: string }>(
         `${BACKEND_URL}/api/documents/upload`,

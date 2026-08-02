@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from beanie import PydanticObjectId
 
 from src.models.user import User
 from src.services.auth.service import create_access_token, verify_access_token
@@ -128,6 +129,11 @@ async def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileR
     user_id = current_user.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    # A stale token can contain an ID from a previous database/environment.
+    # Return a recoverable 404 instead of allowing Beanie to raise a 500.
+    if not PydanticObjectId.is_valid(user_id):
+        raise HTTPException(status_code=404, detail="User not found")
 
     user = await User.get(user_id)
     if not user:

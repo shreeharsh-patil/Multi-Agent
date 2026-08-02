@@ -172,6 +172,8 @@ export interface ChatRequest {
     name: string
     size: number
     documentId?: string
+    driveFileId?: string
+    driveWebViewLink?: string
   }>
   team_agents?: AgentId[]
   workspace_id?: string

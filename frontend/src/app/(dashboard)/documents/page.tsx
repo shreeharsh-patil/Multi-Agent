@@ -134,7 +134,7 @@ export default function DocumentsPage() {
     setUploadProgress(0)
     setError(null)
     try {
-      const res = await api.documents.upload(file, 'default', setUploadProgress, selectedWorkspace === 'all' ? undefined : selectedWorkspace, accessToken)
+      const res = await api.documents.upload(file, 'default', setUploadProgress, selectedWorkspace === 'all' ? undefined : selectedWorkspace, accessToken, refreshToken)
       if (res.success) {
         await fetchDocuments()
       } else {
@@ -185,6 +185,10 @@ export default function DocumentsPage() {
           'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           'text/plain',
           'text/markdown',
+          'image/png',
+          'image/jpeg',
+          'image/gif',
+          'image/webp',
         ]
         const docs = res.data.files.filter(
           (f) => !f.isFolder && supportedMimes.includes(f.mimeType),
@@ -198,7 +202,14 @@ export default function DocumentsPage() {
           if (downloadRes.ok) {
             const blob = await downloadRes.blob()
             const file = new File([blob], doc.name, { type: doc.mimeType })
-            const uploadRes = await api.documents.upload(file, 'default', undefined, undefined, undefined)
+            const uploadRes = await api.documents.upload(
+              file,
+              'default',
+              undefined,
+              selectedWorkspace === 'all' ? undefined : selectedWorkspace,
+              accessToken,
+              refreshToken,
+            )
             if (uploadRes.success) imported++
           }
         }
@@ -208,6 +219,8 @@ export default function DocumentsPage() {
         } else {
           setError('No importable files found in Drive')
         }
+      } else {
+        setError(res.error || 'Could not read files from Google Drive')
       }
     } catch (e) {
       setError('Import from Drive failed')
@@ -244,7 +257,7 @@ export default function DocumentsPage() {
           <label>
             <input
               type="file"
-              accept=".pdf,.docx,.pptx,.txt,.md"
+              accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp,.svg"
               className="hidden"
               onChange={handleUpload}
               disabled={uploading}

@@ -147,7 +147,13 @@ async def _build_attachment_context(
 
         is_image = doc.file_type in IMAGE_EXTENSIONS if doc else False
         content = await _load_attachment_text(doc)
-        if not content and is_image and doc.file_type != "svg" and doc.file_path and os.path.exists(doc.file_path):
+        # Upload-time OCR can return only a generic metadata sentence when the
+        # vision provider is temporarily unavailable. Retry with the actual
+        # image when the user asks a question about it.
+        generic_image_result = bool(
+            content and re.match(r"^(?:Image attachment|Uploaded image)\b", content.strip(), re.IGNORECASE)
+        )
+        if (not content or generic_image_result) and is_image and doc.file_type != "svg" and doc.file_path and os.path.exists(doc.file_path):
             # Retry vision at question time if upload-time analysis was unavailable.
             from src.services.rag.ocr import analyze_image
 
@@ -187,9 +193,17 @@ async def _build_attachment_context(
     if not sections:
         return ""
 
+    image_note = (
+        "At least one attachment is an image. Use its visual analysis to answer questions about what is shown, "
+        "including objects, people, layout, text, diagrams, and visible relationships.\n\n"
+        if any("(png)" in section or "(jpg)" in section or "(jpeg)" in section or "(gif)" in section or "(webp)" in section for section in sections)
+        else ""
+    )
     return (
         "The user attached or referenced the following files in this conversation. Their extracted contents are provided below. "
-        "Answer from this content and identify the file when multiple files are present.\n\n"
+        "Answer from this content and identify the file when multiple files are present. "
+        "Do not say you cannot view an image if visual analysis is included below.\n\n"
+        + image_note
         + "\n\n".join(sections)
         + "\n\nUser's request:\n"
     )

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { SessionProvider as NextAuthSessionProvider, useSession } from 'next-auth/react'
 import { api } from '@/lib/api'
-import { getAccessToken, setAccessToken } from '@/lib/auth-store'
+import { clearAccessToken, getAccessToken, setAccessToken } from '@/lib/auth-store'
 import type { ReactNode } from 'react'
 
 /**
@@ -39,8 +39,20 @@ function AuthTokenBridge() {
 
     const existing = getAccessToken()
     if (existing) {
-      exchanged.current = true
-      window.dispatchEvent(new Event('refresh-conversations-list'))
+      // Validate persisted tokens so a deleted/stale backend user does not
+      // leave features such as Memory stuck on "User not found".
+      api.auth.getMe().then((res) => {
+        if (res.success) {
+          exchanged.current = true
+          window.dispatchEvent(new Event('refresh-conversations-list'))
+        } else {
+          clearAccessToken()
+          exchange()
+        }
+      }).catch(() => {
+        clearAccessToken()
+        exchange()
+      })
       return
     }
 

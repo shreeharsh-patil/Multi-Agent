@@ -26,6 +26,7 @@ import rehypeRaw from 'rehype-raw'
 import { preprocessLaTeX } from '@/lib/latex'
 import { ImagePreviewCard } from '@/components/image-preview-card'
 import { MermaidWorkspace, repairMermaidMarkdown } from '@/components/mermaid-workspace'
+import { getAccessToken } from '@/lib/auth-store'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -108,7 +109,7 @@ function ChatContent() {
     role: 'user' | 'assistant'
     content: string
     agentId?: string
-    attachments?: Array<{ name: string; size: number; documentId?: string }>
+    attachments?: Array<{ name: string; size: number; documentId?: string; driveFileId?: string; driveWebViewLink?: string }>
     citations?: Array<{
       file_name?: string
       page_number?: number
@@ -252,9 +253,9 @@ function ChatContent() {
       const uploadWorkspace = selectedWorkspace !== 'all' && selectedWorkspace !== 'unfiled' ? selectedWorkspace : undefined
       const res = await api.documents.upload(att.file, 'default', (progress) => {
         setAttachments((prev) => prev.map((a) => a.id === att.id ? { ...a, progress } : a))
-      }, uploadWorkspace, googleAccessToken)
+      }, uploadWorkspace, googleAccessToken, googleRefreshToken)
       if (res.success && res.data) {
-        final = { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, progress: 100 }
+        final = { ...att, status: 'done', documentId: res.data.id, imageUrl: res.data.imageUrl, driveFileId: res.data.driveFileId, driveWebViewLink: res.data.driveWebViewLink, progress: 100 }
         if (res.data.driveFileId) {
           final.driveFileId = res.data.driveFileId
           final.driveWebViewLink = res.data.driveWebViewLink
@@ -269,7 +270,7 @@ function ChatContent() {
     setAttachments((prev) => prev.map((a) => a.id === att.id ? final : a))
     uploadPromises.current.delete(att.id)
     return final
-  }, [selectedWorkspace, googleAccessToken])
+  }, [selectedWorkspace, googleAccessToken, googleRefreshToken])
 
   const speakMessage = useCallback(async (id: string, content: string) => {
     if (speakingId === id) {
@@ -750,7 +751,7 @@ function ChatContent() {
           role: m.role as 'user' | 'assistant',
           content: m.content,
           agentId: m.agentId,
-          attachments: (m.metadata as { attachments?: Array<{ name: string; size: number; documentId?: string }> } | undefined)?.attachments,
+          attachments: (m.metadata as { attachments?: Array<{ name: string; size: number; documentId?: string; driveFileId?: string; driveWebViewLink?: string }> } | undefined)?.attachments,
           citations: m.citations,
         })))
       } else {
@@ -837,7 +838,7 @@ function ChatContent() {
     // upload; only kick off a fresh upload for ones that never started
     // (e.g. added programmatically) or previously errored.
     // On regenerate there are no new attachments to process.
-    const uploadedAttachments: Array<{ name: string; size: number; documentId?: string }> = []
+    const uploadedAttachments: Array<{ name: string; size: number; documentId?: string; driveFileId?: string; driveWebViewLink?: string }> = []
     if (!isRegenerate) {
       for (const att of attachments) {
         let updated: Attachment
@@ -853,6 +854,8 @@ function ChatContent() {
           name: att.file.name,
           size: att.file.size,
           documentId: updated.documentId,
+          driveFileId: updated.driveFileId,
+          driveWebViewLink: updated.driveWebViewLink,
         })
       }
       attachments.forEach((att) => { if (att.previewUrl) URL.revokeObjectURL(att.previewUrl) })
@@ -1765,9 +1768,24 @@ function ChatContent() {
                                     a.click()
                                     a.remove()
                                     setTimeout(() => URL.revokeObjectURL(url), 2000)
+                                    return
                                   }
+                                  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+                                  const token = getAccessToken()
+                                  if (token) headers.Authorization = `Bearer ${token}`
+                                  const fallback = await fetch(`${backendUrl}/api/reports`, {
+                                    method: 'POST',
+                                    headers,
+                                    body: JSON.stringify({ title: 'AI Response', content: msg.content, polish: false }),
+                                  })
+                                  if (!fallback.ok) throw new Error(`PDF export failed (${fallback.status})`)
+                                  const data = await fallback.json()
+                                  const downloadUrl = data.data?.downloadUrl || data.downloadUrl
+                                  if (!downloadUrl) throw new Error('PDF download URL was not returned')
+                                  await downloadSecureFile(downloadUrl, `ai-response-${Date.now()}.pdf`)
                                 } catch (err) {
                                   console.error('Failed to export PDF:', err)
+                                  window.alert('PDF export failed. Please try again.')
                                 }
                               }}
                               className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
