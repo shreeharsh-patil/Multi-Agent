@@ -37,11 +37,27 @@ export default function SwarmPage() {
     setAgents(DEFAULT_AGENTS.map((a) => ({ ...a, status: "idle", output: "" })));
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const response = await fetch(`${API_BASE}/api/swarm/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ prompt }),
       });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        let errMsg = `Swarm failed (${response.status})`;
+        try {
+          const parsed = JSON.parse(text);
+          errMsg = parsed.detail || parsed.error || errMsg;
+        } catch {
+          if (text) errMsg = text.slice(0, 150);
+        }
+        throw new Error(errMsg);
+      }
 
       if (!response.body) throw new Error("No response body");
 

@@ -13,13 +13,31 @@ class ResearchAgent(BaseAgent):
 
     async def execute(self, user_input: str, context: dict) -> AgentResult:
         from src.services.llm import llm_service
+        from src.adk.tools import web_search
+        from datetime import datetime, timezone
+
+        now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
+        
+        # Perform live web search to gather up-to-date real-time evidence
+        search_results = ""
+        try:
+            search_results = await web_search(user_input, for_research=True)
+        except Exception as e:
+            search_results = f"Web search note: {e}"
+
+        prompt_with_evidence = (
+            f"User query: {user_input}\n\n"
+            f"Live Real-Time Web Search Findings:\n{search_results}\n\n"
+            f"Provide a comprehensive, accurate, up-to-date report addressing the user's query."
+        )
 
         response = await llm_service.generate(
-            prompt=user_input,
+            prompt=prompt_with_evidence,
             system_instruction=(
-                "You are a Research Agent. Conduct thorough research, compare multiple sources, "
-                "and generate comprehensive reports with proper citations. "
-                "Structure reports with: abstract, methodology, findings, analysis, conclusions, references."
+                f"Current Real-Time System Date & Time: {now_str}.\n"
+                "You are an expert Research Agent with access to live real-time internet search findings. "
+                "Always provide current, up-to-date, accurate information based on the live web search results. "
+                "Use clear Markdown formatting with headings, bold emphasis, bulleted lists, and inline citations [1], [2] when appropriate."
             ),
         )
         return AgentResult(success=True, output=response)
@@ -94,10 +112,13 @@ class ResearchAgent(BaseAgent):
 
         scraped_sources = []
         for url in urls:
-            content = await scrape_page(url)
-            if content and "Error:" not in content:
-                scraped_sources.append({"url": url, "content": content[:12000]})
-                sources_found.append(url)
+            try:
+                content = await scrape_page(url)
+                if content and "error" not in content.lower():
+                    scraped_sources.append({"url": url, "content": content[:12000]})
+                    sources_found.append(url)
+            except Exception as scrape_err:
+                logger.warning(f"Failed to scrape {url}: {scrape_err}")
         stages.append({"id": "sources", "label": "Source review", "detail": f"Read {len(scraped_sources)} primary pages from {len(urls)} candidates"})
 
         # 5. Draft synthesis combining searches + scraped content

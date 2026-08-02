@@ -407,6 +407,7 @@ export function Sidebar() {
               <div key={item.name} className="relative group/tooltip">
                 <Link
                   href={item.href}
+                  prefetch={true}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center rounded-[8px] font-semibold text-sm transition-all duration-200 relative h-10",

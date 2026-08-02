@@ -41,6 +41,18 @@ export default function TaskRunnerPage() {
         body: JSON.stringify({ prompt }),
       });
 
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        let errMsg = `Task execution failed (${response.status})`;
+        try {
+          const parsed = JSON.parse(text);
+          errMsg = parsed.detail || parsed.error || errMsg;
+        } catch {
+          if (text) errMsg = text.slice(0, 150);
+        }
+        throw new Error(errMsg);
+      }
+
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();

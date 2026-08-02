@@ -25,7 +25,13 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
         if agent_id not in {step["agent_id"] for step in steps}:
             steps.append({"agent_id": agent_id, "label": label, "reason": reason, "role": role})
 
-    is_research = _has(text, "research", "sources", "cite", "citation", "current", "latest", "compare")
+    is_research = _has(
+        text,
+        "research", "sources", "cite", "citation", "current", "latest", "compare",
+        "news", "today", "yesterday", "now", "recent", "trending", "price",
+        "update", "version", "event", "who is", "what is the current", "when did",
+        "2025", "2026", "score", "winner", "weather",
+    )
     is_notes = _has(text, "notes", "revision", "study guide", "exam notes", "summarize", "summary")
     is_quiz = _has(text, "quiz", "mcq", "exam", "practice questions", "flashcards")
     is_code = _has(text, "code", "program", "function", "debug", "bug", "react", "python", "javascript", "api")

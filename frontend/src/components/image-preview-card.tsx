@@ -12,6 +12,14 @@ interface ImagePreviewCardProps {
 export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt = 'Generated Image' }: ImagePreviewCardProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+  const imgRef = React.useRef<HTMLImageElement>(null)
+
+  React.useEffect(() => {
+    if (imgRef.current?.complete) {
+      setIsLoading(false)
+    }
+  }, [src])
 
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -22,23 +30,47 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
   return (
     <>
       {/* ChatGPT Style Inline Image Card */}
-      <div className="relative group my-4 max-w-md overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm transition-all hover:shadow-md">
+      <div className="relative group my-4 max-w-md overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm transition-all hover:shadow-md min-h-[220px]">
         {/* Loading Skeleton */}
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/30 animate-pulse min-h-[260px]">
+        {isLoading && !hasError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-muted/30 animate-pulse min-h-[220px]">
             <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
         )}
 
-        <img
-          src={src}
-          alt={alt}
-          onLoad={() => setIsLoading(false)}
-          onClick={() => setIsOpen(true)}
-          className={`w-full h-auto max-h-[420px] object-cover cursor-pointer transition-transform duration-300 group-hover:scale-[1.02] ${
-            isLoading ? 'opacity-0' : 'opacity-100'
-          }`}
-        />
+        {hasError ? (
+          <div className="flex flex-col items-center justify-center p-6 bg-muted/20 text-center min-h-[220px] gap-2">
+            <p className="text-xs text-muted-foreground font-medium">Image preview unavailable inline</p>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download File</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <img
+            ref={imgRef}
+            src={src}
+            alt={alt}
+            onLoad={() => {
+              setIsLoading(false)
+              setHasError(false)
+            }}
+            onError={() => {
+              setIsLoading(false)
+              setHasError(true)
+            }}
+            onClick={() => setIsOpen(true)}
+            className={`w-full h-auto max-h-[420px] object-cover cursor-pointer transition-transform duration-300 group-hover:scale-[1.02] ${
+              isLoading ? 'opacity-0' : 'opacity-100'
+            }`}
+          />
+        )}
 
         {/* Hover Overlay Actions */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-3 pointer-events-none group-hover:pointer-events-auto">
