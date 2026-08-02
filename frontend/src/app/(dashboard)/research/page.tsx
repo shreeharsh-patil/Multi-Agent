@@ -27,7 +27,8 @@ export default function ResearchPage() {
   const [activeStage, setActiveStage] = useState(0)
   const stages = [
     { label: 'Research plan', detail: 'Framing questions and source strategy' },
-    { label: 'Initial search', detail: 'Gathering broad evidence and sources' },
+    { label: 'Sub-question decomposition', detail: 'Splitting the topic into focused angles' },
+    { label: 'Parallel evidence gathering', detail: 'Running concurrent searches across sub-questions' },
     { label: 'Source review', detail: 'Reading and comparing strong pages' },
     { label: 'Draft synthesis', detail: 'Identifying findings and gaps' },
     { label: 'Gap search', detail: 'Running targeted follow-up research' },
