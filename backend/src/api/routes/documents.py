@@ -364,12 +364,29 @@ async def download_document(document_id: str, http_request: Request, download: b
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=doc.drive_web_view_link)
 
-    file_path = doc.file_path
-    if not file_path or not os.path.exists(file_path):
-        if doc.drive_web_view_link and not is_image:
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(url=doc.drive_web_view_link)
-        raise HTTPException(status_code=404, detail="File not found on disk")
+    file_path = doc.file_path or str(UPLOAD_DIR / doc.file_name)
+    if not os.path.exists(file_path):
+        if doc.drive_file_id:
+            try:
+                from src.services.drive.service import drive_service
+                drive_token = http_request.headers.get("X-Drive-Access-Token") or http_request.headers.get("X-Google-Access-Token", "")
+                drive_refresh = http_request.headers.get("X-Drive-Refresh-Token") or http_request.headers.get("X-Google-Refresh-Token", "")
+                if drive_token:
+                    file_bytes = await drive_service.download_file(drive_token, doc.drive_file_id, drive_refresh)
+                    cached_path = Path(UPLOAD_DIR) / doc.file_name
+                    cached_path.write_bytes(file_bytes)
+                    doc.file_path = str(cached_path)
+                    await doc.save()
+                    file_path = str(cached_path)
+                    logger.info(f"Recovered missing file from Google Drive: {doc.file_name}")
+            except Exception as err:
+                logger.warning(f"Failed to recover file {doc.file_name} from Drive: {err}")
+
+        if not os.path.exists(file_path):
+            if doc.drive_web_view_link and not is_image:
+                from fastapi.responses import RedirectResponse
+                return RedirectResponse(url=doc.drive_web_view_link)
+            raise HTTPException(status_code=404, detail="File not found on disk or Google Drive")
 
     media_type_map = {
         "png": "image/png",

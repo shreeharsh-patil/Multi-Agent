@@ -529,6 +529,7 @@ function ChatContent() {
                 role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
                 content: m.content || '',
                 agentId: m.agentId,
+                attachments: m.metadata?.attachments,
               }))
             )
           }
