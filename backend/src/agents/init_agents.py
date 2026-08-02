@@ -41,6 +41,7 @@ def initialize_agents() -> None:
     AgentRegistry.register(QuizAgent())
     AgentRegistry.register(PlannerAgent())
     AgentRegistry.register(ResearchAgent())
+    AgentRegistry.register(DeepResearchAgent())
     AgentRegistry.register(CodingAgent())
     AgentRegistry.register(MemoryAgent())
     AgentRegistry.register(ToolAgent())

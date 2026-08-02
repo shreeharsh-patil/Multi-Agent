@@ -22,16 +22,39 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
   const processedContent = useMemo(() => preprocessLaTeX(content), [content]);
 
   const components = useMemo(() => ({
-    // Responsive Table Wrapper
-    table({ children }: any) {
-      return (
-        <div className="table-responsive my-4 border rounded-lg overflow-x-auto max-w-full">
-          <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            {children}
-          </table>
-        </div>
-      );
-    },
+    // Premium Responsive Markdown Table Rendering
+    table: ({ children }: any) => (
+      <div className="my-4 w-full overflow-x-auto rounded-xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm scrollbar-thin">
+        <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[480px]">
+          {children}
+        </table>
+      </div>
+    ),
+    thead: ({ children }: any) => (
+      <thead className="bg-muted/70 text-foreground font-semibold border-b border-border/80">
+        {children}
+      </thead>
+    ),
+    tbody: ({ children }: any) => (
+      <tbody className="divide-y divide-border/40 text-foreground/90">
+        {children}
+      </tbody>
+    ),
+    tr: ({ children }: any) => (
+      <tr className="hover:bg-muted/40 transition-colors duration-150">
+        {children}
+      </tr>
+    ),
+    th: ({ children }: any) => (
+      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-r border-border/30 last:border-r-0">
+        {children}
+      </th>
+    ),
+    td: ({ children }: any) => (
+      <td className="px-4 py-3 align-top border-r border-border/20 last:border-r-0 leading-relaxed font-normal">
+        {children}
+      </td>
+    ),
     // Responsive Code & Pre blocks
     pre({ children }: any) {
       return (

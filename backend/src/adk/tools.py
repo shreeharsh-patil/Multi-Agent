@@ -412,27 +412,6 @@ async def web_search(query: str, for_research: bool = False) -> str:
     except Exception as e:
         logger.warning(f"Free DuckDuckGo search failed: {e}")
 
-    # 6. Firecrawl Search API (LAST FALLBACK)
-    if settings.firecrawl_api_key:
-        try:
-            logger.info(f"Free engines yielded no results, using Firecrawl fallback search for query: {query}")
-            response = await firecrawl_rotator.execute_request(
-                "POST",
-                "/search",
-                json={"query": query, "limit": max_items, "lang": "en", "scrapeOptions": {"formats": ["markdown"]}}
-            )
-            data = response.get("data", []) or response.get("results", [])
-            if data:
-                results = []
-                for item in data[:max_items]:
-                    title = item.get("title", "No Title")
-                    url = item.get("url", "No URL")
-                    snippet = item.get("markdown", "")[:1000] if for_research else item.get("description", "")[:300]
-                    results.append(f"### {title}\nURL: {url}\n{snippet}\n")
-                return "\n".join(results)
-        except Exception as e:
-            logger.error(f"Firecrawl search fallback failed: {e}")
-
     return f"No search results found for '{query}'."
 
 
@@ -513,6 +492,24 @@ async def scrape_page(url: str) -> str:
                 return obscura_text[:15000]
         except Exception as e:
             logger.warning(f"Obscura scrape failed, continuing with fallback scrapers: {e}")
+
+    # 0. Free Wikipedia / ArXiv / GitHub Open REST API Scanner
+    try:
+        wiki_text = await _wikipedia_arxiv_scrape(url)
+        if wiki_text and len(wiki_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Open REST API Scanner: {url}")
+            return wiki_text[:15000]
+    except Exception as e:
+        logger.warning(f"Open REST API scrape failed for {url}: {e}")
+
+    # 1. Free Trafilatura Main Content Scanner
+    try:
+        traf_text = await _trafilatura_scrape(url)
+        if traf_text and len(traf_text.strip()) > 50:
+            logger.info(f"Successfully scraped URL via Trafilatura: {url}")
+            return traf_text[:15000]
+    except Exception as e:
+        logger.warning(f"Trafilatura scrape failed for {url}: {e}")
 
     # 1. Free Jina AI Reader API (https://r.jina.ai/{url})
     try:
@@ -598,22 +595,56 @@ async def scrape_page(url: str) -> str:
     except Exception as e:
         logger.warning(f"BeautifulSoup scrape failed for {url}: {e}")
 
-    # 7. Firecrawl Scrape API (LAST FALLBACK)
-    if settings.firecrawl_api_key:
-        try:
-            logger.info(f"Free scrapers failed, using Firecrawl fallback to scrape URL: {url}")
-            response = await firecrawl_rotator.execute_request(
-                "POST",
-                "/scrape",
-                json={"url": url, "formats": ["markdown"], "onlyMainContent": True}
-            )
-            markdown = response.get("data", {}).get("markdown", "")
-            if markdown:
-                return markdown[:15000]
-        except Exception as e:
-            logger.error(f"Firecrawl fallback scrape failed for {url}: {e}")
-
     return "Error: Could not scrape page content."
+
+
+async def _wikipedia_arxiv_scrape(url: str) -> str:
+    """Free open REST API scraper for Wikipedia, ArXiv, and GitHub raw URLs."""
+    import urllib.parse
+    client = _get_firecrawl_client()
+    if "wikipedia.org/wiki/" in url:
+        title = url.split("wikipedia.org/wiki/")[-1].split("#")[0]
+        title_decoded = urllib.parse.unquote(title)
+        api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{title_decoded}"
+        resp = await client.get(api_url)
+        if resp.status_code == 200:
+            data = resp.json()
+            extract = data.get("extract", "")
+            if extract:
+                return f"# {data.get('title', title_decoded)}\n\n{extract}"
+    elif "arxiv.org/abs/" in url:
+        paper_id = url.split("arxiv.org/abs/")[-1].split("?")[0]
+        api_url = f"http://export.arxiv.org/api/query?id_list={paper_id}"
+        resp = await client.get(api_url)
+        if resp.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "xml")
+            entry = soup.find("entry")
+            if entry:
+                title = entry.find("title").get_text(strip=True) if entry.find("title") else "ArXiv Paper"
+                summary = entry.find("summary").get_text(strip=True) if entry.find("summary") else ""
+                return f"# {title}\n\n**ArXiv Abstract**:\n{summary}"
+    elif "raw.githubusercontent.com" in url or ("github.com/" in url and "/raw/" in url):
+        resp = await client.get(url)
+        if resp.status_code == 200 and resp.text:
+            return resp.text[:15000]
+    return ""
+
+
+async def _trafilatura_scrape(url: str) -> str:
+    """Free Trafilatura main text & markdown extractor."""
+    try:
+        import trafilatura
+        client = _get_firecrawl_client()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        resp = await client.get(url, headers=headers, follow_redirects=True, timeout=10.0)
+        if resp.status_code == 200 and resp.text:
+            extracted = trafilatura.extract(resp.text, include_formatting=True, include_links=True)
+            if extracted and len(extracted.strip()) > 50:
+                return extracted[:15000]
+    except Exception as exc:
+        logger.warning(f"Trafilatura scrape failed for {url}: {exc}")
+    return ""
 
 
 async def _obscura_scrape(url: str) -> str:

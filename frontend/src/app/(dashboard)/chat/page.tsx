@@ -1763,9 +1763,24 @@ function ChatContent() {
                                   blockquote: ({ children }) => <blockquote className="border-l-2 border-primary/30 pl-3 py-0.5 mb-2 text-muted-foreground italic">{children}</blockquote>,
                                   hr: () => <hr className="my-3 border-border" />,
                                   table: ({ children }) => (
-                                    <div className="table-responsive my-3 border border-border rounded-lg overflow-x-auto max-w-full">
-                                      <table className="w-full text-left border-collapse text-xs sm:text-sm">{children}</table>
+                                    <div className="my-4 w-full overflow-x-auto rounded-xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm scrollbar-thin">
+                                      <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[480px]">{children}</table>
                                     </div>
+                                  ),
+                                  thead: ({ children }) => (
+                                    <thead className="bg-muted/70 text-foreground font-semibold border-b border-border/80">{children}</thead>
+                                  ),
+                                  tbody: ({ children }) => (
+                                    <tbody className="divide-y divide-border/40 text-foreground/90">{children}</tbody>
+                                  ),
+                                  tr: ({ children }) => (
+                                    <tr className="hover:bg-muted/40 transition-colors duration-150">{children}</tr>
+                                  ),
+                                  th: ({ children }) => (
+                                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-r border-border/30 last:border-r-0">{children}</th>
+                                  ),
+                                  td: ({ children }) => (
+                                    <td className="px-4 py-3 align-top border-r border-border/20 last:border-r-0 leading-relaxed font-normal">{children}</td>
                                   ),
                                   div: ({ className, children, ...props }) => {
                                     if (className?.includes('math') || className?.includes('katex-display')) {

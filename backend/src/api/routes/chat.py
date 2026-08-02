@@ -749,8 +749,8 @@ async def chat_stream(
                 # must run through process_dynamic so they receive Google tokens and context.
                 plan_step_agents = {step.get("agent_id") for step in (dynamic_plan or {}).get("steps", [])}
                 is_domain_agent = bool(
-                    routed_agent_id in {"calendar", "contacts", "drive", "gmail", "research", "doctor", "hacker", "planner", "tool", "weather_news", "custom"}
-                    or plan_step_agents.intersection({"calendar", "contacts", "drive", "gmail", "research", "doctor", "hacker", "planner", "tool", "weather_news"})
+                    routed_agent_id in {"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news", "custom"}
+                    or plan_step_agents.intersection({"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news"})
                 )
 
                 if len(dynamic_plan.get("steps", [])) <= 1 and not is_domain_agent:
