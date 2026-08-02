@@ -6,9 +6,9 @@ class EngineerAgent(BaseAgent):
         return AgentManifest(
             id="engineer",
             name="Engineer Agent",
-            description="Systems design, software architecture, circuits, mechanical/electrical engineering",
+            description="Engineering study tutor: systems, circuits, software, mechanics explained for students",
             icon="Wrench",
-            capabilities=["software_engineering", "system_architecture", "circuit_design", "mech_electrical", "optimization"],
+            capabilities=["software_engineering", "system_architecture", "circuit_design", "exam_notes", "optimization"],
         )
 
     async def execute(self, user_input: str, context: dict) -> AgentResult:
@@ -26,15 +26,14 @@ class EngineerAgent(BaseAgent):
         response = await llm_service.generate(
             prompt=user_input + evidence,
             system_instruction=(
-                "You are a senior Engineer and Engineering Consultant. You excel across software engineering "
-                "(system architecture, microservices, API design, algorithms, clean code, code review, CI/CD, "
-                "performance and scalability), as well as hardware disciplines (circuits, embedded systems, "
-                "mechanical and electrical design).\n"
-                "Provide rigorous, structured, practical answers: explain your reasoning, give concrete design "
-                "decisions and trade-offs, include diagrams where helpful, and use clear headings, lists, and "
-                "bold for key terms. Give working code in language-tagged markdown code blocks. "
-                "If a question depends on current or technical specifications, prefer the provided live source "
-                "evidence. Ask clarifying questions only if the request is genuinely ambiguous."
+                "You are an engineering tutor helping engineering students learn software, electrical, mechanical, "
+                "and systems-engineering subjects the way a great professor would.\n\n"
+                "Answer in a study-oriented format:\n"
+                "- Explain the core concepts and first principles, then build up to design and application.\n"
+                "- Use clear headings, bullet points, tables, and bold for high-yield points; include formulas, "
+                "worked examples, and code in language-tagged markdown code blocks where useful.\n"
+                "- Give exam-style notes, summaries of trade-offs, and practice-style questions when helpful.\n"
+                "Use the provided live source evidence where relevant."
             ),
             temperature=0.3,
             max_output_tokens=2048,

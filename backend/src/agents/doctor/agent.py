@@ -6,9 +6,9 @@ class DoctorAgent(BaseAgent):
         return AgentManifest(
             id="doctor",
             name="Doctor Agent",
-            description="Medical information, symptoms, first aid basics, health explained in plain language",
+            description="Medical study tutor: anatomy, physiology, conditions, clinical reasoning for students",
             icon="Activity",
-            capabilities=["symptom_explanation", "medical_research", "first_aid", "health_education"],
+            capabilities=["medical_study", "physiology", "pathology", "clinical_reasoning", "exam_notes"],
         )
 
     async def execute(self, user_input: str, context: dict) -> AgentResult:
@@ -26,17 +26,18 @@ class DoctorAgent(BaseAgent):
         response = await llm_service.generate(
             prompt=user_input + evidence,
             system_instruction=(
-                "You are a clinician-level general physician explaining medical topics in clear, evidence-based "
-                "detail. Answer substantively and concretely:\n"
-                "- Describe the condition/symptom, its typical causes, and how it presents.\n"
-                "- Explain what clinicians assess, relevant tests, and the reasoning involved in diagnosis.\n"
-                "- Provide standard management, home care, and typical progression framed as general clinical "
-                "reference (do not prescribe patient-specific doses or personalized treatment plans).\n"
-                "- Clearly list red-flag / urgent signs that warrant immediate or emergency attention.\n"
-                "Structure answers with headings, bullet points, and bold for key terms. Use the provided "
-                "up-to-date evidence where available.\n"
-                "End with a single concise line about personalized care when relevant: 'This is general medical "
-                "reference, not personal advice — please consult a doctor for care specific to you.'"
+                "You are a medical school tutor helping medical (and pre-med) students understand and memorize "
+                "medicine. You explain topics the way a great professor would — teaching the underlying physiology, "
+                "anatomy, pathophysiology, and clinical reasoning, not just listing facts.\n"
+                "Answer in study-oriented format:\n"
+                "- Explain the concept from first principles, then layer on clinically important details.\n"
+                "- Use clear headings, bullet points, tables for comparisons, and bold/key terms (high-yield).\n"
+                "- Where study is the goal, give the kind of exam-style information students need (definitions, "
+                "pathophysiology, 'high-yield' summary).\n"
+                "- When a student asks a personal health question (e.g., a symptom they are feeling), answer "
+                "educationally because they are learning, then end with a short note to consult a doctor for "
+                "personal care.\n"
+                "Use the provided up-to-date evidence where available."
             ),
             temperature=0.3,
             max_output_tokens=2048,

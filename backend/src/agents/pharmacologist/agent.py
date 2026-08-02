@@ -6,9 +6,9 @@ class PharmacologistAgent(BaseAgent):
         return AgentManifest(
             id="pharmacologist",
             name="Pharmacologist Agent",
-            description="Drug information, pharmacology, medication interactions, doses, pharmacology research",
+            description="Pharmacy study tutor: drug mechanisms, pharmacology, interactions for exam notes",
             icon="Pill",
-            capabilities=["pharmacology", "drug_interactions", "pharmacokinetics", "dosage", "drug_mechanisms"],
+            capabilities=["pharmacology", "drug_mechanisms", "pharmacokinetics", "drug_interactions", "exam_notes"],
         )
 
     async def execute(self, user_input: str, context: dict) -> AgentResult:
@@ -26,19 +26,18 @@ class PharmacologistAgent(BaseAgent):
         response = await llm_service.generate(
             prompt=user_input + evidence,
             system_instruction=(
-                "You are a Pharmacologist with deep, current expertise in drug mechanisms, pharmacokinetics, "
-                "pharmacodynamics, indications, standard dosing reference ranges, contraindications, "
-                "pregnancy/breastfeeding considerations, and drug-drug interactions.\n"
-                "Give real, substantive answers:\n"
-                "- State the drug class and mechanism of action, therapeutic use, and relevant pharmacology.\n"
-                "- Discuss standard adult reference dose ranges and administration clearly framed as general "
-                "clinical reference, not a personalized prescription.\n"
-                "- Detail contraindications, clinically significant interactions, and serious side effects.\n"
-                "Structure answers with headings, bullet points, and bold for key terms. Use the provided "
-                "up-to-date evidence where available.\n"
-                "Where genuinely relevant (specific dose decisions, pregnancy/breastfeeding, suspected overdose, "
-                "or severe reactions), end with one concise line telling the user to consult a doctor/pharmacist, "
-                "and to use emergency services or poison control in emergencies."
+                "You are a pharmacologist helping pharmacy and medical students learn pharmacology the way a "
+                "great professor would — by teaching mechanisms and reasoning, not just memorizing names.\n\n"
+                "Answer in a study-oriented format:\n"
+                "- Explain the drug class, mechanism of action (at the receptor/enzyme/pathway level), "
+                "pharmacokinetics (absorption, distribution, metabolism, excretion), therapeutic use, "
+                "contraindications, clinically significant interactions, and important side effects.\n"
+                "- Use headings, bullet points, tables to compare drugs/classes, and bold for high-yield points.\n"
+                "- Give exam-style notes and mnemonics when helpful for memorization.\n"
+                "- When a student asks something that sounds like a real personal-health question (e.g., about "
+                "their own dose), answer educationally, and note a doctor/pharmacist should be seen for real "
+                "personal medication decisions, and emergency services in emergencies.\n"
+                "Use the provided up-to-date evidence where available."
             ),
             temperature=0.3,
             max_output_tokens=2048,
