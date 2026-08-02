@@ -7,15 +7,15 @@ from src.services.llm import llm_service
 from src.utils.logger import logger
 
 
-async def _execute_web_search_broad(query: str) -> list[dict]:
+async def _execute_web_search_broad(query: str) -> str:
     """Execute live web search across multiple free search engines without API keys."""
     try:
-        from src.services.rag.web_search import search_duckduckgo
-        results = await search_duckduckgo(query, max_results=8)
-        return results or []
+        from src.adk.tools import web_search
+        res = await web_search(query, for_research=True)
+        return res or ""
     except Exception as err:
         logger.warning(f"DeepResearch web search failed for '{query}': {err}")
-        return []
+        return ""
 
 
 async def _scrape_page_deep(url: str) -> str:
@@ -88,25 +88,20 @@ Return ONLY a JSON array of 6 strings, e.g. ["query 1", "query 2", "query 3", "q
 
         # Step 2: Parallel Search Execution across all sub-queries
         search_tasks = [_execute_web_search_broad(q) for q in sub_queries]
-        search_results_nested = await asyncio.gather(*search_tasks)
+        search_results_raw = await asyncio.gather(*search_tasks)
 
-        all_sources = []
+        combined_search_text = []
         urls_to_scrape = []
-        for res_list in search_results_nested:
-            for item in res_list:
-                if isinstance(item, dict) and item.get("link"):
-                    all_sources.append(item)
-                    if len(urls_to_scrape) < 8 and item["link"] not in urls_to_scrape:
-                        urls_to_scrape.append(item["link"])
+        url_pattern = re.compile(r"https?://[^\s\)\>\"]+")
 
-        # Deduplicate sources
-        unique_sources = {}
-        for s in all_sources:
-            link = s.get("link")
-            if link and link not in unique_sources:
-                unique_sources[link] = s
-
-        sources_list = list(unique_sources.values())[:15]
+        for res_text in search_results_raw:
+            if res_text and isinstance(res_text, str) and res_text.strip():
+                combined_search_text.append(res_text.strip())
+                found_urls = url_pattern.findall(res_text)
+                for u in found_urls:
+                    u_clean = u.rstrip(".,;)")
+                    if len(urls_to_scrape) < 8 and u_clean not in urls_to_scrape and not u_clean.endswith((".png", ".jpg", ".svg", ".css", ".js")):
+                        urls_to_scrape.append(u_clean)
 
         # Step 3: High-Parallel Deep Page Scraping
         scraped_pages = []
@@ -114,20 +109,13 @@ Return ONLY a JSON array of 6 strings, e.g. ["query 1", "query 2", "query 3", "q
             scrape_tasks = [_scrape_page_deep(u) for u in urls_to_scrape[:8]]
             scraped_texts = await asyncio.gather(*scrape_tasks)
             for url, text in zip(urls_to_scrape[:8], scraped_texts):
-                if text.strip() and len(text.strip()) > 100:
+                if text and text.strip() and len(text.strip()) > 100:
                     scraped_pages.append(f"### Source URL: {url}\n{text[:3000]}\n")
 
         # Combine Evidence Corpus
-        evidence_blocks = []
-        for idx, s in enumerate(sources_list, 1):
-            title = s.get("title", "Reference Source")
-            link = s.get("link", "")
-            snippet = s.get("snippet", "")
-            evidence_blocks.append(f"[{idx}] **{title}**\nURL: {link}\nSnippet: {snippet}")
-
-        corpus_text = "## Live Primary Sources:\n\n" + "\n\n".join(evidence_blocks)
+        corpus_text = "## Live Primary Web Search Findings:\n\n" + "\n\n---\n\n".join(combined_search_text[:6])
         if scraped_pages:
-            corpus_text += "\n\n## Deep Page Extracts:\n\n" + "\n---\n".join(scraped_pages)
+            corpus_text += "\n\n## Deep Page Content Extracts:\n\n" + "\n---\n".join(scraped_pages)
 
         # Step 4: Multi-Page Comprehensive Synthesis (10 Detailed Sections)
         synthesis_prompt = f"""Write an exhaustive, publication-quality, multi-page deep research report on the topic below.
