@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Download, Maximize2, X } from 'lucide-react'
+import { Download, Maximize2, X, RefreshCw } from 'lucide-react'
 import { downloadSecureFile } from '@/lib/download'
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 interface ImagePreviewCardProps {
   src: string
@@ -13,15 +15,23 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const imgRef = React.useRef<HTMLImageElement>(null)
 
   const imageSrc = React.useMemo(() => {
-    let s = src
+    let s = src?.trim() || ''
+    if (s.startsWith('/api/')) {
+      s = `${BACKEND_URL}${s}`
+    }
     if (s.includes('/api/documents/') && s.includes('/download')) {
       s = s.replace('/download', '/file')
     }
-    return s.replace(/[?&]download=true/g, '')
-  }, [src])
+    s = s.replace(/[?&]download=true/g, '')
+    if (retryCount > 0) {
+      s += (s.includes('?') ? '&' : '?') + `retry=${retryCount}`
+    }
+    return s
+  }, [src, retryCount])
 
   React.useEffect(() => {
     setIsLoading(true)
@@ -50,8 +60,20 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
 
         {hasError ? (
           <div className="flex flex-col items-center justify-center p-6 bg-muted/20 text-center min-h-[220px] gap-2">
-            <p className="text-xs text-muted-foreground font-medium">Image preview unavailable inline</p>
-            <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-muted-foreground font-medium">Image preview loading issue</p>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setHasError(false)
+                  setIsLoading(true)
+                  setRetryCount((prev) => prev + 1)
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Retry Loading</span>
+              </button>
               <button
                 type="button"
                 onClick={handleDownload}
