@@ -29,6 +29,7 @@ import {
   BrainCircuit,
   Workflow,
   ListChecks,
+  FileCode,
   GalleryVerticalEnd,
   LibraryBig,
   BarChart2,
@@ -44,6 +45,7 @@ const navigation = [
   { name: 'Workspace', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Agent Swarm', href: '/swarm', icon: Users },
   { name: 'Task Runner', href: '/task-runner', icon: ListChecks },
+  { name: 'Code Agent', href: '/code-agent', icon: FileCode },
   { name: 'Search', href: '/research', icon: Search },
   { name: 'Library', href: '/documents', icon: BookOpen },
   { name: 'Drive', href: '/drive', icon: HardDrive },
@@ -333,27 +335,12 @@ export function Sidebar() {
     )
   }
 
-  return (
+  const renderSidebarContent = (isMobile: boolean) => (
     <>
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-      <aside 
-        className={cn(
-          "flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out shrink-0 overflow-hidden overflow-x-hidden relative z-40",
-          mobileMenuOpen
-            ? "flex! fixed! inset-y-0 left-0 z-50 w-[280px] h-full animate-in slide-in-from-left duration-200 shadow-2xl"
-            : "hidden lg:flex",
-          collapsed ? "lg:w-[68px]" : "lg:w-[280px]"
-        )}
-      >
       {/* Top Header Section */}
       <div className="p-4 flex flex-col gap-4 border-b border-border shrink-0">
         <div className="flex items-center justify-between h-9">
-          {collapsed ? (
+          {collapsed && !isMobile ? (
             <button
               onClick={toggle}
               className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all hover:bg-secondary/40 duration-200 shadow-xs shrink-0 mx-auto cursor-pointer"
@@ -372,11 +359,11 @@ export function Sidebar() {
                 </span>
               </Link>
               <button
-                onClick={mobileMenuOpen ? () => setMobileMenuOpen(false) : toggle}
+                onClick={isMobile ? () => setMobileMenuOpen(false) : toggle}
                 className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                title={mobileMenuOpen ? "Close menu" : "Collapse sidebar (Ctrl+B)"}
+                title={isMobile ? "Close menu" : "Collapse sidebar (Ctrl+B)"}
               >
-                {mobileMenuOpen ? (
+                {isMobile ? (
                   <X className="h-4.5 w-4.5 stroke-[1.5]" />
                 ) : (
                   <PanelLeftClose className="h-4.5 w-4.5 stroke-[1.5]" />
@@ -389,7 +376,7 @@ export function Sidebar() {
         {/* Workspace Selector */}
         <div className={cn(
           "transition-all duration-300 ease-in-out overflow-hidden",
-          collapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-9"
+          (collapsed && !isMobile) ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-9"
         )}>
           <div className="relative">
             <button
@@ -398,10 +385,10 @@ export function Sidebar() {
             >
               <div className="flex items-center gap-2 truncate">
                 <div className="h-2 w-2 rounded-full bg-[#1f8a65]" />
-                <span className="truncate">                    {activeWorkspace === 'all'
-                      ? 'Personal Space'
-                      : workspaces.find((w) => w.id === activeWorkspace)?.name || 'Personal Space'}
-
+                <span className="truncate">
+                  {activeWorkspace === 'all'
+                    ? 'Personal Space'
+                    : workspaces.find((w) => w.id === activeWorkspace)?.name || 'Personal Space'}
                 </span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground stroke-[1.5]" />
@@ -415,15 +402,15 @@ export function Sidebar() {
                     <button
                       key={space.id}
                       onClick={() => {
-                    setActiveWorkspace(space.id)
-                    setShowWorkspaceMenu(false)
-                    window.dispatchEvent(new CustomEvent('workspace-changed', { detail: space.id }))
-                  }}
-                  className={cn(
-                    "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
-                    activeWorkspace === space.id
-                      ? "bg-secondary text-[#26251e] font-semibold"
-                      : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
+                        setActiveWorkspace(space.id)
+                        setShowWorkspaceMenu(false)
+                        window.dispatchEvent(new CustomEvent('workspace-changed', { detail: space.id }))
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer",
+                        activeWorkspace === space.id
+                          ? "bg-secondary text-[#26251e] font-semibold"
+                          : "text-muted-foreground hover:text-[#26251e] hover:bg-secondary/50"
                       )}
                     >
                       {space.name}
@@ -440,13 +427,13 @@ export function Sidebar() {
           onClick={openCommandPalette}
           className={cn(
             'flex h-9 items-center rounded-[8px] border border-border bg-card text-muted-foreground shadow-xs transition-colors hover:bg-secondary/40 hover:text-foreground',
-            collapsed ? 'w-9 justify-center self-center' : 'w-full gap-2.5 px-3',
+            (collapsed && !isMobile) ? 'w-9 justify-center self-center' : 'w-full gap-2.5 px-3',
           )}
           title="Search workspace (Ctrl+K)"
           aria-label="Search workspace"
         >
           <Search className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-          {!collapsed ? (
+          {(!collapsed || isMobile) ? (
             <>
               <span className="flex-1 text-left text-xs">Search workspace</span>
               <kbd className="rounded-[4px] border border-border bg-secondary px-1.5 py-0.5 text-[9px] text-muted-foreground">Ctrl K</kbd>
@@ -456,10 +443,10 @@ export function Sidebar() {
 
         {/* New Chat Button */}
         <button
-          onClick={handleNewChat}
+          onClick={() => { handleNewChat(); if (isMobile) setMobileMenuOpen(false); }}
           className={cn(
             "flex items-center justify-center rounded-[8px] border border-border text-[13px] font-semibold text-foreground transition-all active:scale-[0.98] shadow-xs bg-card cursor-pointer",
-            isCollapsed 
+            (isCollapsed && !isMobile)
               ? "h-9 w-9 hover:bg-secondary/40 mx-auto gap-0" 
               : "w-full py-2 hover:bg-secondary/40 gap-2"
           )}
@@ -468,7 +455,7 @@ export function Sidebar() {
           <Plus className="h-4 w-4 stroke-[1.5]" />
           <span className={cn(
             "transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden",
-            collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+            (collapsed && !isMobile) ? "opacity-0 w-0" : "opacity-100 w-auto"
           )}>
             New Chat
           </span>
@@ -487,7 +474,7 @@ export function Sidebar() {
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center rounded-[8px] font-semibold text-sm transition-all duration-200 relative h-10",
-                    collapsed 
+                    (collapsed && !isMobile)
                       ? "justify-center h-10 w-10 mx-auto gap-0 px-0" 
                       : "w-full px-3 py-2 gap-3",
                     isActive 
@@ -498,14 +485,14 @@ export function Sidebar() {
                   <item.icon className={cn("h-4.5 w-4.5 stroke-[1.5] shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
                   <span className={cn(
                     "transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden truncate",
-                    collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+                    (collapsed && !isMobile) ? "opacity-0 w-0" : "opacity-100 w-auto"
                   )}>
                     {item.name}
                   </span>
                 </Link>
 
                 {/* Collapsed Tooltip */}
-                {collapsed && (
+                {collapsed && !isMobile && (
                   <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 rounded-[6px] bg-card border border-border text-xs font-semibold text-foreground whitespace-nowrap opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-150 z-50 shadow-xs">
                     {item.name}
                   </div>
@@ -515,8 +502,8 @@ export function Sidebar() {
           })}
         </div>
 
-        {/* Documents Explorer Section (Only on Chat route and when not collapsed) */}
-        {isChatRoute && !collapsed && (
+        {/* Documents Explorer Section */}
+        {isChatRoute && (!collapsed || isMobile) && (
           <div className="space-y-2 pt-4 border-t border-border">
             <div className="px-3 flex items-center justify-between">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider select-none">
@@ -546,6 +533,7 @@ export function Sidebar() {
                         onClick={() => {
                           const event = new CustomEvent('open-document-tab', { detail: doc })
                           window.dispatchEvent(event)
+                          if (isMobile) setMobileMenuOpen(false)
                         }}
                         className="w-full flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-left text-xs transition-all hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
                       >
@@ -560,10 +548,10 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* History / Conversations Section (Hidden when collapsed) */}
+        {/* History / Conversations Section */}
         <div className={cn(
           "transition-all duration-300 ease-in-out overflow-hidden",
-          collapsed ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-auto pt-4 border-t border-border"
+          (collapsed && !isMobile) ? "opacity-0 h-0 pointer-events-none" : "opacity-100 h-auto pt-4 border-t border-border"
         )}>
           {conversations.length > 0 && (
             <>
@@ -581,38 +569,24 @@ export function Sidebar() {
               {renderHistorySection("Yesterday", yesterday)}
               {renderHistorySection("Previous 7 Days", previous7Days)}
               {renderHistorySection("Older", older)}
-              {conversationSearch.trim() && today.length + yesterday.length + previous7Days.length + older.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">No chats found.</p>
-              )}
             </>
           )}
         </div>
       </div>
 
       {/* Footer Profile Section */}
-      <div className={cn("p-4 border-t border-border bg-secondary/85 shrink-0", collapsed ? "px-2" : "px-4")}>
-        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
+      <div className={cn("p-4 border-t border-border bg-secondary/85 shrink-0", (collapsed && !isMobile) ? "px-2" : "px-4")}>
+        <div className={cn("flex items-center", (collapsed && !isMobile) ? "justify-center" : "gap-3")}>
           <div className="relative group/tooltip">
-            <Avatar className="h-9 w-9 border border-border cursor-pointer shrink-0" onClick={() => router.push('/settings')}>
+            <Avatar className="h-9 w-9 border border-border cursor-pointer shrink-0" onClick={() => { router.push('/settings'); if (isMobile) setMobileMenuOpen(false); }}>
               <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
               <AvatarFallback className="bg-card text-xs text-muted-foreground font-semibold uppercase">
                 {session?.user?.name?.charAt(0) ?? 'U'}
               </AvatarFallback>
             </Avatar>
-
-            {/* Collapsed profile tooltip */}
-            {collapsed && (
-              <div className="absolute left-full bottom-0 ml-3 p-3 rounded-[8px] bg-card border border-border shadow-xs z-50 flex flex-col gap-1.5 pointer-events-none opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
-                <span className="text-xs font-semibold text-[#26251e] whitespace-nowrap">{session?.user?.name}</span>
-                <span className="text-[10px] text-muted-foreground whitespace-nowrap">{session?.user?.email}</span>
-                <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-[4px] font-bold w-fit uppercase tracking-wider">
-                  Pro
-                </span>
-              </div>
-            )}
           </div>
 
-          {!collapsed && (
+          {(!collapsed || isMobile) && (
             <div className="flex-1 flex items-center justify-between transition-all duration-300 ease-in-out min-w-0">
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -630,6 +604,7 @@ export function Sidebar() {
               
               <Link 
                 href="/settings"
+                onClick={() => setMobileMenuOpen(false)}
                 className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-2"
                 title="Settings"
               >
@@ -639,7 +614,33 @@ export function Sidebar() {
           )}
         </div>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile Drawer (Fixed Overlay — Never affects or shrinks background layout) */}
+      {mobileMenuOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 z-50 w-[280px] h-full bg-secondary border-r border-border flex flex-col animate-in slide-in-from-left duration-200 shadow-2xl lg:hidden overflow-hidden">
+            {renderSidebarContent(true)}
+          </aside>
+        </>
+      )}
+
+      {/* Desktop Sidebar (In-flow flex layout item strictly for lg+ screens) */}
+      <aside 
+        className={cn(
+          "hidden lg:flex flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out shrink-0 overflow-hidden overflow-x-hidden relative z-40",
+          collapsed ? "w-[68px]" : "w-[280px]"
+        )}
+      >
+        {renderSidebarContent(false)}
+      </aside>
     </>
   )
 }

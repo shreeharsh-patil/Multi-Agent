@@ -36,6 +36,13 @@ const courierPrime = Courier_Prime({
   display: 'swap',
 })
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
+
 export const metadata: Metadata = {
   title: 'Agentic — AI Agent Workspace',
   description: 'Chat with multiple specialized AI agents, research the web, query documents with RAG, generate quizzes, create study plans, and build custom agents — all in one collaborative workspace.',
