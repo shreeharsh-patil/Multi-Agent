@@ -116,12 +116,26 @@ async def _generate_cloudflare(prompt: str) -> tuple[bytes, str | None]:
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
+            "Accept": "image/png",
         }
         try:
             async with httpx.AsyncClient(timeout=60) as http:
                 response = await http.post(url, headers=headers, json={"prompt": prompt})
                 if response.status_code < 400:
-                    return response.content, None
+                    content_type = response.headers.get("content-type", "").lower()
+                    content = response.content
+                    if "application/json" in content_type or content.startswith(b"{"):
+                        try:
+                            data = response.json()
+                            if isinstance(data, dict) and "result" in data:
+                                res_val = data["result"]
+                                if isinstance(res_val, dict) and "image" in res_val:
+                                    return base64.b64decode(res_val["image"]), None
+                                elif isinstance(res_val, str):
+                                    return base64.b64decode(res_val), None
+                        except Exception as parse_err:
+                            logger.warning(f"Failed to parse Cloudflare JSON response: {parse_err}")
+                    return content, None
                 logger.warning(f"Cloudflare pair (Account: {acc_id[:6]}...) returned HTTP {response.status_code}, rotating to next matched pair...")
                 last_error = f"HTTP {response.status_code}"
         except Exception as err:

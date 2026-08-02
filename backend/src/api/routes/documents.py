@@ -340,13 +340,11 @@ async def get_document(document_id: str, http_request: Request) -> dict:
 
 
 @router.get("/{document_id}/download")
-async def download_document(document_id: str, http_request: Request):
-    """Serve an uploaded file for inline preview.
+async def download_document(document_id: str, http_request: Request, download: bool = False):
+    """Serve an uploaded file for inline preview or direct attachment download.
 
-    If a Google Drive ``webViewLink`` is available the request is redirected
-    to Drive so the user gets Drive's built-in viewer (handles PDFs, images,
-    DOCX, etc. perfectly).  Falls back to the local file when no Drive link
-    exists (e.g. upload without a Google session).
+    If download=True, forces direct file attachment download without redirecting.
+    If download=False and a Google Drive webViewLink is available, redirects to Drive.
     """
     doc = await Document.get(document_id)
     if not doc:
@@ -358,9 +356,8 @@ async def download_document(document_id: str, http_request: Request):
         if not doc.workspace_id or not await can_use_workspace(doc.workspace_id, resolved_user_id):
             raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
-    # Prefer Drive's viewer when available — it survives server restarts
-    # and provides a better preview experience (especially for PDFs).
-    if doc.drive_web_view_link:
+    # Only redirect to Drive preview if this is an inline view request and not an explicit file download
+    if doc.drive_web_view_link and not download:
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=doc.drive_web_view_link)
 
@@ -384,7 +381,7 @@ async def download_document(document_id: str, http_request: Request):
     media_type = media_type_map.get(doc.file_type, "application/octet-stream")
 
     inline_types = {"pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "txt", "md"}
-    disposition = "inline" if doc.file_type in inline_types else "attachment"
+    disposition = "attachment" if download else ("inline" if doc.file_type in inline_types else "attachment")
 
     return FileResponse(
         path=file_path,

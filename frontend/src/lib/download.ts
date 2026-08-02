@@ -1,10 +1,17 @@
 import { getAccessToken } from '@/lib/auth-store';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
 /**
  * Downloads a file securely via fetch blob without exposing the backend URL
  * or redirecting the browser away from the application.
  */
 export async function downloadSecureFile(url: string, fileName?: string): Promise<void> {
+  let targetUrl = url.startsWith('/api/') ? `${BACKEND_URL}${url}` : url;
+  if (targetUrl.includes('/api/documents/') && targetUrl.includes('/download') && !targetUrl.includes('download=true')) {
+    targetUrl += targetUrl.includes('?') ? '&download=true' : '?download=true';
+  }
+
   try {
     const token = getAccessToken();
     const headers: Record<string, string> = {};
@@ -12,7 +19,7 @@ export async function downloadSecureFile(url: string, fileName?: string): Promis
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const res = await fetch(url, { headers });
+    const res = await fetch(targetUrl, { headers });
     if (!res.ok) {
       throw new Error(`Download failed with status ${res.status}`);
     }
@@ -46,7 +53,7 @@ export async function downloadSecureFile(url: string, fileName?: string): Promis
   } catch (err) {
     console.error('Secure download failed:', err);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = targetUrl;
     if (fileName) a.download = fileName;
     document.body.appendChild(a);
     a.click();

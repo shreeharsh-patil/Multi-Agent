@@ -1560,9 +1560,29 @@ function ChatContent() {
                                 remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
                                 rehypePlugins={[rehypeKatex, rehypeRaw]}
                                 components={{
-                                  a: ({ href, children }) => (
-                                    <a href={resolveApiUrl(href)} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
-                                  ),
+                                  a: ({ href, children }) => {
+                                    const resolved = resolveApiUrl(href)
+                                    const textContent = typeof children === 'string' ? children.toLowerCase() : ''
+                                    const isDownload = resolved?.includes('/download') || textContent.includes('download')
+                                    if (isDownload && resolved) {
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            downloadSecureFile(resolved, 'generated-image.png')
+                                          }}
+                                          className="text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer inline-flex items-center gap-1 font-medium"
+                                        >
+                                          {children}
+                                        </button>
+                                      )
+                                    }
+                                    return (
+                                      <a href={resolved} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
+                                    )
+                                  },
                                   img: ({ src, alt }) => typeof src === 'string' ? (
                                     <ImagePreviewCard src={resolveApiUrl(src) || src} alt={alt || 'Generated image'} />
                                   ) : null,

@@ -7,7 +7,11 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import { preprocessLaTeX } from "@/lib/latex";
+import { downloadSecureFile } from "@/lib/download";
 import { ImagePreviewCard } from "@/components/image-preview-card";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const resolveApiUrl = (url?: string) => url?.startsWith('/api/') ? `${BACKEND_URL}${url}` : url;
 
 interface MarkdownRendererProps {
   content: string;
@@ -68,9 +72,27 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           },
           // Responsive Link & Word Wrap
           a({ href, children }) {
+            const resolved = resolveApiUrl(href);
+            const textContent = typeof children === 'string' ? children.toLowerCase() : '';
+            const isDownload = resolved?.includes('/download') || textContent.includes('download');
+            if (isDownload && resolved) {
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    downloadSecureFile(resolved, 'downloaded-file');
+                  }}
+                  className="text-primary underline hover:underline break-all font-medium cursor-pointer inline-flex items-center gap-1"
+                >
+                  {children}
+                </button>
+              );
+            }
             return (
               <a
-                href={href}
+                href={resolved}
                 target="_blank"
                 rel="noreferrer"
                 className="text-primary hover:underline break-all"
@@ -82,7 +104,8 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           // Responsive ChatGPT Style Image Preview
           img({ src, alt }) {
             if (typeof src !== 'string') return null;
-            return <ImagePreviewCard src={src} alt={alt || 'Generated image'} />;
+            const resolvedSrc = resolveApiUrl(src) || src;
+            return <ImagePreviewCard src={resolvedSrc} alt={alt || 'Generated image'} />;
           },
         }}
       >
