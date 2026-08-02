@@ -128,13 +128,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+origins = [o.strip().rstrip("/") for o in settings.allowed_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    # Also support Vercel preview deployments without adding every generated
+    # preview URL to Render environment variables.
+    allow_origin_regex=r"^https://[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-User-Id", "X-Google-Access-Token", "X-Drive-Access-Token", "X-Drive-Refresh-Token"],
+    # The frontend sends integration tokens conditionally. Reflecting the
+    # requested headers prevents a newly added optional integration header
+    # from breaking the browser preflight on a deployed backend.
+    allow_headers=["*"],
 )
 app.middleware("http")(jwt_auth_middleware)
 app.middleware("http")(error_handler_middleware)

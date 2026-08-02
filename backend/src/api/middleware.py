@@ -6,6 +6,7 @@ from src.utils.logger import logger
 from src.utils.exceptions import AppException
 from src.services.auth.service import verify_access_token
 import time
+import re
 
 # Paths that do NOT require authentication
 PUBLIC_PATHS = {
@@ -175,14 +176,15 @@ async def jwt_auth_middleware(request: Request, call_next):
 
 
 def _cors_headers(request: Request) -> dict:
-    origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
-    origin = request.headers.get("origin", "")
-    if origin in origins or "*" in origins:
+    origins = [o.strip().rstrip("/") for o in settings.allowed_origins.split(",") if o.strip()]
+    origin = request.headers.get("origin", "").rstrip("/")
+    is_vercel_origin = bool(re.match(r"^https://[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.vercel\.app$", origin))
+    if origin in origins or "*" in origins or is_vercel_origin:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id, X-Google-Access-Token, X-Drive-Access-Token, X-Drive-Refresh-Token",
+            "Access-Control-Allow-Headers": "*",
         }
     return {}
 
