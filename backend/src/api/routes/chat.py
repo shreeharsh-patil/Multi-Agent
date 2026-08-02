@@ -680,10 +680,6 @@ async def chat_stream(
                 "conversation_history": history_snippet,
             }
 
-            async def orchestration_event(event_name: str, data: dict):
-                yield_value = {"event": event_name, "data": data}
-                event_queue.append(yield_value)
-
             event_queue: list[dict] = []
 
             if routed_agent_id == "image":
@@ -705,6 +701,36 @@ async def chat_stream(
                 return
 
             if automatic_mode and routed_agent_id != "image":
+                dynamic_plan = plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id))
+
+                # Simple requests should start emitting model tokens as soon
+                # as the provider produces them. The specialist execution
+                # API is intentionally reserved for multi-agent synthesis,
+                # where waiting for parallel findings is necessary.
+                if len(dynamic_plan.get("steps", [])) <= 1:
+                    async for stream_event in process_message_stream(
+                        message=augmented_message,
+                        user_id=user_id,
+                        conversation_id=conv_id,
+                    ):
+                        event_name = stream_event["event"]
+                        event_data = stream_event["data"]
+                        if event_name in {"start", "agent"}:
+                            continue
+                        if event_name == "chunk" and event_data.get("text"):
+                            accumulated_output += event_data["text"]
+                        if event_name == "complete":
+                            final_output = event_data.get("output") or accumulated_output
+                            attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                            await _save_messages(
+                                conv_id=conv_id, user_id=user_id, user_message=body.message,
+                                agent_message=final_output, agent_id="orchestrator", is_new=is_new,
+                                attachments=attachments_data, workspace_id=body.workspace_id,
+                                citations=event_data.get("citations"),
+                            )
+                        yield f"event: {event_name}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                    return
+
                 # The queue lets the dynamic executor report live progress
                 # while specialist tasks run concurrently.
                 async def on_dynamic_event(event_name: str, data: dict):
@@ -713,7 +739,7 @@ async def chat_stream(
                 dynamic_task = asyncio.create_task(get_orchestrator().process_dynamic(
                     augmented_message,
                     user_id,
-                    plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
+                    dynamic_plan,
                     conv_id,
                     context=stream_google_context,
                     on_event=on_dynamic_event,

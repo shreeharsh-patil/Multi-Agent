@@ -1570,7 +1570,7 @@ function ChatContent() {
                           }`}
                         >
                           {msg.role === 'assistant' && !msg.content && sending ? (
-                            orchestration ? (
+                            orchestration && orchestration.agents.length > 1 ? (
                               <div className="min-w-[240px] space-y-2 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5" role="status" aria-label="AI team working">
                                 <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
                                   <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
