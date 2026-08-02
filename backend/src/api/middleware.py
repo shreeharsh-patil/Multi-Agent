@@ -24,6 +24,7 @@ PUBLIC_PATHS = {
 PUBLIC_METHOD_PREFIXES = (
     ("GET", "/api/shares/chat/"),
     ("POST", "/api/voice/"),
+    ("GET", "/api/documents/"),
 )
 
 # Suffixes for GET routes the browser opens directly (<img src>, download/export
@@ -32,6 +33,8 @@ PUBLIC_METHOD_PREFIXES = (
 PUBLIC_GET_SUFFIXES = (
     "/download",
     "/download/content",
+    "/file",
+    "/view",
 )
 
 
