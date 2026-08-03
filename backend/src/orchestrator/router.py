@@ -49,7 +49,8 @@ class AgentRouter:
             (r"(?i)\b(google\s+task|google\s+tasks|tasks|to-do list|checklist)\b", "tasks"),
             (r"(?i)\b(plan|deadline|remind|task\s+list)\b", "planner"),
             (r"(?i)\b(deep research|multi-page research|multi page research|exhaustive research|detailed research report|deep dive report|academic research|long research|pages research|deep analysis report)\b", "deep_research"),
-            (r"(?i)\b(research|search\s+(the\s+)?internet|web\s+search|find\s+online|report\s+on|investigate)\b", "research"),
+            (r"(?i)\b(web\s+search|search\s+(the\s+)?(internet|web)|find\s+online|online\s+search|google\s+search|research|report\s+on|investigate)\b", "research"),
+
             (r"(?i)\b(write code|code|program|debug|function|class|algorithm|implement)\b", "coding"),
             (r"(?i)\b(remember|memory|recall|what did i|my name|my preference)\b", "memory"),
             (r"(?i)\b(gmail|gmai|gmial|email|inbox|mail|message|messages)\b", "gmail"),
