@@ -855,24 +855,25 @@ async def chat_stream(
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
-            registry_agent = get_orchestrator().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
+            target_agent_id = routed_agent_id if (routed_agent_id and routed_agent_id != "auto") else (body.agent_id if body.agent_id and body.agent_id != "auto" else None)
+            registry_agent = get_orchestrator().registry.get_agent(target_agent_id) if target_agent_id else None
 
             if registry_agent:
                 agent_result = await registry_agent.execute(augmented_message, stream_google_context)
-                yield f"event: agent\ndata: {json.dumps({'agent_id': routed_agent_id})}\n\n"
+                yield f"event: agent\ndata: {json.dumps({'agent_id': target_agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=routed_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=target_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                 return
 
-            if body.workspace_id:
+            if body.workspace_id and body.agent_id in (None, "auto", "knowledge"):
                 knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
                 if not knowledge_agent:
                     raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
                 agent_result = await knowledge_agent.execute(
-                    augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id, "conversation_history": history_snippet}
+                    augmented_message, {**stream_google_context, "workspace_id": body.workspace_id, "conversation_id": conv_id}
                 )
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
                 async for word in _word_chunks(agent_result.output):
@@ -881,6 +882,7 @@ async def chat_stream(
                 await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                 return
+
 
             async for sse_event in process_message_stream(
                 message=augmented_message, user_id=user_id, conversation_id=conv_id,

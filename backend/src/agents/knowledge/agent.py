@@ -18,12 +18,34 @@ class KnowledgeAgent(BaseAgent):
         retriever = get_retriever()
         user_id = context.get("user_id", "")
 
+        # Cross-domain delegation for specific integration queries (calendar, drive, contacts)
+        lower_q = user_input.lower()
+        if any(w in lower_q for w in ["calendar", "calender", "meeting", "appointment", "schedule", "event"]):
+            try:
+                from src.agents.calendar.agent import CalendarAgent
+                return await CalendarAgent().execute(user_input, context)
+            except Exception:
+                pass
+        elif any(w in lower_q for w in ["google drive", "gdrive", "drive file", "drive folder"]):
+            try:
+                from src.agents.drive.agent import DriveAgent
+                return await DriveAgent().execute(user_input, context)
+            except Exception:
+                pass
+        elif any(w in lower_q for w in ["contact", "contacts", "email of", "phone number"]):
+            try:
+                from src.agents.contacts.agent import ContactsAgent
+                return await ContactsAgent().execute(user_input, context)
+            except Exception:
+                pass
+
         docs = await retriever.retrieve(
             user_input,
             user_id=user_id,
             workspace_id=context.get("workspace_id"),
             top_k=5,
         )
+
 
         if docs:
             response, citations = await llm_service.generate_with_citations(

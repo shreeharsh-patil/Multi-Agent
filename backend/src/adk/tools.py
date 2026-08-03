@@ -569,18 +569,25 @@ async def web_search(query: str, for_research: bool = False) -> str:
 
 
 
-async def scrape_page(url: str) -> str:
-    """Scrape a web page and convert it into clean markdown format.
+async def _jina_scrape(url: str) -> str:
+    """Free Jina AI Reader API (r.jina.ai)."""
+    try:
+        client = _get_firecrawl_client()
+        jina_url = f"https://r.jina.ai/{url}"
+        resp = await client.get(jina_url, headers={"X-No-Cache": "true"}, timeout=8.0)
+        if resp.status_code == 200 and resp.text and len(resp.text.strip()) > 50:
+            return resp.text.strip()[:15000]
+    except Exception as e:
+        logger.warning(f"Jina Reader scrape failed for {url}: {e}")
+    return ""
 
-    Priority Order:
-    1. Obscura CDP browser (when OBSCURA_CDP_URL is configured)
-    2. Free Jina AI Reader API (r.jina.ai)
-    3. Free Readability Article Content Scanner
-    4. Free Crawl4AI / Playwright Headless Browser
-    5. Free Google Web Cache Text-Only Proxy Scanner
-    6. Free Rotated User-Agent Browser Scanner (Chrome/Safari/Firefox headers)
-    7. Free BeautifulSoup & Markdownify Semantic HTML Parser
-    8. Firecrawl Scrape API (Last Fallback, used only if configured & free scrapers fail)
+
+async def scrape_page(url: str) -> str:
+    """Scrape a web page concurrently across multiple specialized extraction engines in parallel.
+
+    Executes Trafilatura, Jina AI Reader, Readability, Open REST APIs, and Rotated User-Agent
+    Scrapers simultaneously using asyncio.gather. Evaluates extracted markdown by quality score
+    and returns the richest, longest clean text.
     """
     if not _validate_outbound_url(url):
         return "The requested URL was blocked by the server's SSRF protection (only public http/https URLs are allowed)."
@@ -592,47 +599,31 @@ async def scrape_page(url: str) -> str:
                 logger.info(f"Successfully scraped URL via Obscura: {url}")
                 return obscura_text[:15000]
         except Exception as e:
-            logger.warning(f"Obscura scrape failed, continuing with fallback scrapers: {e}")
+            logger.warning(f"Obscura scrape failed: {e}")
 
-    # 0. Free Wikipedia / ArXiv / GitHub Open REST API Scanner
-    try:
-        wiki_text = await _wikipedia_arxiv_scrape(url)
-        if wiki_text and len(wiki_text.strip()) > 50:
-            logger.info(f"Successfully scraped URL via Open REST API Scanner: {url}")
-            return wiki_text[:15000]
-    except Exception as e:
-        logger.warning(f"Open REST API scrape failed for {url}: {e}")
+    # Launch parallel extraction tasks concurrently across 5 engines
+    tasks = [
+        _trafilatura_scrape(url),
+        _jina_scrape(url),
+        _readability_scrape(url),
+        _wikipedia_arxiv_scrape(url),
+        _rotated_user_agent_scrape(url),
+    ]
 
-    # 1. Free Trafilatura Main Content Scanner
-    try:
-        traf_text = await _trafilatura_scrape(url)
-        if traf_text and len(traf_text.strip()) > 50:
-            logger.info(f"Successfully scraped URL via Trafilatura: {url}")
-            return traf_text[:15000]
-    except Exception as e:
-        logger.warning(f"Trafilatura scrape failed for {url}: {e}")
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # 1. Free Jina AI Reader API (https://r.jina.ai/{url})
-    try:
-        client = _get_firecrawl_client()
-        jina_url = f"https://r.jina.ai/{url}"
-        resp = await client.get(jina_url, headers={"X-No-Cache": "true"})
-        if resp.status_code == 200 and resp.text and len(resp.text) > 50:
-            logger.info(f"Successfully scraped URL via Jina Reader: {url}")
-            return resp.text[:15000]
-    except Exception as e:
-        logger.warning(f"Jina Reader scrape failed for {url}: {e}")
+    candidates = []
+    for res in results:
+        if isinstance(res, str) and res and len(res.strip()) > 50 and "Error:" not in res:
+            candidates.append(res.strip())
 
-    # 2. Free Readability Article Content Scanner
-    try:
-        readability_text = await _readability_scrape(url)
-        if readability_text and len(readability_text.strip()) > 50:
-            logger.info(f"Successfully scraped URL via Readability Scanner: {url}")
-            return readability_text[:15000]
-    except Exception as e:
-        logger.warning(f"Readability scrape failed for {url}: {e}")
+    if candidates:
+        # Pick candidate with highest length / markdown density
+        best = max(candidates, key=lambda text: len(text))
+        logger.info(f"Parallel scraper selected richest extract ({len(best)} chars out of {len(candidates)} successful engines) for {url}")
+        return best[:15000]
 
-    # 3. Crawl4AI / Playwright Headless Browser for JS rendering
+    # Fallback to Crawl4AI / Playwright headless JS browser or Google Cache if fast parallel scrapers fail
     try:
         crawl_text = await _crawl4ai_scrape(url)
         if crawl_text and len(crawl_text.strip()) > 50:
@@ -641,7 +632,6 @@ async def scrape_page(url: str) -> str:
     except Exception as e:
         logger.warning(f"Crawl4AI / Playwright scrape failed for {url}: {e}")
 
-    # 4. Free Google Web Cache Text-Only Proxy Scanner
     try:
         cache_text = await _google_cache_scrape(url)
         if cache_text and len(cache_text.strip()) > 50:
@@ -650,53 +640,26 @@ async def scrape_page(url: str) -> str:
     except Exception as e:
         logger.warning(f"Google Cache scrape failed for {url}: {e}")
 
-    # 5. Free Rotated User-Agent Browser Scanner
-    try:
-        browser_text = await _rotated_user_agent_scrape(url)
-        if browser_text and len(browser_text.strip()) > 50:
-            logger.info(f"Successfully scraped URL via Rotated User-Agent Scanner: {url}")
-            return browser_text[:15000]
-    except Exception as e:
-        logger.warning(f"Rotated User-Agent scrape failed for {url}: {e}")
-
-    # 6. Free Wayback Machine Archive Proxy Scanner
-    try:
-        archive_text = await _wayback_archive_scrape(url)
-        if archive_text and len(archive_text.strip()) > 50:
-            logger.info(f"Successfully scraped URL via Wayback Archive Scanner: {url}")
-            return archive_text[:15000]
-    except Exception as e:
-        logger.warning(f"Wayback Archive scrape failed for {url}: {e}")
-
-    # 6. Free BeautifulSoup & Markdownify Semantic HTML Parser Fallback
-    try:
-        client = _get_firecrawl_client()
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}
-        resp = await client.get(url, headers=headers, follow_redirects=True)
-        if resp.status_code == 200:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for tag in soup(["script", "style", "nav", "footer", "header", "svg", "noscript", "iframe"]):
-                tag.decompose()
-            main = soup.find("main") or soup.find("article") or soup.body or soup
-            paragraphs = []
-            for element in main.find_all(["h1", "h2", "h3", "p", "li"]):
-                txt = element.get_text(strip=True)
-                if len(txt) > 20:
-                    if element.name in ["h1", "h2", "h3"]:
-                        paragraphs.append(f"\n### {txt}\n")
-                    elif element.name == "li":
-                        paragraphs.append(f"- {txt}")
-                    else:
-                        paragraphs.append(txt)
-            clean_text = "\n\n".join(paragraphs).strip()
-            if clean_text and len(clean_text) > 50:
-                logger.info(f"Successfully scraped URL via BeautifulSoup: {url}")
-                return clean_text[:15000]
-    except Exception as e:
-        logger.warning(f"BeautifulSoup scrape failed for {url}: {e}")
-
     return "Error: Could not scrape page content."
+
+
+async def batch_scrape_pages(urls: list[str], max_concurrent: int = 10) -> list[dict]:
+    """Scrape multiple web pages in parallel using a concurrency semaphore."""
+    sem = asyncio.Semaphore(max_concurrent)
+
+    async def _scrape_sem(u: str):
+        async with sem:
+            try:
+                content = await scrape_page(u)
+                if content and "Error:" not in content and len(content.strip()) > 50:
+                    return {"url": u, "content": content}
+            except Exception as exc:
+                logger.warning(f"Batch scrape error for {u}: {exc}")
+            return None
+
+    results = await asyncio.gather(*[_scrape_sem(u) for u in urls])
+    return [r for r in results if r is not None]
+
 
 
 async def _wikipedia_arxiv_scrape(url: str) -> str:

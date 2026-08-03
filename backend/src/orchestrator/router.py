@@ -39,6 +39,8 @@ class AgentRouter:
             # Calendar: catch all natural calendar/scheduling requests
             (r"(?i)\b(calendar|calender|calander|calendder|calandar|calendars?)\b", "calendar"),
             (r"(?i)\b(meeting|appointment|event|availability|free\s*time|reschedule|book\s+(a\s+)?(slot|time|meeting)|add\s+to\s+(my\s+)?calendar|what.s\s+on\s+my|my\s+agenda|my\s+schedule|upcoming\s+events?|today.s\s+events?|tomorrow.s\s+events?|check\s+(my\s+)?schedule|show\s+(my\s+)?events?|list\s+(my\s+)?events?|delete\s+(the\s+)?(event|meeting|appointment)|cancel\s+(the\s+)?(event|meeting|appointment)|create\s+(a\s+)?(meeting|event|appointment)|schedule\s+(a\s+)?(meeting|call|event|appointment))\b", "calendar"),
+            (r"(?i)\b(contacts?|contact|google\s+contacts?|phonebook|address\s+book)\b", "contacts"),
+
             (r"(?i)\b(summarize|summarise|summary|extract|what is|explain|tell me about|find|search)\b.*\b(document|pdf|file|knowledge|upload|note|article|paper)\b", "knowledge"),
             (r"(?i)\b(google\s+drive|gdrive|g\s*drive|drive|googledrive|googl\s*drive)\b", "drive"),
             (r"(?i)\b(drive|google drive|upload|download|sync|folder|file)\b.*\b(document|file|folder|upload|download|doc|docs)\b", "drive"),
