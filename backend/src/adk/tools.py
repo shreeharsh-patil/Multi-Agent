@@ -569,6 +569,117 @@ async def web_search(query: str, for_research: bool = False) -> str:
 
 
 
+def _evaluate_content_quality(text: str) -> float:
+    """Calculate a multi-metric quality score for scraped markdown text."""
+    import re
+    if not text or not isinstance(text, str):
+        return 0.0
+
+
+    raw = text.strip()
+    length = len(raw)
+    if length < 60:
+        return 0.0
+
+    # Penalize common Cloudflare / CAPTCHA / 404 / JS Disabled error screens
+    error_phrases = [
+        "cloudflare", "just a moment", "enable javascript", "access denied",
+        "404 not found", "403 forbidden", "security check", "robot check",
+        "turn on javascript", "checking your browser"
+    ]
+    lowered = raw.lower()
+    for phrase in error_phrases:
+        if phrase in lowered and length < 1000:
+            return 0.0
+
+    score = float(length)
+
+    # Bonus for clean Markdown structure
+    heading_count = len(re.findall(r"^#{1,4}\s+", raw, re.MULTILINE))
+    score += heading_count * 150.0
+
+    list_count = len(re.findall(r"^\s*[-*•\d+.]\s+", raw, re.MULTILINE))
+    score += list_count * 50.0
+
+    # Bonus for paragraph density
+    paragraphs = [p for p in raw.split("\n\n") if len(p.strip()) > 30]
+    score += len(paragraphs) * 100.0
+
+    return score
+
+
+async def _nextjs_data_scrape(url: str) -> str:
+    """Extract clean text directly from Next.js / Nuxt / React hydration JSON script tags."""
+    try:
+        client = _get_firecrawl_client()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        resp = await client.get(url, headers=headers, follow_redirects=True, timeout=8.0)
+        if resp.status_code == 200 and resp.text:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            script = soup.find("script", id="__NEXT_DATA__")
+            if script and script.string:
+                try:
+                    data = json.loads(script.string)
+                    props = data.get("props", {}).get("pageProps", {})
+                    text_parts = []
+
+                    def _traverse(obj):
+                        if isinstance(obj, str):
+                            s = obj.strip()
+                            if len(s) > 25 and not s.startswith("http") and not s.startswith("data:"):
+                                text_parts.append(s)
+                        elif isinstance(obj, dict):
+                            for v in obj.values():
+                                _traverse(v)
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                _traverse(item)
+
+                    _traverse(props)
+                    if text_parts:
+                        clean = "\n\n".join(dict.fromkeys(text_parts))
+                        if len(clean) > 100:
+                            return f"### React Hydration Extract\n\n{clean[:15000]}"
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning(f"Next.js data scrape failed for {url}: {e}")
+    return ""
+
+
+async def _tls_impersonate_scrape(url: str) -> str:
+    """Scrape web pages using primp / TLS fingerprint impersonation to bypass Cloudflare anti-bot."""
+    try:
+        import primp
+
+        def _do_primp():
+            c = primp.Client(impersonate="chrome_125", follow_redirects=True)
+            return c.get(url)
+
+        resp = await asyncio.to_thread(_do_primp)
+        if resp.status_code == 200 and resp.text:
+            import trafilatura
+            extracted = trafilatura.extract(resp.text, include_formatting=True, include_links=True)
+            if extracted and len(extracted.strip()) > 50:
+                return extracted.strip()[:15000]
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for el in soup(["script", "style", "nav", "footer", "header", "svg", "noscript", "iframe"]):
+                el.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+            lines = [l for l in text.splitlines() if len(l.strip()) > 15]
+            if lines:
+                return "\n\n".join(lines)[:15000]
+    except Exception as e:
+        logger.warning(f"TLS impersonate scrape failed for {url}: {e}")
+    return ""
+
+
 async def _jina_scrape(url: str) -> str:
     """Free Jina AI Reader API (r.jina.ai)."""
     try:
@@ -585,9 +696,9 @@ async def _jina_scrape(url: str) -> str:
 async def scrape_page(url: str) -> str:
     """Scrape a web page concurrently across multiple specialized extraction engines in parallel.
 
-    Executes Trafilatura, Jina AI Reader, Readability, Open REST APIs, and Rotated User-Agent
-    Scrapers simultaneously using asyncio.gather. Evaluates extracted markdown by quality score
-    and returns the richest, longest clean text.
+    Executes Trafilatura, Next.js SPA Hydration Scanner, Jina AI Reader, Readability, Open REST APIs,
+    TLS Impersonator, and Rotated User-Agent Scrapers simultaneously using asyncio.gather.
+    Evaluates extracted markdown using a multi-metric quality scorer and returns the highest quality text.
     """
     if not _validate_outbound_url(url):
         return "The requested URL was blocked by the server's SSRF protection (only public http/https URLs are allowed)."
@@ -601,9 +712,10 @@ async def scrape_page(url: str) -> str:
         except Exception as e:
             logger.warning(f"Obscura scrape failed: {e}")
 
-    # Launch parallel extraction tasks concurrently across 5 engines
+    # Launch parallel extraction tasks concurrently across 6 primary fast engines
     tasks = [
         _trafilatura_scrape(url),
+        _nextjs_data_scrape(url),
         _jina_scrape(url),
         _readability_scrape(url),
         _wikipedia_arxiv_scrape(url),
@@ -615,18 +727,28 @@ async def scrape_page(url: str) -> str:
     candidates = []
     for res in results:
         if isinstance(res, str) and res and len(res.strip()) > 50 and "Error:" not in res:
-            candidates.append(res.strip())
+            score = _evaluate_content_quality(res)
+            if score > 0:
+                candidates.append((score, res.strip()))
 
     if candidates:
-        # Pick candidate with highest length / markdown density
-        best = max(candidates, key=lambda text: len(text))
-        logger.info(f"Parallel scraper selected richest extract ({len(best)} chars out of {len(candidates)} successful engines) for {url}")
-        return best[:15000]
+        # Pick candidate with highest multi-metric quality score
+        best_score, best_text = max(candidates, key=lambda item: item[0])
+        logger.info(f"Parallel scraper selected highest-quality extract (score: {best_score:.0f}, {len(best_text)} chars out of {len(candidates)} valid engines) for {url}")
+        return best_text[:15000]
 
-    # Fallback to Crawl4AI / Playwright headless JS browser or Google Cache if fast parallel scrapers fail
+    # Secondary Stage: Launch TLS Impersonator, Crawl4AI / Playwright, or Google Cache if primary fast scrapers fail
+    try:
+        tls_text = await _tls_impersonate_scrape(url)
+        if tls_text and _evaluate_content_quality(tls_text) > 0:
+            logger.info(f"Successfully scraped URL via TLS Impersonator: {url}")
+            return tls_text[:15000]
+    except Exception as e:
+        logger.warning(f"TLS Impersonator scrape failed for {url}: {e}")
+
     try:
         crawl_text = await _crawl4ai_scrape(url)
-        if crawl_text and len(crawl_text.strip()) > 50:
+        if crawl_text and _evaluate_content_quality(crawl_text) > 0:
             logger.info(f"Successfully scraped URL via Crawl4AI / Playwright: {url}")
             return crawl_text[:15000]
     except Exception as e:
@@ -634,13 +756,14 @@ async def scrape_page(url: str) -> str:
 
     try:
         cache_text = await _google_cache_scrape(url)
-        if cache_text and len(cache_text.strip()) > 50:
+        if cache_text and _evaluate_content_quality(cache_text) > 0:
             logger.info(f"Successfully scraped URL via Google Cache Scanner: {url}")
             return cache_text[:15000]
     except Exception as e:
         logger.warning(f"Google Cache scrape failed for {url}: {e}")
 
     return "Error: Could not scrape page content."
+
 
 
 async def batch_scrape_pages(urls: list[str], max_concurrent: int = 10) -> list[dict]:
