@@ -148,6 +148,9 @@ class PublicationDocumentExporter:
                 for line in filtered_md.split("\n"):
                     raw_line = line.strip()
 
+                    # Reset horizontal position to left margin before each line block
+                    pdf.set_x(pdf.l_margin)
+
                     # Code block handling
                     if raw_line.startswith("```"):
                         if in_code_block:
@@ -204,8 +207,7 @@ class PublicationDocumentExporter:
 
                     # Bullet Points
                     elif raw_line.startswith("- ") or raw_line.startswith("* "):
-                        pdf.cell(4)
-                        pdf.multi_cell(0, 5.5, pdf_safe_text(f"- {raw_line[2:]}"))
+                        pdf.multi_cell(0, 5.5, pdf_safe_text(f"  •  {raw_line[2:]}"))
 
                     # Normal Text
                     elif raw_line:
@@ -213,11 +215,11 @@ class PublicationDocumentExporter:
                     else:
                         pdf.ln(2)
 
-                buffer = io.BytesIO()
-                pdf.output(buffer)
-                return buffer.getvalue()
+                pdf_bytes = pdf.output()
+                return bytes(pdf_bytes) if isinstance(pdf_bytes, (bytes, bytearray)) else pdf_bytes.encode("latin-1")
 
             return await asyncio.to_thread(_build_pdf)
+
         except Exception as e:
             logger.error(f"PDF export error: {e}", exc_info=True)
             raise
