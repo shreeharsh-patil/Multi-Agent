@@ -100,15 +100,15 @@ Return ONLY a JSON array of 6 strings, e.g. ["query 1", "query 2", "query 3", "q
                 found_urls = url_pattern.findall(res_text)
                 for u in found_urls:
                     u_clean = u.rstrip(".,;)")
-                    if len(urls_to_scrape) < 8 and u_clean not in urls_to_scrape and not u_clean.endswith((".png", ".jpg", ".svg", ".css", ".js")):
+                    if len(urls_to_scrape) < 12 and u_clean not in urls_to_scrape and not u_clean.endswith((".png", ".jpg", ".svg", ".css", ".js")):
                         urls_to_scrape.append(u_clean)
 
         # Step 3: High-Parallel Deep Page Scraping
         scraped_pages = []
         if urls_to_scrape:
-            scrape_tasks = [_scrape_page_deep(u) for u in urls_to_scrape[:8]]
+            scrape_tasks = [_scrape_page_deep(u) for u in urls_to_scrape[:12]]
             scraped_texts = await asyncio.gather(*scrape_tasks)
-            for url, text in zip(urls_to_scrape[:8], scraped_texts):
+            for url, text in zip(urls_to_scrape[:12], scraped_texts):
                 if text and text.strip() and len(text.strip()) > 100:
                     scraped_pages.append(f"### Source URL: {url}\n{text[:3000]}\n")
 
@@ -212,11 +212,12 @@ Ensure the response is extremely thorough, analytical, objective, and filled wit
                 data={
                     "topic": user_input,
                     "sub_queries": sub_queries,
-                    "sources_count": len(sources_list),
+                    "sources_count": len(urls_to_scrape),
                     "scraped_count": len(scraped_pages),
                     "document_id": doc_id,
                 },
             )
+
 
         except Exception as exc:
             logger.error(f"DeepResearch report synthesis failed: {exc}")

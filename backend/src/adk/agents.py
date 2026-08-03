@@ -23,7 +23,25 @@ from src.adk.tools import (
     drive_upload_tool,
     drive_delete_tool,
     contacts_list_tool,
+    calendar_list_tool,
+    calendar_create_tool,
 )
+
+
+def create_calendar_agent() -> LlmAgent:
+    return LlmAgent(
+        name="calendar",
+        model=MODEL,
+        instruction=(
+            "You are the Calendar Agent. You help users list, search, create, update, delete, and check availability on Google Calendar.\n"
+            "Capabilities:\n"
+            "1. calendar_list - List or search Google Calendar events\n"
+            "2. calendar_create - Create a new event on Google Calendar\n\n"
+            "To manage calendar events: call the appropriate tool with user_id."
+        ),
+        tools=[calendar_list_tool, calendar_create_tool],
+        description="Lists, creates, reschedules, and manages Google Calendar events and meetings.",
+    )
 
 
 def create_contacts_agent() -> LlmAgent:
@@ -57,6 +75,8 @@ def create_orchestrator_agent() -> LlmAgent:
     memory = create_memory_agent()
     tool_agent = create_tool_agent()
     contacts = create_contacts_agent()
+    calendar = create_calendar_agent()
+
 
     from src.agents.engineer.agent import EngineerAgent
     from src.agents.pharmacologist.agent import PharmacologistAgent
@@ -85,7 +105,9 @@ def create_orchestrator_agent() -> LlmAgent:
         memory,
         tool_agent,
         contacts,
+        calendar,
         engineer,
+
         pharmacologist,
         doctor,
         finance,

@@ -2,10 +2,13 @@ import asyncio
 import os
 import tempfile
 from typing import Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Header, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Header, Query, Depends
+
 from pydantic import BaseModel
 from src.services.drive.service import drive_service
 from src.utils.logger import logger
+
+from src.adk.tools import find_user_access_token
 
 router = APIRouter(prefix="/api/drive", tags=["Drive"])
 
@@ -23,17 +26,33 @@ class DriveDownloadResponse(BaseModel):
     download_url: str
 
 
+async def _resolve_token(
+    access_token: Optional[str] = Header(None, alias="X-Drive-Access-Token"),
+    refresh_token: Optional[str] = Header(None, alias="X-Drive-Refresh-Token"),
+    user_id: Optional[str] = Query("default"),
+) -> tuple[str, str]:
+    token = access_token or ""
+    r_token = refresh_token or ""
+    if not token and user_id:
+        token = await find_user_access_token(user_id)
+    return token, r_token
+
+
 @router.get("/files")
 async def list_drive_files(
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
     folder_id: Optional[str] = Query(None, description="Folder ID to list"),
     page_size: int = Query(20, description="Number of files per page"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ) -> DriveListResponse:
     """List files from Google Drive using the user's access token."""
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     try:
         files = await drive_service.list_files(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             folder_id=folder_id,
             page_size=page_size,
@@ -61,11 +80,15 @@ async def list_drive_files(
 @router.post("/upload")
 async def upload_to_drive(
     file: UploadFile = File(...),
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
     folder_id: Optional[str] = Query(None, description="Target folder ID"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ) -> dict:
     """Upload a file to Google Drive."""
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     if file.filename is None:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -92,7 +115,7 @@ async def upload_to_drive(
 
     try:
         result = await drive_service.upload_file(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             file_path=tmp_path,
             file_name=file.filename,
@@ -117,13 +140,17 @@ async def upload_to_drive(
 @router.get("/download/{file_id}")
 async def download_from_drive(
     file_id: str,
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ) -> dict:
     """Get download URL and metadata for a Drive file."""
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     try:
         info = await drive_service.get_file_info(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             file_id=file_id,
         )
@@ -143,21 +170,25 @@ async def download_from_drive(
 @router.get("/download/{file_id}/content")
 async def download_drive_file_content(
     file_id: str,
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ):
     """Download the actual file content from Google Drive."""
     from fastapi.responses import StreamingResponse
     import io
 
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     try:
         info = await drive_service.get_file_info(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             file_id=file_id,
         )
         file_bytes = await drive_service.download_file(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             file_id=file_id,
         )
@@ -178,13 +209,17 @@ async def download_drive_file_content(
 @router.delete("/files/{file_id}")
 async def delete_drive_file(
     file_id: str,
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ) -> dict:
     """Delete a file from Google Drive."""
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     try:
         result = await drive_service.delete_file(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             file_id=file_id,
         )
@@ -197,14 +232,18 @@ async def delete_drive_file(
 @router.post("/folders")
 async def create_drive_folder(
     name: str = Query(..., description="Folder name"),
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
     parent_id: Optional[str] = Query(None, description="Parent folder ID"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ) -> dict:
     """Create a folder in Google Drive."""
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     try:
         result = await drive_service.create_folder(
-            access_token=access_token,
+            access_token=token,
             refresh_token=refresh_token,
             folder_name=name,
             parent_id=parent_id,
@@ -217,12 +256,16 @@ async def create_drive_folder(
 
 @router.get("/storage")
 async def get_drive_storage(
-    access_token: str = Header(..., alias="X-Drive-Access-Token"),
-    refresh_token: str = Header(default="", alias="X-Drive-Refresh-Token"),
+    user_id: Optional[str] = Query("default"),
+    token_data: tuple[str, str] = Depends(_resolve_token),
 ) -> dict:
     """Get Drive storage usage information."""
+    token, refresh_token = token_data
+    if not token:
+        raise HTTPException(status_code=401, detail="Google Drive is not connected. Connect Google in Settings > Integrations.")
+
     try:
-        quota = await drive_service.get_storage_usage(access_token, refresh_token)
+        quota = await drive_service.get_storage_usage(token, refresh_token)
         return {
             "limit": int(quota.get("limit", 0)),
             "usage": int(quota.get("usage", 0)),
@@ -232,3 +275,4 @@ async def get_drive_storage(
     except Exception as e:
         logger.error(f"Drive storage check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+

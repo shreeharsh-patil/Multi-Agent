@@ -811,4 +811,35 @@ export const api = {
       }
     },
   },
+  calendar: {
+    listEvents: (query?: string, timeMin?: string, timeMax?: string) => {
+      const params = new URLSearchParams()
+      if (query) params.set('query', query)
+      if (timeMin) params.set('time_min', timeMin)
+      if (timeMax) params.set('time_max', timeMax)
+      const qStr = params.toString()
+      return fetchApi<{ events: Array<any>; count: number }>(`/api/calendar/events${qStr ? `?${qStr}` : ''}`)
+    },
+    createEvent: (data: { summary: string; start: string; end?: string; description?: string; location?: string; attendees?: string[]; generate_meet_link?: boolean }) =>
+      fetchApi<{ event: any; success: boolean }>('/api/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
+    deleteEvent: (eventId: string) =>
+      fetchApi<{ success: boolean; message: string }>(`/api/calendar/events/${eventId}`, { method: 'DELETE' }),
+    checkAvailability: (timeMin: string, timeMax: string) =>
+      fetchApi<{ timeMin: string; timeMax: string; busy: Array<any>; available: boolean }>(`/api/calendar/availability?time_min=${encodeURIComponent(timeMin)}&time_max=${encodeURIComponent(timeMax)}`),
+  },
+  contacts: {
+    list: (query?: string, limit?: number) => {
+      const params = new URLSearchParams()
+      if (query) params.set('query', query)
+      if (limit) params.set('limit', String(limit))
+      const qStr = params.toString()
+      return fetchApi<{ contacts: Array<{ resourceName: string; name: string; email: string; phone: string; company: string }>; count: number }>(`/api/contacts${qStr ? `?${qStr}` : ''}`)
+    },
+    create: (data: { name: string; email?: string; phone?: string; company?: string }) =>
+      fetchApi<{ contact: any; success: boolean }>('/api/contacts', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (resourceName: string) =>
+      fetchApi<{ success: boolean; message: string }>(`/api/contacts/${encodeURIComponent(resourceName)}`, { method: 'DELETE' }),
+  },
 }
+
+

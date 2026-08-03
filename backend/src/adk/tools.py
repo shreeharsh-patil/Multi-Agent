@@ -325,147 +325,248 @@ async def calculator(expression: str) -> str:
         return f"Calculation error: {e}"
 
 
-async def web_search(query: str, for_research: bool = False) -> str:
-    """Search the internet for current information.
-
-    Priority Order:
-    1. Free Jina AI Search API (s.jina.ai)
-    2. Free SearXNG Meta-Search API
-    3. Free Wikipedia API Academic Search
-    4. Free ArXiv Scientific Papers Search
-    5. Free DuckDuckGo Search (duckduckgo_search / DDGS)
-    6. Firecrawl Search API (Last Fallback, used only if configured & free search yields no results)
-    """
-    max_items = 5 if for_research else 3
-
-    # 1. Free Jina AI Search API (https://s.jina.ai/)
+async def _google_news_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
+    """Fetch live real-time news articles from Google News RSS feed (100% Free, zero API key)."""
+    import urllib.parse
+    import xml.etree.ElementTree as ET
+    client = _get_firecrawl_client()
+    encoded = urllib.parse.quote(query)
+    url = f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en"
+    results = []
     try:
-        jina_res = await _jina_search(query, max_items)
-        if jina_res and len(jina_res.strip()) > 30:
-            logger.info(f"Successfully retrieved search results via Jina AI Search: {query}")
-            return jina_res
-    except Exception as e:
-        logger.warning(f"Jina AI Search failed: {e}")
+        resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=8.0)
+        if resp.status_code == 200 and resp.text:
+            root = ET.fromstring(resp.text)
+            for item in root.findall(".//item")[:max_items]:
+                title = item.findtext("title") or "Untitled"
+                link = item.findtext("link") or ""
+                pub_date = item.findtext("pubDate") or ""
+                description = item.findtext("description") or ""
+                if "<" in description:
+                    try:
+                        from bs4 import BeautifulSoup
+                        description = BeautifulSoup(description, "html.parser").get_text(strip=True)
+                    except Exception:
+                        pass
+                snippet = f"Published: {pub_date} | {description[:300]}".strip(" |")
+                results.append({
+                    "title": title,
+                    "url": link,
+                    "snippet": snippet,
+                    "source": "Google News",
+                })
+    except Exception as exc:
+        logger.warning(f"Google News RSS search failed for '{query}': {exc}")
+    return results
 
-    # 2. Free SearXNG Meta-Search API
+
+async def _ddg_html_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
+    """Direct HTTP HTML scraper fallback for DuckDuckGo Search."""
+    client = _get_firecrawl_client()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    results = []
     try:
-        searx_res = await _searxng_search(query, max_items)
-        if searx_res and len(searx_res.strip()) > 30:
-            logger.info(f"Successfully retrieved search results via SearXNG: {query}")
-            return searx_res
-    except Exception as e:
-        logger.warning(f"SearXNG search failed: {e}")
-
-    # 3. Free Wikipedia API Search
-    try:
-        wiki_res = await _wikipedia_search(query)
-        if wiki_res and len(wiki_res.strip()) > 30:
-            logger.info(f"Successfully retrieved search results via Wikipedia API: {query}")
-            return wiki_res
-    except Exception as e:
-        logger.warning(f"Wikipedia search failed: {e}")
-
-    # 4. Free ArXiv Academic Papers Search
-    try:
-        arxiv_res = await _arxiv_search(query)
-        if arxiv_res and len(arxiv_res.strip()) > 30:
-            logger.info(f"Successfully retrieved search results via ArXiv API: {query}")
-            return arxiv_res
-    except Exception as e:
-        logger.warning(f"ArXiv search failed: {e}")
-
-    # 5. 100% Free Live Web Search via DuckDuckGo
-    try:
-        results = []
-        try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                ddg_results = list(ddgs.text(query, max_results=max_items))
-                for item in ddg_results:
-                    title = item.get("title", "No Title")
-                    url = item.get("href", "No URL")
-                    snippet = item.get("body", "No Snippet")
-                    results.append(f"### {title}\nURL: {url}\n{snippet}\n")
-        except Exception as ddg_err:
-            logger.warning(f"duckduckgo_search package failed ({ddg_err}), trying HTTP DDG fallback")
-
-        if results:
-            return "\n".join(results)
-
-        # HTTP Fallback search via DuckDuckGo Instant API
-        client = _get_firecrawl_client()
-        response = await client.get(
-            "https://api.duckduckgo.com/",
-            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
+        resp = await client.post(
+            "https://html.duckduckgo.com/html/",
+            data={"q": query},
+            headers=headers,
+            follow_redirects=True,
+            timeout=8.0,
         )
-        if response.status_code == 200:
-            data = response.json()
-            abstract = data.get("AbstractText", "")
-            if abstract:
-                results.append(f"Summary: {abstract}")
-            topics = data.get("RelatedTopics", [])
-            for topic in topics[:5]:
-                if "Text" in topic:
-                    results.append(f"- {topic['Text']}")
-            if results:
-                return "\n".join(results)
-    except Exception as e:
-        logger.warning(f"Free DuckDuckGo search failed: {e}")
+        if resp.status_code == 200 and resp.text:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for result in soup.find_all("div", class_=lambda c: c and "result" in c)[:max_items]:
+                a_tag = result.find("a", class_=lambda c: c and "result__a" in c)
+                snippet_tag = result.find("a", class_=lambda c: c and "result__snippet" in c) or result.find("div", class_=lambda c: c and "snippet" in c)
+                if a_tag:
+                    title = a_tag.get_text(strip=True)
+                    raw_href = a_tag.get("href", "")
+                    import urllib.parse
+                    if "uddg=" in raw_href:
+                        parsed = urllib.parse.parse_qs(urllib.parse.urlparse(raw_href).query)
+                        url = parsed.get("uddg", [raw_href])[0]
+                    else:
+                        url = raw_href
+                    snippet = snippet_tag.get_text(strip=True) if snippet_tag else ""
+                    if url and title:
+                        results.append({
+                            "title": title,
+                            "url": url,
+                            "snippet": snippet,
+                            "source": "DuckDuckGo Web",
+                        })
+    except Exception as exc:
+        logger.warning(f"DuckDuckGo HTML search failed for '{query}': {exc}")
+    return results
 
-    return f"No search results found for '{query}'."
+
+async def _duckduckgo_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
+    """Execute DuckDuckGo Web & News search using python package or HTML fallback."""
+    results = []
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            ddg_results = list(ddgs.text(query, max_results=max_items))
+            for item in ddg_results:
+                title = item.get("title", "No Title")
+                url = item.get("href") or item.get("url") or ""
+                snippet = item.get("body", "")
+                if url:
+                    results.append({"title": title, "url": url, "snippet": snippet, "source": "DuckDuckGo Web"})
+    except Exception as err:
+        logger.warning(f"duckduckgo_search package failed ({err}), using direct HTML fallback")
+        results = await _ddg_html_search(query, max_items)
+    return results
 
 
-async def _jina_search(query: str, max_items: int = 5) -> str:
-    """Free Jina AI Search API (https://s.jina.ai/). Returns clean Markdown search results."""
+async def _jina_search_items(query: str, max_items: int = 6) -> List[Dict[str, str]]:
+    """Free Jina AI Search API (https://s.jina.ai/). Returns structured search item dictionaries."""
     import urllib.parse
     client = _get_firecrawl_client()
     url = f"https://s.jina.ai/{urllib.parse.quote(query)}"
     headers = {"Accept": "application/json", "X-No-Cache": "true"}
-    resp = await client.get(url, headers=headers)
-    if resp.status_code == 200:
-        try:
+    results = []
+    try:
+        resp = await client.get(url, headers=headers, timeout=8.0)
+        if resp.status_code == 200:
             data = resp.json()
             items = data.get("data", [])
-            results = []
             for item in items[:max_items]:
                 title = item.get("title", "No Title")
-                item_url = item.get("url", "No URL")
+                item_url = item.get("url", "")
                 content = item.get("content", "") or item.get("description", "")
-                results.append(f"### {title}\nURL: {item_url}\n{content[:1500]}\n")
-            if results:
-                return "\n".join(results)
-        except Exception:
-            text = resp.text
-            if text and len(text) > 50:
-                return text[:10000]
-    return ""
+                if title or item_url:
+                    results.append({
+                        "title": title,
+                        "url": item_url,
+                        "snippet": content[:1200],
+                        "source": "Jina AI Search",
+                    })
+    except Exception as exc:
+        logger.warning(f"Jina AI search items failed for '{query}': {exc}")
+    return results
 
 
-async def _searxng_search(query: str, max_items: int = 5) -> str:
+async def _searxng_search_items(query: str, max_items: int = 6) -> List[Dict[str, str]]:
     """SearXNG Meta-Search API (Self-hosted or Public instance)."""
     import os
     searxng_url = os.getenv("SEARXNG_URL", "https://searx.be").rstrip("/")
     client = _get_firecrawl_client()
+    results = []
     try:
         resp = await client.get(
             f"{searxng_url}/search",
             params={"q": query, "format": "json", "language": "en"},
             headers={"User-Agent": "Mozilla/5.0"},
+            timeout=6.0,
         )
         if resp.status_code == 200:
             data = resp.json()
             items = data.get("results", [])
-            results = []
             for item in items[:max_items]:
                 title = item.get("title", "No Title")
-                item_url = item.get("url", "No URL")
+                item_url = item.get("url", "")
                 snippet = item.get("content", "")
-                results.append(f"### {title}\nURL: {item_url}\n{snippet}\n")
-            if results:
-                return "\n".join(results)
+                results.append({
+                    "title": title,
+                    "url": item_url,
+                    "snippet": snippet,
+                    "source": "SearXNG",
+                })
     except Exception as err:
         logger.warning(f"SearXNG search failed: {err}")
-    return ""
+    return results
+
+
+async def web_search(query: str, for_research: bool = False) -> str:
+    """Search the internet for current live information across multiple web engines.
+
+    Aggregates up to-the-minute news, live web pages, and authoritative articles
+    from Google News RSS, DuckDuckGo, Jina AI, SearXNG, and academic databases.
+    """
+    max_items = 12 if for_research else 8
+
+    raw_items: List[Dict[str, str]] = []
+
+    # 1. Run primary live search engines concurrently
+    tasks = [
+        _google_news_search(query, max_items=6),
+        _duckduckgo_search(query, max_items=8),
+    ]
+    engine_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for res in engine_results:
+        if isinstance(res, list):
+            raw_items.extend(res)
+
+    # 2. Enrich with Jina AI Search if more results needed
+    if len(raw_items) < max_items:
+        jina_items = await _jina_search_items(query, max_items=6)
+        raw_items.extend(jina_items)
+
+    # 3. SearXNG Meta-Search fallback
+    if len(raw_items) < 4:
+        searx_items = await _searxng_search_items(query, max_items=6)
+        raw_items.extend(searx_items)
+
+    # 4. Academic/Encyclopedic fallbacks if live web results are sparse
+    if len(raw_items) < 3:
+        try:
+            wiki_res = await _wikipedia_search(query)
+            if wiki_res and len(wiki_res.strip()) > 30:
+                raw_items.append({"title": "Wikipedia Reference", "url": "", "snippet": wiki_res, "source": "Wikipedia"})
+        except Exception:
+            pass
+
+    # Deduplicate results by URL and title
+    seen_urls = set()
+    seen_titles = set()
+    unique_results: List[Dict[str, str]] = []
+
+    for item in raw_items:
+        title = item.get("title", "").strip()
+        url = item.get("url", "").strip()
+        snippet = item.get("snippet", "").strip()
+
+        if not title or not snippet:
+            continue
+
+        norm_url = url.split("#")[0].rstrip("/") if url else ""
+        norm_title = title.lower()
+
+        if norm_url and norm_url in seen_urls:
+            continue
+        if norm_title in seen_titles:
+            continue
+
+        if norm_url:
+            seen_urls.add(norm_url)
+        seen_titles.add(norm_title)
+        unique_results.append(item)
+
+        if len(unique_results) >= max_items:
+            break
+
+    if not unique_results:
+        return f"No live search results found for '{query}'."
+
+    formatted = []
+    for idx, item in enumerate(unique_results, 1):
+        t = item.get("title", "Untitled")
+        u = item.get("url", "")
+        s = item.get("snippet", "")
+        src = item.get("source", "Web")
+        url_line = f"\nURL: {u}" if u else ""
+        formatted.append(f"### [{idx}] {t} ({src}){url_line}\n{s}\n")
+
+    logger.info(f"Successfully aggregated {len(unique_results)} search results across engines for: '{query}'")
+    return "\n".join(formatted)
+
 
 
 async def scrape_page(url: str) -> str:
@@ -1231,7 +1332,58 @@ async def contacts_list(user_id: str = "default", query: str = "") -> str:
         return json.dumps(contacts, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Contacts list tool error: {e}")
-        return f"Failed to list contacts: {e}"
+async def calendar_list(user_id: str = "default", query: str = "") -> str:
+    """List upcoming Google Calendar events for the user.
+
+    Args:
+        user_id: User ID or email
+        query: Optional search filter for event title or attendees
+
+    Returns:
+        JSON string of events
+    """
+    from src.services.calendar.service import calendar_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return "Please connect Google Calendar first from Settings > Integrations."
+
+        events = await calendar_service.list_events(access_token, query=query or None, limit=10)
+        if not events:
+            return f'No calendar events found matching "{query}".' if query else "No upcoming events found on your Google Calendar."
+        return json.dumps(events, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Calendar list tool error: {e}")
+        return f"Failed to list calendar events: {e}"
+
+
+async def calendar_create(user_id: str, summary: str, start: str, end: str = "", description: str = "", location: str = "") -> str:
+    """Create a new event on Google Calendar.
+
+    Args:
+        user_id: User ID or email
+        summary: Event title
+        start: Event start time (e.g. 2026-08-04T10:00:00Z)
+        end: Event end time (optional, defaults to 1h after start)
+        description: Event description
+        location: Event location
+
+    Returns:
+        JSON string with created event details
+    """
+    from src.services.calendar.service import calendar_service
+
+    try:
+        access_token = await find_user_access_token(user_id)
+        if not access_token:
+            return "Please connect Google Calendar first from Settings > Integrations."
+
+        event = await calendar_service.create_event(access_token, summary=summary, start=start, end=end or start, description=description, location=location)
+        return json.dumps({"success": True, "event": event}, indent=2)
+    except Exception as e:
+        logger.error(f"Calendar create tool error: {e}")
+        return f"Failed to create calendar event: {e}"
 
 
 # Export all tools as FunctionTool instances for ADK agents
@@ -1246,3 +1398,6 @@ drive_read_tool = FunctionTool(func=drive_read_file)
 drive_upload_tool = FunctionTool(func=drive_upload)
 drive_delete_tool = FunctionTool(func=drive_delete)
 contacts_list_tool = FunctionTool(func=contacts_list)
+calendar_list_tool = FunctionTool(func=calendar_list)
+calendar_create_tool = FunctionTool(func=calendar_create)
+

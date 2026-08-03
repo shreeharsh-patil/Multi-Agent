@@ -182,16 +182,29 @@ class CalendarAgent(BaseAgent):
                 return AgentResult(success=True, output=msg)
             if action in {"update", "reschedule"}:
                 event_id = command.get("event_id")
+                search_q = query or command.get("summary") or user_input
                 if not event_id:
-                    return AgentResult(success=False, output="Event ID is required to update an event.", error="missing_event_id")
+                    matching = await calendar_service.list_events(token, query=search_q, limit=5, refresh_token=refresh_token)
+                    if matching:
+                        event_id = matching[0]["id"]
+                    else:
+                        return AgentResult(success=False, output=f"I couldn't find an event matching '{search_q}' to update.", error="event_not_found")
                 event = await calendar_service.update_event(token, event_id, command.get("summary"), command.get("start"), command.get("end"), command.get("description"), command.get("location"), command.get("attendees"), refresh_token=refresh_token)
                 return AgentResult(success=True, output=f"Updated “{event.get('summary', 'event')}”.\n{event.get('link', '')}")
             if action == "delete":
                 event_id = command.get("event_id")
+                search_q = query or command.get("summary") or user_input
+                matched_title = "event"
                 if not event_id:
-                    return AgentResult(success=False, output="Event ID is required to cancel an event.", error="missing_event_id")
+                    matching = await calendar_service.list_events(token, query=search_q, limit=5, refresh_token=refresh_token)
+                    if matching:
+                        event_id = matching[0]["id"]
+                        matched_title = matching[0].get("summary", "event")
+                    else:
+                        return AgentResult(success=False, output=f"I couldn't find an event matching '{search_q}' to cancel.", error="event_not_found")
                 await calendar_service.delete_event(token, event_id, refresh_token=refresh_token)
-                return AgentResult(success=True, output="Event cancelled successfully.")
+                return AgentResult(success=True, output=f"Cancelled event “{matched_title}” successfully.")
+
             if action == "availability":
                 time_min = command.get("time_min")
                 time_max = command.get("time_max")

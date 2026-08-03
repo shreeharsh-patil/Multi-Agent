@@ -108,17 +108,21 @@ class ResearchAgent(BaseAgent):
             clean = url.rstrip(".,;\"'")
             if clean not in urls:
                 urls.append(clean)
-        urls = urls[:5]
+        urls = urls[:10]
 
-        scraped_sources = []
-        for url in urls:
+        async def _scrape_one(u: str):
             try:
-                content = await scrape_page(url)
-                if content and "error" not in content.lower():
-                    scraped_sources.append({"url": url, "content": content[:12000]})
-                    sources_found.append(url)
+                c = await scrape_page(u)
+                if c and "error" not in c.lower() and len(c.strip()) > 50:
+                    return {"url": u, "content": c[:12000]}
             except Exception as scrape_err:
-                logger.warning(f"Failed to scrape {url}: {scrape_err}")
+                logger.warning(f"Failed to scrape {u}: {scrape_err}")
+            return None
+
+        scrape_results = await asyncio.gather(*[_scrape_one(u) for u in urls])
+        scraped_sources = [s for s in scrape_results if s is not None]
+        for s in scraped_sources:
+            sources_found.append(s["url"])
         stages.append({"id": "sources", "label": "Source review", "detail": f"Read {len(scraped_sources)} primary pages from {len(urls)} candidates"})
 
         # 5. Draft synthesis combining searches + scraped content

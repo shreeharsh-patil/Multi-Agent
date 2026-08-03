@@ -11,7 +11,9 @@ from src.api.middleware import (
     error_handler_middleware,
     jwt_auth_middleware,
 )
-from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates, data_analysis as data_analysis_route, workflows as workflows_route, weather_news as weather_news_route, swarm, study, task_runner, code_agent
+from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates, data_analysis as data_analysis_route, workflows as workflows_route, weather_news as weather_news_route, swarm, study, task_runner, code_agent, calendar as calendar_route, contacts as contacts_route
+
+
 
 
 @asynccontextmanager
@@ -171,6 +173,10 @@ app.include_router(swarm.router)
 app.include_router(study.router)
 app.include_router(task_runner.router)
 app.include_router(code_agent.router)
+app.include_router(calendar_route.router)
+app.include_router(contacts_route.router)
+
+
 
 
 @app.get("/api/health")
