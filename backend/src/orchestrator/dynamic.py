@@ -25,13 +25,21 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
         if agent_id not in {step["agent_id"] for step in steps}:
             steps.append({"agent_id": agent_id, "label": label, "reason": reason, "role": role})
 
+    is_shopping = _has(
+        text,
+        "mouse", "keyboard", "laptop", "headphones", "earphones", "monitor", "ssd",
+        "phone", "mobile", "buy", "purchase", "price", "cheapest", "best under",
+        "deals", "discounts", "under ₹", "under rs", "under 500", "under 1000", "under 2000", "under 5000", "under 60000"
+    )
+    is_scraping = _has(text, "scrape", "scraping", "crawler", "extract text", "scrape url", "http://", "https://")
+
     is_research = _has(
         text,
         "research", "sources", "cite", "citation", "current", "latest", "compare",
         "news", "today", "yesterday", "now", "recent", "trending", "price",
         "update", "version", "event", "who is", "what is the current", "when did",
         "2025", "2026", "score", "winner", "weather",
-    )
+    ) or is_shopping
     is_notes = _has(text, "notes", "revision", "study guide", "exam notes", "summarize", "summary")
     is_quiz = _has(text, "quiz", "mcq", "exam", "practice questions", "flashcards")
     is_code = _has(text, "code", "program", "function", "debug", "bug", "react", "python", "javascript", "api")
@@ -43,6 +51,11 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
     is_finance = _has(text, "finance", "financial", "stock", "invest", "valuation", "accounting", "tax")
     is_planning = _has(text, "plan", "schedule", "roadmap", "deadline", "milestone", "tasks")
 
+    if is_shopping:
+        add("product-researcher", "Product Researcher", "Retrieving live product listings, prices in INR, and verified purchase URLs", "real-time product search and hard budget verification")
+        add("price-verification-agent", "Price Verification", "Verifying prices and hard budget constraints", "price and variant verification")
+    if is_scraping:
+        add("scraping-specialist", "Scraping Specialist", "Extracting HTML body, tables, and structured data from target web page", "web scraping and HTML extraction")
     if is_document:
         add("knowledge", "Knowledge Agent", "Extracting information from the uploaded or referenced material", "knowledge extraction and source grounding")
     if is_research:

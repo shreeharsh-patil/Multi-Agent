@@ -166,6 +166,18 @@ class BossAgent:
                 memory.no_verified_products = True
                 memory.record_result("product-researcher", "NO_VERIFIED_PRODUCTS_FOUND")
 
+        # Step 1.7: Mandatory Real-Time Institution & Entity Research Gate
+        if intent.get("is_institution_research") and not intent.get("is_shopping"):
+            await emit("institution_research_started", {"query": user_request})
+            from src.tools.research_tool import institution_research_tool
+            try:
+                res_data = await institution_research_tool.execute_focused_research(user_request)
+                if res_data.get("success") and res_data.get("sources"):
+                    await emit("institution_research_completed", {"total_sources": res_data["total_sources"]})
+                    memory.record_result("research", res_data["summary_text"], sources=res_data["sources"])
+            except Exception as e:
+                logger.warning(f"Institution research gate error: {e}")
+
         # Step 2: Build Task Graph & Select Specialists
         graph = await self._build_execution_graph(tid, user_request, intent)
 
@@ -336,11 +348,16 @@ class BossAgent:
         elif "usd to inr" in text or "exchange rate" in text or "forex" in text or "currency rate" in text:
             api_capability = "exchange_rate"
 
+        # Institution / Entity Research Intent Detection
+        institution_terms = ["pcce", "college", "university", "institute", "bits goa", "nit goa", "iit goa", "gec goa", "admission", "cutoff", "fee structure", "placements", "campus", "accreditation"]
+        is_institution_research = any(term in text for term in institution_terms) or ("goa" in text and any(k in text for k in ["pcce", "college", "university"]))
+
         return {
             "is_shopping": is_shopping,
-            "is_live_data": is_live_data or bool(api_capability),
+            "is_live_data": is_live_data or bool(api_capability) or is_institution_research,
             "is_image_generation": is_image_generation,
             "is_scraping": is_scraping,
+            "is_institution_research": is_institution_research,
             "api_capability": api_capability,
             "shopping_params": {
                 "category": category,
@@ -349,7 +366,7 @@ class BossAgent:
                 "country": "India",
             },
             "is_coding": is_coding,
-            "is_research": is_research,
+            "is_research": is_research or is_institution_research,
             "is_data": is_data,
             "is_writing": is_writing,
             "is_security": is_security,
@@ -646,7 +663,16 @@ class BossAgent:
             "Do not mention internal agent chatter or routing details. Distinguish facts from assumptions.\n"
         )
 
-        if is_shopping:
+        if intent and intent.get("is_institution_research"):
+            system_instruction += (
+                "\nCRITICAL INSTITUTION & ENTITY RESEARCH SYNTHESIS RULES:\n"
+                "1. Focus strictly on verified claims from retrieved real-time search results.\n"
+                "2. NO GENERIC FILLER: Do not output generic introductory fluff (e.g. 'Engineering education is important').\n"
+                "3. Structure response into clean Markdown sections (e.g., Overview, Location, Courses, Admissions, Placements, Official Website).\n"
+                "4. EVERY factual section MUST cite verified sources as active clickable Markdown links: [Source Title](url).\n"
+                "5. If specific details (like current fee structure or exact cutoffs) are unverified from official sources, state clearly: 'Current fees/cutoffs could not be verified from official live sources.'\n"
+            )
+        elif is_shopping:
             from datetime import datetime
             today_str = datetime.now().strftime("%d %b %Y")
             budget_note = f" (Budget Hard Constraint: <= ₹{budget_val} INR)" if budget_val else ""

@@ -748,9 +748,15 @@ async def chat_stream(
                 # Specialized domain agents (calendar, contacts, drive, gmail, research, planner, etc.)
                 # must run through process_dynamic so they receive Google tokens and context.
                 plan_step_agents = {step.get("agent_id") for step in (dynamic_plan or {}).get("steps", [])}
+                msg_lower = body.message.lower()
+                is_shopping_msg = any(term in msg_lower for term in ["mouse", "keyboard", "laptop", "headphones", "earphones", "monitor", "ssd", "phone", "mobile", "buy", "purchase", "under ₹", "under rs", "under 500", "under 1000", "cheapest", "best under", "deals"])
+                is_scraping_msg = any(term in msg_lower for term in ["scrape", "scraping", "crawler", "extract page", "extract text from", "http://", "https://"])
+                is_api_msg = any(term in msg_lower for term in ["weather", "temperature", "bitcoin", "crypto", "ethereum", "solana", "game deal", "ip address", "exchange rate"])
+
                 is_domain_agent = bool(
-                    routed_agent_id in {"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news", "custom"}
-                    or plan_step_agents.intersection({"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news"})
+                    is_shopping_msg or is_scraping_msg or is_api_msg
+                    or routed_agent_id in {"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news", "custom", "product-researcher", "scraping-specialist", "boss"}
+                    or plan_step_agents.intersection({"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news", "product-researcher", "price-verification-agent", "scraping-specialist"})
                 )
 
                 if len(dynamic_plan.get("steps", [])) <= 1 and not is_domain_agent:
