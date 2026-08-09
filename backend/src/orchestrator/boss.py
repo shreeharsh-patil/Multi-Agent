@@ -49,6 +49,7 @@ class TaskMemoryManager:
         self.traces: list[dict[str, Any]] = []
         self.uncertain_nodes: list[str] = []
         self.products: list[dict[str, Any]] = []
+        self.no_verified_products: bool = False
 
     def record_result(self, agent_id: str, output: str, sources: Optional[list] = None, confidence: float = 1.0, conf_level: str = "high") -> None:
         self.results[agent_id] = output
@@ -142,6 +143,28 @@ class BossAgent:
                     json.dumps(norm, indent=2),
                     sources=[{"title": norm.get("source", "API"), "url": norm.get("sourceUrl", "")}]
                 )
+
+        # Step 1.6: Mandatory Real-Time Shopping Data Retrieval Gate
+        if intent.get("is_shopping"):
+            params = intent.get("shopping_params", {})
+            category = params.get("category", "product")
+            budget = params.get("budget")
+            await emit("shopping_retrieval_started", {"category": category, "budget": budget})
+            from src.tools.shopping_tool import shopping_tool
+            try:
+                shop_res = await shopping_tool.search_live_products(category=category, budget=budget)
+                if shop_res.get("success") and shop_res.get("offers"):
+                    await emit("shopping_retrieval_completed", {"total_verified": shop_res["total_verified"]})
+                    memory.products = shop_res["offers"]
+                    memory.record_result("product-researcher", json.dumps(shop_res, indent=2))
+                else:
+                    await emit("shopping_retrieval_failed", {"reason": "Zero verified products returned under budget constraint"})
+                    memory.no_verified_products = True
+                    memory.record_result("product-researcher", "NO_VERIFIED_PRODUCTS_FOUND")
+            except Exception as e:
+                logger.warning(f"Shopping retrieval gate error: {e}")
+                memory.no_verified_products = True
+                memory.record_result("product-researcher", "NO_VERIFIED_PRODUCTS_FOUND")
 
         # Step 2: Build Task Graph & Select Specialists
         graph = await self._build_execution_graph(tid, user_request, intent)
@@ -596,6 +619,16 @@ class BossAgent:
 
     async def _synthesize_final_output(self, user_request: str, memory: TaskMemoryManager, intent: Optional[dict] = None) -> str:
         """Synthesizes all collected findings into a final response."""
+        is_shopping = intent and intent.get("is_shopping")
+        shopping_params = intent.get("shopping_params", {}) if intent else {}
+        budget_val = shopping_params.get("budget")
+        category_val = shopping_params.get("category", "product")
+
+        # Anti-Hallucination Guard: If live retrieval produced zero verified products under budget, state it immediately!
+        if is_shopping and memory.no_verified_products:
+            budget_str = f" under ₹{int(budget_val)}" if budget_val else ""
+            return f"I couldn't verify a suitable {category_val}{budget_str} from the available live sources. Real-time retrieval returned no verified products meeting your exact budget constraint."
+
         if not memory.results:
             return "BossAgent received your request, but specialist execution produced no outputs. Please refine your prompt."
 
@@ -607,9 +640,6 @@ class BossAgent:
             for agent_id, output in memory.results.items()
         )
 
-        is_shopping = intent and intent.get("is_shopping")
-        shopping_params = intent.get("shopping_params", {}) if intent else {}
-
         system_instruction = (
             "You are BossAgent — the Executive Decision Maker and Central Control Layer.\n"
             "Synthesize the specialist findings into one cohesive, beautifully formatted Markdown response.\n"
@@ -619,7 +649,6 @@ class BossAgent:
         if is_shopping:
             from datetime import datetime
             today_str = datetime.now().strftime("%d %b %Y")
-            budget_val = shopping_params.get("budget")
             budget_note = f" (Budget Hard Constraint: <= ₹{budget_val} INR)" if budget_val else ""
 
             system_instruction += (
