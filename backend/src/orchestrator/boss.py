@@ -352,12 +352,17 @@ class BossAgent:
         institution_terms = ["pcce", "college", "university", "institute", "bits goa", "nit goa", "iit goa", "gec goa", "admission", "cutoff", "fee structure", "placements", "campus", "accreditation"]
         is_institution_research = any(term in text for term in institution_terms) or ("goa" in text and any(k in text for k in ["pcce", "college", "university"]))
 
+        from src.services.freshness_analyzer import freshness_analyzer
+        freshness_info = freshness_analyzer.analyze(user_request)
+
         return {
             "is_shopping": is_shopping,
-            "is_live_data": is_live_data or bool(api_capability) or is_institution_research,
+            "is_live_data": is_live_data or bool(api_capability) or is_institution_research or freshness_info["research_required"],
             "is_image_generation": is_image_generation,
             "is_scraping": is_scraping,
             "is_institution_research": is_institution_research,
+            "freshness": freshness_info,
+            "requires_live_data": freshness_info["research_required"] or is_shopping or is_institution_research or bool(api_capability),
             "api_capability": api_capability,
             "shopping_params": {
                 "category": category,
@@ -366,7 +371,7 @@ class BossAgent:
                 "country": "India",
             },
             "is_coding": is_coding,
-            "is_research": is_research or is_institution_research,
+            "is_research": is_research or is_institution_research or freshness_info["research_required"],
             "is_data": is_data,
             "is_writing": is_writing,
             "is_security": is_security,
