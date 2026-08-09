@@ -25,7 +25,8 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Laptop
+  Laptop,
+  IndianRupee
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -75,13 +76,13 @@ const API_VAULT_DATABASE: ApiItem[] = [
   {
     id: 'coingecko',
     name: 'CoinGecko Crypto API',
-    description: 'Live cryptocurrency prices, market cap, volume, historical data and exchange statistics.',
+    description: 'Live cryptocurrency prices, market cap, volume, historical data and exchange statistics in INR & USD.',
     category: 'Blockchain & Crypto',
     url: 'https://www.coingecko.com/en/api',
     auth: 'No',
     https: true,
     cors: 'yes',
-    sampleEndpoint: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd,eur'
+    sampleEndpoint: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=inr,usd'
   },
   {
     id: 'cheapshark',
@@ -198,13 +199,17 @@ const API_VAULT_DATABASE: ApiItem[] = [
 export default function ApiVaultPage() {
   const [activeTab, setActiveTab] = useState('mashup')
 
+  // --- CURRENCY PREFERENCE (INR ₹ default) ---
+  const [currencyUnit, setCurrencyUnit] = useState<'INR' | 'USD'>('INR')
+  const usdToInrRate = 86.5 // Current USD to INR conversion rate
+
   // --- CATALOG STATE ---
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [authFilter, setAuthFilter] = useState<string>('All')
 
   // --- PLAYGROUND STATE ---
-  const [endpointUrl, setEndpointUrl] = useState('https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true')
+  const [endpointUrl, setEndpointUrl] = useState('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=inr,usd')
   const [httpMethod, setHttpMethod] = useState<'GET' | 'POST'>('GET')
   const [requestHeaders, setRequestHeaders] = useState('{\n  "Accept": "application/json"\n}')
   const [requestBody, setRequestBody] = useState('')
@@ -220,7 +225,7 @@ export default function ApiVaultPage() {
   const [cryptoData, setCryptoData] = useState<any>(null)
   const [cryptoLoading, setCryptoLoading] = useState(false)
   const [currencyData, setCurrencyData] = useState<any>(null)
-  const [amountUsd, setAmountUsd] = useState('100')
+  const [amountInr, setAmountInr] = useState('1000')
   const [gameDeals, setGameDeals] = useState<any[]>([])
   const [ipInfo, setIpInfo] = useState<any>(null)
   const [quoteData, setQuoteData] = useState<{ advice: string; id: number } | null>(null)
@@ -245,10 +250,10 @@ export default function ApiVaultPage() {
 
   // Load Dashboard Data
   const loadDashboardData = useCallback(async () => {
-    // 1. Crypto Prices
+    // 1. Crypto Prices in INR & USD
     setCryptoLoading(true)
     try {
-      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,cardano,dogecoin&vs_currencies=usd&include_24hr_change=true')
+      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,cardano,dogecoin&vs_currencies=inr,usd&include_24hr_change=true')
       if (res.ok) {
         const data = await res.json()
         setCryptoData(data)
@@ -257,11 +262,11 @@ export default function ApiVaultPage() {
       }
     } catch {
       setCryptoData({
-        bitcoin: { usd: 89450, usd_24h_change: 3.42 },
-        ethereum: { usd: 3240, usd_24h_change: -1.15 },
-        solana: { usd: 185, usd_24h_change: 5.80 },
-        cardano: { usd: 0.72, usd_24h_change: 2.10 },
-        dogecoin: { usd: 0.24, usd_24h_change: 8.90 }
+        bitcoin: { inr: 7737425, usd: 89450, inr_24h_change: 3.42, usd_24h_change: 3.42 },
+        ethereum: { inr: 280260, usd: 3240, inr_24h_change: -1.15, usd_24h_change: -1.15 },
+        solana: { inr: 16002, usd: 185, inr_24h_change: 5.80, usd_24h_change: 5.80 },
+        cardano: { inr: 62.28, usd: 0.72, inr_24h_change: 2.10, usd_24h_change: 2.10 },
+        dogecoin: { inr: 20.76, usd: 0.24, inr_24h_change: 8.90, usd_24h_change: 8.90 }
       })
     } finally {
       setCryptoLoading(false)
@@ -275,7 +280,7 @@ export default function ApiVaultPage() {
         setCurrencyData(data.rates)
       }
     } catch {
-      setCurrencyData({ EUR: 0.92, GBP: 0.78, JPY: 154.2, INR: 86.4, CAD: 1.38 })
+      setCurrencyData({ EUR: 0.92, GBP: 0.78, JPY: 154.2, INR: 86.5, CAD: 1.38 })
     }
 
     // 3. CheapShark Game Deals
@@ -446,6 +451,16 @@ export default function ApiVaultPage() {
     setActiveTab('playground')
   }
 
+  // Format Currency
+  const formatPrice = (usdVal: number, inrVal?: number) => {
+    if (currencyUnit === 'INR') {
+      const rupees = inrVal !== undefined ? inrVal : usdVal * usdToInrRate
+      return `₹${Math.round(rupees).toLocaleString('en-IN')}`
+    } else {
+      return `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    }
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-background text-foreground">
       {/* Top Banner */}
@@ -460,12 +475,15 @@ export default function ApiVaultPage() {
             <Badge variant="outline" className="border-white/40 text-white font-mono text-xs">
               40+ Public Categories
             </Badge>
+            <Badge className="bg-emerald-500/20 text-emerald-200 border-emerald-400/40 text-xs font-semibold">
+              <IndianRupee className="h-3 w-3 mr-1" /> Prices in INR (₹)
+            </Badge>
           </div>
           <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight text-white">
             Universal API Hub & Explorer
           </h1>
           <p className="text-white/90 text-sm md:text-base leading-relaxed">
-            Discover, test, and mash up open public APIs from ApiVault. Live market trackers, game deal aggregators, IP geolocators, interactive HTTP testing playground, and latency monitors.
+            Discover, test, and mash up open public APIs from ApiVault. Live market trackers in Indian Rupees (₹), game deal aggregators, IP geolocators, interactive HTTP testing playground, and latency monitors.
           </p>
         </div>
       </div>
@@ -493,20 +511,47 @@ export default function ApiVaultPage() {
 
         {/* 1. LIVE MASHUP DASHBOARD */}
         <TabsContent value="mashup" className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold tracking-tight">Live Multi-API Mashup</h2>
               <p className="text-xs md:text-sm text-muted-foreground">
-                Aggregated real-time widgets powered by open public APIs listed on ApiVault.
+                Aggregated real-time widgets with prices formatted in <strong>Indian Rupees (₹)</strong> or <strong>USD ($)</strong>.
               </p>
             </div>
-            <button
-              onClick={loadDashboardData}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold hover:bg-secondary transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Refresh All</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Currency Toggle Switch */}
+              <div className="flex items-center bg-muted/70 p-1 rounded-xl border border-border">
+                <button
+                  onClick={() => setCurrencyUnit('INR')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    currencyUnit === 'INR'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <IndianRupee className="h-3 w-3" />
+                  <span>INR (₹)</span>
+                </button>
+                <button
+                  onClick={() => setCurrencyUnit('USD')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    currencyUnit === 'USD'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <span>USD ($)</span>
+                </button>
+              </div>
+
+              <button
+                onClick={loadDashboardData}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-semibold hover:bg-secondary transition-colors"
+              >
+                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -522,23 +567,30 @@ export default function ApiVaultPage() {
                   </div>
                   <Badge variant="outline" className="text-[10px] text-muted-foreground">CoinGecko API</Badge>
                 </div>
-                <CardDescription className="text-xs">Live 24h market prices in USD</CardDescription>
+                <CardDescription className="text-xs">
+                  Live 24h market prices in <strong>{currencyUnit === 'INR' ? 'Indian Rupees (₹)' : 'USD ($)'}</strong>
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {cryptoLoading ? (
                   <div className="py-6 text-center text-xs text-muted-foreground animate-pulse">Loading live crypto quotes...</div>
                 ) : cryptoData ? (
-                  Object.entries(cryptoData).map(([coin, val]: [string, any]) => (
-                    <div key={coin} className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0">
-                      <span className="capitalize font-semibold text-foreground">{coin}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold">${val.usd?.toLocaleString()}</span>
-                        <span className={`font-mono text-[11px] ${val.usd_24h_change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {val.usd_24h_change >= 0 ? '+' : ''}{val.usd_24h_change?.toFixed(2)}%
-                        </span>
+                  Object.entries(cryptoData).map(([coin, val]: [string, any]) => {
+                    const priceFormatted = formatPrice(val.usd, val.inr)
+                    const change = currencyUnit === 'INR' ? (val.inr_24h_change ?? val.usd_24h_change) : val.usd_24h_change
+
+                    return (
+                      <div key={coin} className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0">
+                        <span className="capitalize font-semibold text-foreground">{coin}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-foreground">{priceFormatted}</span>
+                          <span className={`font-mono text-[11px] ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {change >= 0 ? '+' : ''}{change?.toFixed(2)}%
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 ) : null}
               </CardContent>
             </Card>
@@ -551,34 +603,49 @@ export default function ApiVaultPage() {
                     <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
                       <TrendingUp className="h-4 w-4" />
                     </div>
-                    <CardTitle className="text-base font-bold">FX Currency Rates</CardTitle>
+                    <CardTitle className="text-base font-bold">Rupee Currency Converter</CardTitle>
                   </div>
                   <Badge variant="outline" className="text-[10px] text-muted-foreground">Frankfurter API</Badge>
                 </div>
-                <CardDescription className="text-xs">Base currency: 100 USD</CardDescription>
+                <CardDescription className="text-xs">Live exchange rates from Indian Rupees (₹)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-muted-foreground">USD Amount:</span>
+                  <span className="text-xs font-semibold text-muted-foreground">Amount (₹ INR):</span>
                   <input
                     type="number"
-                    value={amountUsd}
-                    onChange={(e) => setAmountUsd(e.target.value)}
-                    className="h-8 w-24 px-2 rounded-md border border-border bg-background text-xs font-mono font-semibold"
+                    value={amountInr}
+                    onChange={(e) => setAmountInr(e.target.value)}
+                    className="h-8 w-28 px-2.5 rounded-md border border-border bg-background text-xs font-mono font-bold text-emerald-600"
                   />
                 </div>
                 {currencyData && (
                   <div className="space-y-1.5 pt-1">
-                    {Object.entries(currencyData).map(([curr, rate]: [string, any]) => {
-                      const num = parseFloat(amountUsd) || 0
-                      const converted = (num * rate).toFixed(2)
+                    {(() => {
+                      const numRupees = parseFloat(amountInr) || 0
+                      const usdEquiv = numRupees / usdToInrRate
+
                       return (
-                        <div key={curr} className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0">
-                          <span className="font-semibold text-muted-foreground">{curr} Rate</span>
-                          <span className="font-mono font-bold text-foreground">{converted} {curr}</span>
-                        </div>
+                        <>
+                          <div className="flex items-center justify-between text-xs py-1 border-b border-border/40">
+                            <span className="font-semibold text-muted-foreground">US Dollar ($ USD)</span>
+                            <span className="font-mono font-bold text-foreground">${usdEquiv.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs py-1 border-b border-border/40">
+                            <span className="font-semibold text-muted-foreground">Euro (€ EUR)</span>
+                            <span className="font-mono font-bold text-foreground">€{(usdEquiv * (currencyData.EUR || 0.92)).toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs py-1 border-b border-border/40">
+                            <span className="font-semibold text-muted-foreground">British Pound (£ GBP)</span>
+                            <span className="font-mono font-bold text-foreground">£{(usdEquiv * (currencyData.GBP || 0.78)).toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs py-1">
+                            <span className="font-semibold text-muted-foreground">Japanese Yen (¥ JPY)</span>
+                            <span className="font-mono font-bold text-foreground">¥{(usdEquiv * (currencyData.JPY || 154.2)).toFixed(0)}</span>
+                          </div>
+                        </>
                       )
-                    })}
+                    })()}
                   </div>
                 )}
               </CardContent>
@@ -592,25 +659,34 @@ export default function ApiVaultPage() {
                     <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
                       <Gamepad2 className="h-4 w-4" />
                     </div>
-                    <CardTitle className="text-base font-bold">Game Deals Aggregator</CardTitle>
+                    <CardTitle className="text-base font-bold">Game Deals in Rupees</CardTitle>
                   </div>
                   <Badge variant="outline" className="text-[10px] text-muted-foreground">CheapShark API</Badge>
                 </div>
-                <CardDescription className="text-xs">Active PC game discounts under $25</CardDescription>
+                <CardDescription className="text-xs">PC game discounts converted to <strong>{currencyUnit === 'INR' ? '₹ INR' : '$ USD'}</strong></CardDescription>
               </CardHeader>
               <CardContent className="space-y-2.5">
-                {gameDeals.map((deal, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 text-xs">
-                    <div className="truncate pr-2">
-                      <p className="font-semibold truncate text-foreground">{deal.title}</p>
-                      <span className="text-[10px] text-emerald-500 font-bold">{parseFloat(deal.savings).toFixed(0)}% OFF</span>
+                {gameDeals.map((deal, idx) => {
+                  const originalUsd = parseFloat(deal.normalPrice) || 0
+                  const saleUsd = parseFloat(deal.salePrice) || 0
+
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 text-xs">
+                      <div className="truncate pr-2">
+                        <p className="font-semibold truncate text-foreground">{deal.title}</p>
+                        <span className="text-[10px] text-emerald-500 font-bold">{parseFloat(deal.savings).toFixed(0)}% OFF</span>
+                      </div>
+                      <div className="text-right shrink-0 font-mono">
+                        <span className="text-[10px] line-through text-muted-foreground block">
+                          {formatPrice(originalUsd)}
+                        </span>
+                        <span className="font-bold text-indigo-500">
+                          {formatPrice(saleUsd)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 font-mono">
-                      <span className="text-[10px] line-through text-muted-foreground block">${deal.normalPrice}</span>
-                      <span className="font-bold text-indigo-500">${deal.salePrice}</span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
 

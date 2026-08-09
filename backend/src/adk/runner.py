@@ -284,7 +284,8 @@ async def _fallback_process_message(
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, PDF Generation, and Python Execution. "
                 "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "
-                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure."
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure. "
+                "ALWAYS INCLUDE CLICKABLE MARKDOWN LINKS for all websites, services, APIs, and documentation (e.g. [ApiVault](https://apivault.dev), [GitHub](https://github.com)). Never output plain text domain names without hyperlinking them."
             ),
         )
         return {
@@ -470,7 +471,8 @@ async def _fallback_process_message_stream(
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, PDF Generation, and Python Execution. "
                 "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "
-                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure."
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure. "
+                "ALWAYS INCLUDE CLICKABLE MARKDOWN LINKS for all websites, services, APIs, and documentation (e.g. [ApiVault](https://apivault.dev), [GitHub](https://github.com)). Never output plain text domain names without hyperlinking them."
             ),
         ):
             if chunk:
