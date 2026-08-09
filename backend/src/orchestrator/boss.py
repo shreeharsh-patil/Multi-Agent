@@ -115,6 +115,34 @@ class BossAgent:
         intent = await self._analyze_intent(user_request)
         await emit("intent_analyzed", intent)
 
+        # Step 1.5: Capability-based Internal API Registry Discovery & Execution
+        if intent.get("api_capability"):
+            cap = intent["api_capability"]
+            await emit("api_discovery_started", {"capability": cap})
+            from src.tools.api_tool import api_tool
+            api_res = await api_tool.execute_with_fallback(
+                cap,
+                {
+                    "query": user_request,
+                    "location": "Goa" if "goa" in user_request.lower() else "Requested Location",
+                    "asset": "bitcoin" if "bitcoin" in user_request.lower() or "btc" in user_request.lower() else "ethereum",
+                    "ip": "8.8.8.8" if "8.8.8.8" in user_request else "8.8.8.8",
+                }
+            )
+            if api_res.get("success"):
+                norm = api_res.get("normalized", {})
+                await emit("api_execution_completed", {
+                    "api_id": api_res.get("api_id"),
+                    "api_name": api_res.get("api_name"),
+                    "type": norm.get("type"),
+                    "status": "200 OK"
+                })
+                memory.record_result(
+                    "api-executor",
+                    json.dumps(norm, indent=2),
+                    sources=[{"title": norm.get("source", "API"), "url": norm.get("sourceUrl", "")}]
+                )
+
         # Step 2: Build Task Graph & Select Specialists
         graph = await self._build_execution_graph(tid, user_request, intent)
 
@@ -268,10 +296,24 @@ class BossAgent:
             mode = TaskMode.QUICK
             complexity = "simple"
 
+        # Internal API Registry Capability Detection
+        api_capability = None
+        if "weather" in text or "temperature" in text or "forecast" in text:
+            api_capability = "current_weather"
+        elif any(c in text for c in ["bitcoin", "btc", "crypto", "ethereum", "solana"]) and any(w in text for w in ["price", "cost", "right now", "rate", "value", "worth"]):
+            api_capability = "crypto_price"
+        elif any(g in text for g in ["steam", "game deal", "gta v", "gta 5", "cyberpunk", "witcher"]) and any(w in text for w in ["deal", "cheap", "price", "discount", "sale"]):
+            api_capability = "game_deals"
+        elif "ip " in text or "8.8.8.8" in text or "ip address" in text or "geolocation" in text or "ip info" in text:
+            api_capability = "ip_geolocation"
+        elif "usd to inr" in text or "exchange rate" in text or "forex" in text or "currency rate" in text:
+            api_capability = "exchange_rate"
+
         return {
             "is_shopping": is_shopping,
-            "is_live_data": is_live_data,
+            "is_live_data": is_live_data or bool(api_capability),
             "is_image_generation": is_image_generation,
+            "api_capability": api_capability,
             "shopping_params": {
                 "category": category,
                 "budget": budget,

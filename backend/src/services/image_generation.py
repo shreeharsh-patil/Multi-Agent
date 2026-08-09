@@ -243,9 +243,9 @@ async def generate_and_store_image(
                 mime_type="image/png",
                 refresh_token=drive_refresh_token or "",
             )
-            drive_file_id = drive_result.get("id")
-            drive_web_view_link = drive_result.get("webViewLink")
-            logger.info(f"Generated image uploaded directly to Drive: {file_name} (id={drive_file_id})")
+        except Exception as err:
+            logger.warning(f"Failed to upload generated image to Drive: {err}")
+
     import base64
     base64_payload = base64.b64encode(image_bytes).decode("utf-8") if len(image_bytes) <= 12 * 1024 * 1024 else None
 
