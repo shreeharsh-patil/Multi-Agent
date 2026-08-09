@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from src.models.agent import AgentConfig
+from src.agents.registry import AgentRegistry
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
 
@@ -56,9 +57,21 @@ AGENT_METADATA = [
 
 @router.get("")
 async def list_agents(request: Request) -> list[dict]:
+    all_metadata = AgentRegistry.get_all_metadata()
     built_ins = [
-        {**agent, "version": "0.1.0", "enabled": True}
-        for agent in AGENT_METADATA
+        {
+            "id": m.id,
+            "name": m.name,
+            "department": m.department.value,
+            "description": m.description,
+            "icon": m.icon,
+            "capabilities": m.capabilities,
+            "responsibilities": m.responsibilities,
+            "tools": m.required_tools + m.optional_tools,
+            "version": "0.1.0",
+            "enabled": m.enabled,
+        }
+        for m in all_metadata
     ]
     custom_agents = await AgentConfig.find(AgentConfig.user_id == resolved_user(request), AgentConfig.custom == True).sort(-AgentConfig.updated_at).to_list()
     return built_ins + [serialize_custom(agent) for agent in custom_agents]

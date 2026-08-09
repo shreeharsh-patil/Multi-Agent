@@ -143,6 +143,19 @@ class Settings(BaseSettings):
             )
         return self
 
+    # ---- Agentic Boss (multi-agent orchestration) ----
+    agentic_enabled: bool = True
+    agentic_max_agents: int = 14
+    agentic_max_waves: int = 8
+    agentic_max_retries: int = 2
+    agentic_max_alternates: int = 1
+    agentic_max_replan_rounds: int = 2
+    agentic_agent_timeout_seconds: int = 45
+    agentic_think_timeout_seconds: int = 40
+    agentic_include_reviewers: bool = True
+    agentic_auto_evaluate: bool = True
+    agentic_strong_synthesis: bool = True
+
     model_config = {
         # Resolve both env files so startup works from either the repository
         # root or backend directory. The backend file contains service keys;

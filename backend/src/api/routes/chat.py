@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from src.adk.runner import process_message, process_message_stream, process_fast_message_stream
-from src.orchestrator.base import get_orchestrator
+from src.orchestrator.boss import get_boss_agent
 from src.orchestrator.router import AgentRouter
 from src.orchestrator.dynamic import plan_dynamic
 from src.agents.custom import CustomAgent
@@ -562,7 +562,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             "conversation_history": history_snippet,
         }
 
-        registry_agent = get_orchestrator().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
+        registry_agent = get_boss_agent().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
 
         if routed_agent_id == "image":
             drive_token = http_request.headers.get("X-Drive-Access-Token") or google_access_token
@@ -573,7 +573,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             )
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
         elif automatic_mode:
-            result = await get_orchestrator().process_dynamic(
+            result = await get_boss_agent().process_dynamic(
                 augmented_message,
                 user_id,
                 plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
@@ -581,7 +581,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 context=google_agent_context,
             )
         elif body.team_agents:
-            result = await get_orchestrator().process_team(
+            result = await get_boss_agent().process_team(
                 augmented_message,
                 user_id,
                 body.team_agents,
@@ -590,7 +590,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             )
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
-            get_orchestrator().registry.register(custom_agent)
+            get_boss_agent().registry.register(custom_agent)
             agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif registry_agent:
@@ -602,7 +602,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 "events_count": 1,
             }
         elif body.workspace_id:
-            knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
+            knowledge_agent = get_boss_agent().registry.get_agent("knowledge")
             if not knowledge_agent:
                 raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
             agent_result = await knowledge_agent.execute(
@@ -772,7 +772,7 @@ async def chat_stream(
                             attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
                             await _save_messages(
                                 conv_id=conv_id, user_id=user_id, user_message=body.message,
-                                agent_message=final_output, agent_id="orchestrator", is_new=is_new,
+                                agent_message=final_output, agent_id="boss_agent", is_new=is_new,
                                 attachments=attachments_data, workspace_id=body.workspace_id,
                                 citations=event_data.get("citations"),
                             )
@@ -784,7 +784,7 @@ async def chat_stream(
                 async def on_dynamic_event(event_name: str, data: dict):
                     event_queue.append({"event": event_name, "data": data})
 
-                dynamic_task = asyncio.create_task(get_orchestrator().process_dynamic(
+                dynamic_task = asyncio.create_task(get_boss_agent().process_dynamic(
                     augmented_message,
                     user_id,
                     dynamic_plan,
@@ -800,17 +800,17 @@ async def chat_stream(
                     if not dynamic_task.done():
                         if asyncio.get_running_loop().time() >= dynamic_deadline:
                             dynamic_task.cancel()
-                            raise TimeoutError("Automatic orchestration timed out")
+                            raise TimeoutError("BossAgent execution timed out")
                         await asyncio.sleep(0.02)
                 dynamic_result = await dynamic_task
-                _chat_log(request_id, "orchestration", "complete", request_started_at, output_chars=len(dynamic_result.get("output") or ""))
+                _chat_log(request_id, "boss_agent", "complete", request_started_at, output_chars=len(dynamic_result.get("output") or ""))
                 accumulated_output = dynamic_result["output"]
                 async for word in _word_chunks(accumulated_output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
                 await _save_messages(
                     conv_id=conv_id, user_id=user_id, user_message=body.message,
-                    agent_message=accumulated_output, agent_id="orchestrator", is_new=is_new,
+                    agent_message=accumulated_output, agent_id="boss_agent", is_new=is_new,
                     attachments=attachments_data, workspace_id=body.workspace_id,
                     citations=dynamic_result.get("citations"),
                 )
@@ -818,7 +818,7 @@ async def chat_stream(
                 return
 
             if body.team_agents:
-                team_result = await get_orchestrator().process_team(
+                team_result = await get_boss_agent().process_team(
                     augmented_message,
                     user_id,
                     body.team_agents,
@@ -844,7 +844,7 @@ async def chat_stream(
 
             if custom_config:
                 custom_agent = CustomAgent(custom_config)
-                get_orchestrator().registry.register(custom_agent)
+                get_boss_agent().registry.register(custom_agent)
                 agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
@@ -856,7 +856,7 @@ async def chat_stream(
                 return
 
             target_agent_id = routed_agent_id if (routed_agent_id and routed_agent_id != "auto") else (body.agent_id if body.agent_id and body.agent_id != "auto" else None)
-            registry_agent = get_orchestrator().registry.get_agent(target_agent_id) if target_agent_id else None
+            registry_agent = get_boss_agent().registry.get_agent(target_agent_id) if target_agent_id else None
 
             if registry_agent:
                 agent_result = await registry_agent.execute(augmented_message, stream_google_context)
@@ -869,7 +869,7 @@ async def chat_stream(
                 return
 
             if body.workspace_id and body.agent_id in (None, "auto", "knowledge"):
-                knowledge_agent = get_orchestrator().registry.get_agent("knowledge")
+                knowledge_agent = get_boss_agent().registry.get_agent("knowledge")
                 if not knowledge_agent:
                     raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
                 agent_result = await knowledge_agent.execute(

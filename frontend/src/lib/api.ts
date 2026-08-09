@@ -687,12 +687,33 @@ export const api = {
 
   agents: {
     list: () =>
-      fetchApi<Array<{ id: string; name: string; description: string; icon: string; capabilities?: string[]; tools?: string[]; systemInstruction?: string; custom?: boolean }>>('/api/agents'),
+      fetchApi<Array<{ id: string; name: string; department?: string; description: string; icon: string; capabilities?: string[]; responsibilities?: string[]; tools?: string[]; systemInstruction?: string; custom?: boolean }>>('/api/agents'),
     create: (data: { name: string; description: string; icon: string; system_instruction: string; tools: string[] }) =>
       fetchApi<{ id: string; name: string; description: string; icon: string; tools: string[]; custom: boolean }>('/api/agents', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: { name: string; description: string; icon: string; system_instruction: string; tools: string[] }) =>
       fetchApi<{ id: string; name: string; description: string; icon: string; tools: string[]; custom: boolean }>(`/api/agents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: string) => fetchApi<{ success: boolean }>(`/api/agents/${id}`, { method: 'DELETE' }),
+  },
+
+  agentPlatform: {
+    list: (department?: string, capability?: string, query?: string) => {
+      const params = new URLSearchParams()
+      if (department) params.append('department', department)
+      if (capability) params.append('capability', capability)
+      if (query) params.append('query', query)
+      const qStr = params.toString() ? `?${params.toString()}` : ''
+      return fetchApi<{ success: boolean; total_agents: number; departments: string[]; data: any[] }>(`/api/agent-platform/agents${qStr}`)
+    },
+    plan: (prompt: string) =>
+      fetchApi<{ success: boolean; complexity: string; execution_graph: any[] }>('/api/agent-platform/plan', {
+        method: 'POST',
+        body: JSON.stringify({ prompt }),
+      }),
+    execute: (prompt: string, taskId?: string) =>
+      fetchApi<{ success: boolean; data: any }>('/api/agent-platform/execute', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, task_id: taskId }),
+      }),
   },
 
   images: {

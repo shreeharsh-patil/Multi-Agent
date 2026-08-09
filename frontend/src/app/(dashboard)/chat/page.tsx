@@ -40,7 +40,7 @@ const typingKeyframes = `
 
 
 const agents = [
-  { id: 'auto', name: 'Auto (Orchestrator)' },
+  { id: 'auto', name: 'BossAgent (Executive)' },
   { id: 'image', name: 'Image Generation Agent' },
   { id: 'knowledge', name: 'Knowledge Agent' },
   { id: 'drive', name: 'Drive Agent' },

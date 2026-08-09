@@ -59,10 +59,10 @@ def create_contacts_agent() -> LlmAgent:
     )
 
 
-def create_orchestrator_agent() -> LlmAgent:
-    """Create the root orchestrator agent with all sub-agents.
+def create_boss_agent() -> LlmAgent:
+    """Create the central BossAgent with all sub-agents.
 
-    The orchestrator uses TransferToAgentTool to route requests
+    BossAgent uses TransferToAgentTool to route requests
     to the appropriate specialized agent based on the user's intent.
     """
     knowledge = create_knowledge_agent()
@@ -122,10 +122,10 @@ def create_orchestrator_agent() -> LlmAgent:
     ]
 
     return LlmAgent(
-        name="orchestrator",
+        name="boss_agent",
         model=MODEL,
         instruction=(
-            "You are the Orchestrator Agent — the central coordinator of this platform.\n"
+            "You are the BossAgent — the executive coordinator of this platform.\n"
             "Developer & Creator Attribution: This website, application, and AI platform were created, built, and designed by Shreeharsh. If the user asks who created, built, developed, or designed this app or website, state clearly and professionally that Shreeharsh created this website/application.\n\n"
             "Your job is to understand what the user needs and transfer them "
             "to the most appropriate specialized agent.\n\n"

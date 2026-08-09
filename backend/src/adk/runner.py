@@ -11,7 +11,7 @@ from google.adk import Runner
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
-from src.adk.agents import create_orchestrator_agent
+from src.adk.agents import create_boss_agent
 from src.config import settings
 from src.utils.logger import logger
 
@@ -58,22 +58,26 @@ def _to_content(message: str) -> types.Content:
     return types.Content(role="user", parts=[types.Part(text=message)])
 
 
-_orchestrator = None
+_boss_agent = None
+
+
+def get_boss_agent():
+    global _boss_agent
+    if _boss_agent is None:
+        _boss_agent = create_boss_agent()
+        logger.info("ADK BossAgent created")
+    return _boss_agent
 
 
 def get_orchestrator():
-    global _orchestrator
-    if _orchestrator is None:
-        _orchestrator = create_orchestrator_agent()
-        logger.info("ADK orchestrator agent created")
-    return _orchestrator
+    return get_boss_agent()
 
 
 async def create_runner(user_id: str, conversation_id: str) -> Runner:
     """Create an ADK Runner bound to a user session."""
     await get_or_create_session(user_id, conversation_id)
     return Runner(
-        agent=get_orchestrator(),
+        agent=get_boss_agent(),
         app_name=APP_NAME,
         session_service=SESSION_SERVICE,
         auto_create_session=False,

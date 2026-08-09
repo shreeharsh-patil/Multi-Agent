@@ -11,7 +11,7 @@ from src.api.middleware import (
     error_handler_middleware,
     jwt_auth_middleware,
 )
-from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates, data_analysis as data_analysis_route, workflows as workflows_route, weather_news as weather_news_route, swarm, study, task_runner, code_agent, calendar as calendar_route, contacts as contacts_route
+from src.api.routes import auth, chat, documents, agents as agents_route, knowledge, drive, notes, quiz, research, planner, workspaces, sharing, voice, memory, images, flashcards, reports, templates, data_analysis as data_analysis_route, workflows as workflows_route, weather_news as weather_news_route, swarm, study, task_runner, code_agent, calendar as calendar_route, contacts as contacts_route, agentic, agent_platform
 
 
 
@@ -152,6 +152,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(agents_route.router)
+app.include_router(agent_platform.router)
 app.include_router(knowledge.router)
 app.include_router(drive.router)
 app.include_router(notes.router)

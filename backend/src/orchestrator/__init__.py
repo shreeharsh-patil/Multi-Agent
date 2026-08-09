@@ -1,4 +1,4 @@
-from src.orchestrator.base import AgentOrchestrator, get_orchestrator
+from src.orchestrator.boss import BossAgent, get_boss_agent
 from src.orchestrator.router import AgentRouter
 
-__all__ = ["AgentOrchestrator", "AgentRouter", "get_orchestrator"]
+__all__ = ["BossAgent", "AgentRouter", "get_boss_agent"]

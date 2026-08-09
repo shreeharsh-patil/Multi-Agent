@@ -1,8 +1,11 @@
 import base64
 import uuid
+import time
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime, timezone
+from typing import Optional, Any
 
 import httpx
 
@@ -14,6 +17,12 @@ from src.utils.logger import logger
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# Cloudflare Workers AI FLUX Model Strategy Constants
+MODEL_FLUX_2_KLEIN_9B = "@cf/black-forest-labs/flux-2-klein-9b"
+MODEL_FLUX_2_KLEIN_4B = "@cf/black-forest-labs/flux-2-klein-4b"
+MODEL_FLUX_1_SCHNELL = "@cf/black-forest-labs/flux-1-schnell"
+MODEL_SDXL_LIGHTNING = "@cf/bytedance/stable-diffusion-xl-lightning"
+
 
 @dataclass
 class GeneratedImage:
@@ -21,165 +30,168 @@ class GeneratedImage:
     file_name: str
     download_url: str
     provider: str
+    model: str
     revised_prompt: str | None = None
     drive_file_id: str | None = None
     drive_web_view_link: str | None = None
 
 
-def _openai_options(size: str) -> tuple[str, str]:
-    model = settings.openai_image_model
-    if model.startswith("dall-e"):
-        allowed = {"1024x1024", "1792x1024", "1024x1792"}
-        quality = settings.openai_image_quality if settings.openai_image_quality in {"standard", "hd"} else "standard"
-    else:
-        allowed = {"1024x1024", "1536x1024", "1024x1536"}
-        quality = settings.openai_image_quality
-    return (size if size in allowed else "1024x1024"), quality
+class ImageGenerationService:
+    """Production-quality ImageGenerationService supporting Cloudflare Workers AI models:
+    - Primary High-Quality Model: @cf/black-forest-labs/flux-2-klein-9b
+    - Fast / Low-Cost Model: @cf/black-forest-labs/flux-2-klein-4b
+    - Fallback Model: @cf/black-forest-labs/flux-1-schnell
+    """
 
+    def __init__(self):
+        self.account_ids = [a.strip() for a in settings.cloudflare_account_id.split(",") if a.strip()]
+        self.api_tokens = [t.strip() for t in settings.cloudflare_api_token.split(",") if t.strip()]
+        self.key_pairs = list(zip(self.account_ids, self.api_tokens))
 
-async def _generate_openai(prompt: str, size: str) -> tuple[bytes, str | None]:
-    if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY is not configured")
+    async def generate_image(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        width: int = 1024,
+        height: int = 1024,
+        aspect_ratio: str = "1:1",
+        seed: Optional[int] = None,
+        input_images: Optional[list] = None,
+    ) -> dict[str, Any]:
+        """Generates an image via Cloudflare Workers AI with model routing & automatic fallback sequence."""
+        start_t = time.time()
+        target_model = model or MODEL_FLUX_2_KLEIN_9B
 
-    from openai import AsyncOpenAI
+        # Model Fallback Order
+        fallback_models = [
+            target_model,
+            MODEL_FLUX_2_KLEIN_9B,
+            MODEL_FLUX_2_KLEIN_4B,
+            MODEL_FLUX_1_SCHNELL,
+            MODEL_SDXL_LIGHTNING,
+        ]
+        # Deduplicate while preserving order
+        models_to_try = []
+        for m in fallback_models:
+            if m not in models_to_try:
+                models_to_try.append(m)
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-    resolved_size, quality = _openai_options(size)
-    result = await client.images.generate(
-        model=settings.openai_image_model,
-        prompt=prompt,
-        size=resolved_size,
-        quality=quality,
-        n=1,
-    )
-    image = result.data[0]
-    if image.b64_json:
-        return base64.b64decode(image.b64_json), image.revised_prompt
-    if image.url:
-        async with httpx.AsyncClient(timeout=60) as http:
-            response = await http.get(image.url)
+        if not self.key_pairs:
+            logger.warning("Cloudflare credentials missing, attempting Pollinations.ai fallback")
+            return await self._generate_pollinations_fallback(prompt, width, height, start_t)
+
+        last_error = None
+        for current_model in models_to_try:
+            for acc_id, token in self.key_pairs:
+                url = f"https://api.cloudflare.com/client/v4/accounts/{acc_id}/ai/run/{current_model}"
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Accept": "image/png",
+                }
+                payload: dict[str, Any] = {
+                    "prompt": prompt,
+                    "width": width,
+                    "height": height,
+                }
+                if seed is not None:
+                    payload["seed"] = seed
+                if input_images:
+                    payload["image"] = input_images[0]
+
+                try:
+                    async with httpx.AsyncClient(timeout=60) as http:
+                        response = await http.post(url, headers=headers, json=payload)
+                        if response.status_code < 400:
+                            content_type = response.headers.get("content-type", "").lower()
+                            content = response.content
+                            img_b64 = None
+
+                            if "application/json" in content_type or content.startswith(b"{"):
+                                try:
+                                    data = response.json()
+                                    if isinstance(data, dict) and "result" in data:
+                                        res_val = data["result"]
+                                        if isinstance(res_val, dict) and "image" in res_val:
+                                            img_b64 = res_val["image"]
+                                        elif isinstance(res_val, str):
+                                            img_b64 = res_val
+                                except Exception as json_err:
+                                    logger.warning(f"Failed to parse Cloudflare JSON: {json_err}")
+
+                            if not img_b64 and content:
+                                img_b64 = base64.b64encode(content).decode("utf-8")
+
+                            if img_b64:
+                                elapsed_ms = round((time.time() - start_t) * 1000, 2)
+                                logger.info(f"Successfully generated image via Cloudflare model {current_model} in {elapsed_ms}ms")
+                                return {
+                                    "success": True,
+                                    "model": current_model,
+                                    "prompt": prompt,
+                                    "image": img_b64,
+                                    "width": width,
+                                    "height": height,
+                                    "generationTime": f"{elapsed_ms}ms",
+                                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                                }
+
+                        logger.warning(f"Model {current_model} returned HTTP {response.status_code}, trying fallback model...")
+                        last_error = f"HTTP {response.status_code} on model {current_model}"
+                except Exception as err:
+                    logger.warning(f"Cloudflare model {current_model} call failed ({err}), trying fallback...")
+                    last_error = str(err)
+
+        logger.warning(f"All Cloudflare Workers AI models failed ({last_error}), switching to Pollinations.ai fallback")
+        return await self._generate_pollinations_fallback(prompt, width, height, start_t)
+
+    async def _generate_pollinations_fallback(self, prompt: str, width: int, height: int, start_t: float) -> dict[str, Any]:
+        """Fallback to free Pollinations.ai API if Cloudflare is unreachable."""
+        encoded_prompt = urllib.parse.quote(prompt)
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&nologo=true"
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as http:
+            response = await http.get(url)
             response.raise_for_status()
-            return response.content, image.revised_prompt
-    raise RuntimeError("The image provider returned no image data")
+            img_b64 = base64.b64encode(response.content).decode("utf-8")
+            elapsed_ms = round((time.time() - start_t) * 1000, 2)
+            return {
+                "success": True,
+                "model": "pollinations-flux-fallback",
+                "prompt": prompt,
+                "image": img_b64,
+                "width": width,
+                "height": height,
+                "generationTime": f"{elapsed_ms}ms",
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+            }
 
 
-async def _generate_stability(prompt: str) -> tuple[bytes, str | None]:
-    if not settings.stability_api_key:
-        raise ValueError("STABILITY_API_KEY is not configured")
-
-    headers = {
-        "Authorization": f"Bearer {settings.stability_api_key}",
-        "Accept": "image/*",
-    }
-    async with httpx.AsyncClient(timeout=120) as http:
-        response = await http.post(
-            "https://api.stability.ai/v2beta/stable-image/generate/core",
-            headers=headers,
-            files={"none": ("", b"")},
-            data={"prompt": prompt, "output_format": "png"},
-        )
-        if response.status_code >= 400:
-            raise RuntimeError(f"Stability AI image generation failed ({response.status_code})")
-        return response.content, None
-
-
-async def _generate_pollinations(prompt: str, size: str = "1024x1024", model: str = "flux") -> tuple[bytes, str | None]:
-    """Generate image via 100% free Pollinations.ai API."""
-    encoded_prompt = urllib.parse.quote(prompt)
-    width, height = 1024, 1024
-    if "x" in size:
-        parts = size.split("x")
-        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-            width, height = int(parts[0]), int(parts[1])
-
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model={model}&nologo=true"
-    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as http:
-        response = await http.get(url)
-        response.raise_for_status()
-        return response.content, None
-
-
-async def _generate_cloudflare(prompt: str) -> tuple[bytes, str | None]:
-    """Generate image via Cloudflare Workers AI with strict matching Account ID & API Token rotation."""
-    account_ids = [a.strip() for a in settings.cloudflare_account_id.split(",") if a.strip()]
-    api_tokens = [t.strip() for t in settings.cloudflare_api_token.split(",") if t.strip()]
-
-    if not account_ids or not api_tokens:
-        raise ValueError("CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN must be configured")
-
-    # Strictly pair Account ID #1 with API Token #1, Account ID #2 with API Token #2, etc.
-    pairs = list(zip(account_ids, api_tokens))
-    if not pairs:
-        raise ValueError("No valid matching Cloudflare (Account ID, API Token) pairs found")
-
-    last_error = None
-    for acc_id, token in pairs:
-        url = f"https://api.cloudflare.com/client/v4/accounts/{acc_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "image/png",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=60) as http:
-                response = await http.post(url, headers=headers, json={"prompt": prompt})
-                if response.status_code < 400:
-                    content_type = response.headers.get("content-type", "").lower()
-                    content = response.content
-                    if "application/json" in content_type or content.startswith(b"{"):
-                        try:
-                            data = response.json()
-                            if isinstance(data, dict) and "result" in data:
-                                res_val = data["result"]
-                                if isinstance(res_val, dict) and "image" in res_val:
-                                    return base64.b64decode(res_val["image"]), None
-                                elif isinstance(res_val, str):
-                                    return base64.b64decode(res_val), None
-                        except Exception as parse_err:
-                            logger.warning(f"Failed to parse Cloudflare JSON response: {parse_err}")
-                    return content, None
-                logger.warning(f"Cloudflare pair (Account: {acc_id[:6]}...) returned HTTP {response.status_code}, rotating to next matched pair...")
-                last_error = f"HTTP {response.status_code}"
-        except Exception as err:
-            logger.warning(f"Cloudflare request failed for Account {acc_id[:6]}... ({err}), rotating to next matched pair...")
-            last_error = str(err)
-
-    raise RuntimeError(f"All configured Cloudflare key pairs failed. Last error: {last_error}")
-
-
-import re
+image_generation_service = ImageGenerationService()
 
 
 async def _enhance_image_prompt(prompt: str) -> str:
-    """Clean raw user request into a clear, detailed, unambiguous visual prompt for image generation models."""
+    """Intelligently transforms user image request into a high-quality visual prompt."""
     raw = prompt.strip()
-    clean = re.sub(
-        r"(?i)^(generate|create|draw|make|design|render|paint|show|produce)\s+(me\s+)?(a|an|some)?\s*(image|picture|photo|photograph|illustration|drawing|artwork)?\s*(of|showing|featuring)?\s*",
-        "",
-        raw,
-    ).strip()
+    clean = raw
 
-    if not clean:
-        clean = raw
-
-    # Disambiguate ambiguous terms (e.g. medical injection vs car fuel injection)
-    if clean.lower() in {"injection", "an injection", "the injection", "syringe"}:
-        return "a medical syringe injection, healthcare doctor vaccine needle, clear clinical setting, high quality photograph"
-
-    # Use LLM to expand short prompts into detailed visual descriptions if needed
-    if len(clean.split()) <= 4:
-        try:
-            from src.services.llm import llm_service
-            expanded = await llm_service.generate(
-                prompt=f"Convert this image request into a clear, detailed 1-sentence visual description for AI image generation (avoid automotive confusion unless specified): '{clean}'",
-                system_instruction="You are an AI image prompt enhancer. Output ONLY the 1-sentence prompt text with no quotes or prefixes.",
-                max_output_tokens=60,
-            )
-            expanded_clean = expanded.strip().strip('"\'`')
-            if expanded_clean and len(expanded_clean) > 5:
-                return expanded_clean
-        except Exception as err:
-            logger.warning(f"Prompt enhancement failed: {err}")
+    # Expand short prompts into cinematic visual descriptions
+    try:
+        from src.services.llm import llm_service
+        expanded = await llm_service.generate(
+            prompt=(
+                f"Transform this user request into an elite, detailed image generation prompt: '{clean}'.\n"
+                f"Incorporate: subject, environment, composition, lighting, camera perspective, textures, mood, atmosphere, and visual hierarchy."
+            ),
+            system_instruction=(
+                "You are an expert AI Prompt Engineer for FLUX.2 models. Output ONLY the enhanced visual prompt string with no quotes or conversation."
+            ),
+            max_output_tokens=150,
+        )
+        expanded_clean = expanded.strip().strip('"\'`')
+        if expanded_clean and len(expanded_clean) > 10:
+            return expanded_clean
+    except Exception as err:
+        logger.warning(f"Prompt enhancement failed: {err}")
 
     return clean
 
@@ -187,55 +199,33 @@ async def _enhance_image_prompt(prompt: str) -> str:
 async def generate_and_store_image(
     prompt: str,
     user_id: str,
-    workspace_id: str | None = None,
+    workspace_id: Optional[str] = None,
     size: str = "1024x1024",
-    drive_access_token: str | None = None,
-    drive_refresh_token: str | None = None,
+    model: Optional[str] = None,
+    drive_access_token: Optional[str] = None,
+    drive_refresh_token: Optional[str] = None,
 ) -> GeneratedImage:
     raw_prompt = prompt.strip()
     if not raw_prompt:
         raise ValueError("An image prompt is required")
-    if len(raw_prompt) > 4000:
-        raise ValueError("Image prompts are limited to 4000 characters")
 
     clean_prompt = await _enhance_image_prompt(raw_prompt)
 
-    provider = settings.image_provider.lower()
-    if provider == "auto":
-        if settings.cloudflare_account_id and settings.cloudflare_api_token:
-            provider = "cloudflare"
-        elif settings.openai_api_key:
-            provider = "openai"
-        elif settings.stability_api_key:
-            provider = "stability"
-        else:
-            provider = "pollinations"
+    width, height = 1024, 1024
+    if "x" in size:
+        parts = size.split("x")
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            width, height = int(parts[0]), int(parts[1])
 
-    if provider == "cloudflare":
-        try:
-            image_bytes, revised_prompt = await _generate_cloudflare(clean_prompt)
-        except Exception as e:
-            logger.warning(f"Cloudflare Workers AI failed ({e}), falling back to Pollinations.ai")
-            image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
-            provider = "pollinations"
-    elif provider == "openai":
-        try:
-            image_bytes, revised_prompt = await _generate_openai(clean_prompt, size)
-        except Exception as e:
-            logger.warning(f"OpenAI image generation failed ({e}), falling back to Pollinations.ai")
-            image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
-            provider = "pollinations"
-    elif provider == "stability":
-        try:
-            image_bytes, revised_prompt = await _generate_stability(clean_prompt)
-        except Exception as e:
-            logger.warning(f"Stability AI image generation failed ({e}), falling back to Pollinations.ai")
-            image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
-            provider = "pollinations"
-    else:
-        image_bytes, revised_prompt = await _generate_pollinations(clean_prompt, size)
-        provider = "pollinations"
+    # Call ImageGenerationService
+    gen_result = await image_generation_service.generate_image(
+        prompt=clean_prompt,
+        model=model or MODEL_FLUX_2_KLEIN_9B,
+        width=width,
+        height=height,
+    )
 
+    image_bytes = base64.b64decode(gen_result["image"])
     file_name = f"generated-{uuid.uuid4().hex[:12]}.png"
     file_path = UPLOAD_DIR / file_name
     file_path.write_bytes(image_bytes)
@@ -272,12 +262,14 @@ async def generate_and_store_image(
     )
     await document.insert()
     document_id = str(document.id)
+
     return GeneratedImage(
         document_id=document_id,
         file_name=file_name,
         download_url=f"/api/documents/{document_id}/file",
-        provider=provider,
-        revised_prompt=revised_prompt,
+        provider="cloudflare_workers_ai",
+        model=gen_result.get("model", MODEL_FLUX_2_KLEIN_9B),
+        revised_prompt=clean_prompt,
         drive_file_id=drive_file_id,
         drive_web_view_link=drive_web_view_link,
     )
