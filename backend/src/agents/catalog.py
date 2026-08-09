@@ -1114,11 +1114,18 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         id="scraping-specialist",
         name="Scraping Specialist",
         department=AgentDepartment.AUTOMATION,
-        description="Parses HTML structure, bypasses pagination, and extracts clean text.",
-        capabilities=["html-parsing", "beautifulsoup", "pagination-handling"],
-        specialized_instruction="You are a Web Scraping & HTML Extraction Specialist. Construct robust BeautifulSoup/lxml parsers to extract clean data through dynamic pagination.",
-        domain_quality_criteria=["Parser Resilience", "Clean Text Extraction"],
+        description="Parses HTML structure, extracts web data, tables, and structured Markdown content from URLs.",
+        capabilities=["web-scraping", "scrape-url", "crawl-website", "extract-web-data", "table-extraction", "html-parsing", "beautifulsoup", "pagination-handling"],
+        specialized_instruction=(
+            "You are a Web Scraping & HTML Extraction Specialist.\n"
+            "1. When given a URL or web page request, extract the main body content, tables, and structured data.\n"
+            "2. Convert HTML into clean, well-formatted Markdown headings, bullet points, and tables.\n"
+            "3. Strip out unwanted page clutter (navbars, ads, cookie banners, sidebars).\n"
+            "4. Preserve all important data, source URLs, product details, and canonical links without data loss."
+        ),
+        domain_quality_criteria=["Parser Resilience", "Clean Text Extraction", "Zero Data Loss", "Markdown Table Formatting"],
         required_tools=["browser", "web_search"],
+        priority=10,
         icon="Code",
     ),
     AgentMetadata(

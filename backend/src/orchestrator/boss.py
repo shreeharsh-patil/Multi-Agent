@@ -271,19 +271,23 @@ class BossAgent:
         image_keywords = ["logo", "image", "draw", "picture", "wallpaper", "thumbnail", "illustration", "poster"]
         is_image_generation = any(k in text for k in image_keywords)
 
+        # Web Scraping Intent Detection
+        scraping_terms = ["scrape", "scraping", "crawler", "extract text from", "extract page", "scrape url", "http://", "https://"]
+        is_scraping = any(term in text for term in scraping_terms)
+
         is_coding = any(k in text for k in ["code", "script", "bug", "build", "api", "app", "react", "python", "backend", "database"])
-        is_research = any(k in text for k in ["research", "investigate", "sources", "latest", "compare", "papers", "news", "market"]) or is_shopping or is_live_data
+        is_research = any(k in text for k in ["research", "investigate", "sources", "latest", "compare", "papers", "news", "market"]) or is_shopping or is_live_data or is_scraping
         is_data = any(k in text for k in ["data", "csv", "sql", "excel", "calculate", "stat", "chart", "forecast"])
         is_writing = any(k in text for k in ["write", "article", "script", "essay", "blog", "copy", "hook", "story"])
         is_security = any(k in text for k in ["security", "auth", "encrypt", "vulnerability", "owasp", "penetration"])
 
-        match_count = sum([is_coding, is_research, is_data, is_writing, is_security, is_image_generation])
+        match_count = sum([is_coding, is_research, is_data, is_writing, is_security, is_image_generation, is_scraping])
         word_count = len(user_request.split())
 
         mode = TaskMode.STANDARD
         complexity = "moderate"
 
-        if is_shopping or is_image_generation:
+        if is_shopping or is_image_generation or is_scraping:
             mode = TaskMode.STANDARD
             complexity = "moderate"
         elif is_security or "critical" in text or "production" in text or match_count >= 3:
@@ -313,6 +317,7 @@ class BossAgent:
             "is_shopping": is_shopping,
             "is_live_data": is_live_data or bool(api_capability),
             "is_image_generation": is_image_generation,
+            "is_scraping": is_scraping,
             "api_capability": api_capability,
             "shopping_params": {
                 "category": category,
@@ -393,6 +398,21 @@ class BossAgent:
                 agent_id="product-comparison-agent",
                 objective=f"Build side-by-side spec comparison table for {category_str} and deduplicate duplicate seller listings.",
                 dependencies=["price-verification-agent"],
+            )
+        elif intent.get("is_scraping"):
+            graph.nodes["scraping-specialist"] = TaskNode(
+                id="scraping-specialist",
+                title="Web Scraping & Structured HTML Extraction",
+                agent_id="scraping-specialist",
+                objective=f"Scrape target web page, extract main body content, tables, and structured data for: {user_request}. Output clean Markdown.",
+                dependencies=["intent-detector"],
+            )
+            graph.nodes["real-time-data-verifier"] = TaskNode(
+                id="real-time-data-verifier",
+                title="Scraped Data Verification",
+                agent_id="real-time-data-verifier",
+                objective="Verify completeness, source links, and accuracy of extracted scraped data.",
+                dependencies=["scraping-specialist"],
             )
         elif intent.get("is_live_data"):
             graph.nodes["live-search-specialist"] = TaskNode(
@@ -604,13 +624,14 @@ class BossAgent:
 
             system_instruction += (
                 f"\nCRITICAL REAL-TIME SHOPPING SYNTHESIS RULES:\n"
-                f"1. Render a clean Markdown comparison table:\n"
-                f"   | Product | Price | Type / Spec | Rating | Best For |\n"
-                f"2. Hard Budget Rule: Only recommend products where price <= budget{budget_note}. "
+                f"1. Currency Rule: ALL PRICES MUST BE GIVEN IN INDIAN RUPEES (INR / ₹). Convert any USD prices to INR (1 USD = 86.5 INR).\n"
+                f"2. Render a clean Markdown comparison table:\n"
+                f"   | Product | Price (INR / ₹) | Type / Spec | Rating | Best For |\n"
+                f"3. Hard Budget Rule: Only recommend products where price <= budget{budget_note}. "
                 f"If mentioning a product slightly above budget, place it under '### Just above your budget'.\n"
-                f"3. EVERY product recommendation MUST include its verified product URL as a clickable link: [View product](url).\n"
-                f"4. Include timestamp at bottom: '*Price verified: {today_str}*'.\n"
-                f"5. End with a clear '### My pick' executive recommendation."
+                f"4. EVERY product recommendation MUST include its verified product URL as a clickable link: [View product](url).\n"
+                f"5. Include timestamp at bottom: '*Price verified: {today_str}*'.\n"
+                f"6. End with a clear '### My pick' executive recommendation."
             )
 
         try:

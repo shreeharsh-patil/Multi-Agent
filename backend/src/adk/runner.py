@@ -311,13 +311,14 @@ async def _fallback_process_message(
                 "CREATOR ATTRIBUTION: This website, application, and platform were created, built, and designed by Shreeharsh. "
                 "When asked 'who created this app', 'who made this website', 'who built this platform', or similar questions, respond directly and clearly: "
                 "'This website and application were created and developed by **Shreeharsh**.'\n"
+                "CURRENCY & PRODUCT PRICING RULE: All product prices, shopping deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n"
+                "CLICKABLE LINKS RULE: ALWAYS render every product recommendation, service, API, and website as an active clickable Markdown link [Product/Site Name](url). Never output plain text URLs or domain names without hyperlinking them.\n"
                 "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot generate or export PDF files — this platform HAS automated PDF generation, study book publishing, and PDF export capabilities. "
                 "Never claim you cannot access calendars, external applications, or tools in general — "
                 "this platform integrates Google Calendar, Google Contacts, Google Drive, Gmail, RAG Document Analysis, Web Search, PDF Generation, and Python Execution. "
                 "If a user asks about their contacts, calendar, or emails and their account is not connected, instruct them to connect Google in Settings → Integrations. "
-                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure. "
-                "ALWAYS INCLUDE CLICKABLE MARKDOWN LINKS for all websites, services, APIs, and documentation (e.g. [ApiVault](https://apivault.dev), [GitHub](https://github.com)). Never output plain text domain names without hyperlinking them."
+                "Be thorough and well-structured: **bold** for emphasis, *italic* for terms, bullet points for lists, headings for structure."
             ),
         )
         return {
