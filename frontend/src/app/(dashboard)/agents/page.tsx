@@ -23,12 +23,10 @@ import {
   Send,
   X,
   Sparkles,
-  Layers,
-  Terminal,
-  Database,
-  Cpu,
   CheckCircle,
+  Terminal,
   Zap,
+  Layers,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -141,8 +139,9 @@ export default function AgentsPage() {
     setTestOutput('')
     try {
       const res = await api.agentPlatform.execute(testMessage.trim(), `test_${testFor.id}`)
-      if (res.success && res.data && res.data.output) {
-        setTestOutput(res.data.output)
+      const resData = res.data as any
+      if (res.success && resData && resData.output) {
+        setTestOutput(resData.output)
       } else {
         setTestOutput('No output received from agent execution.')
       }
@@ -157,9 +156,10 @@ export default function AgentsPage() {
     if (!draft.name.trim() || !draft.system_instruction.trim()) return
     setSaving(true)
     try {
-      const res = await api.agents.create(draft)
-      if (res && res.id) {
-        setAgents((prev) => [res as any, ...prev])
+      const res = await api.agents.create(draft) as any
+      const agentObj = res.data || res
+      if (agentObj && agentObj.id) {
+        setAgents((prev) => [agentObj, ...prev])
         setBuilderOpen(false)
         setDraft({ name: '', description: '', icon: 'Bot', system_instruction: '', tools: [] })
       }

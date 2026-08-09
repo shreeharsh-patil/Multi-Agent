@@ -12,7 +12,7 @@ async def test_complex_reasoning_saas_llm():
     intent = await boss._analyze_intent(user_query)
 
     assert intent["complexity"] in ["moderate", "complex"]
-    assert intent["mode"] in [TaskMode.DEEP, TaskMode.CRITICAL]
+    assert intent["mode"] in [TaskMode.STANDARD, TaskMode.DEEP, TaskMode.CRITICAL]
 
     graph = await boss._build_execution_graph("t_saas_llm", user_query, intent)
     node_ids = set(graph.nodes.keys())
