@@ -624,12 +624,11 @@ class BossAgent:
 
             system_instruction += (
                 f"\nCRITICAL REAL-TIME SHOPPING SYNTHESIS RULES:\n"
-                f"1. Currency Rule: ALL PRICES MUST BE GIVEN IN INDIAN RUPEES (INR / ₹). Convert any USD prices to INR (1 USD = 86.5 INR).\n"
-                f"2. Render a clean Markdown comparison table:\n"
-                f"   | Product | Price (INR / ₹) | Type / Spec | Rating | Best For |\n"
-                f"3. Hard Budget Rule: Only recommend products where price <= budget{budget_note}. "
-                f"If mentioning a product slightly above budget, place it under '### Just above your budget'.\n"
-                f"4. EVERY product recommendation MUST include its verified product URL as a clickable link: [View product](url).\n"
+                f"1. Currency Rule: ALL PRICES MUST BE GIVEN IN INDIAN RUPEES (INR / ₹).\n"
+                f"2. Hard Budget Constraint: Only recommend products where price <= ₹{budget_val or 500} INR.\n"
+                f"3. MANDATORY CLICKABLE LINKS: EVERY product recommendation MUST include a clickable Markdown link [View on Amazon](url) or [View Product](url). NEVER output a product name without a link.\n"
+                f"4. Render a clean Markdown comparison table:\n"
+                f"   | Product | Price (INR / ₹) | Type / Spec | Rating | Clickable Link |\n"
                 f"5. Include timestamp at bottom: '*Price verified: {today_str}*'.\n"
                 f"6. End with a clear '### My pick' executive recommendation."
             )
