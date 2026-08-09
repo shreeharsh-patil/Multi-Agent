@@ -12,6 +12,7 @@ class Document(BeanieDocument):
     file_type: ALLOWED_FILE_TYPES
     file_size: int
     file_path: str
+    file_data_base64: Optional[str] = None
     status: Literal["uploading", "processing", "ready", "error"] = "uploading"
     chunk_count: int = 0
     error_message: Optional[str] = None

@@ -162,11 +162,13 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
         return await opendocuments_client.upload_document(safe_name, content)
 
     if is_image:
-        # Store images permanently in uploads directory
         dest_name = f"{uuid.uuid4().hex}_{safe_name}"
         dest_path = UPLOAD_DIR / dest_name
         with open(dest_path, "wb") as f:
             f.write(content)
+
+        import base64
+        base64_payload = base64.b64encode(content).decode("utf-8") if len(content) <= 12 * 1024 * 1024 else None
 
         doc = Document(
             user_id=resolved_user_id,
@@ -174,6 +176,7 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             file_type=ext,
             file_size=len(content),
             file_path=str(dest_path),
+            file_data_base64=base64_payload,
             status="ready",
             chunk_count=0,
             workspace_id=workspace_id,
@@ -245,12 +248,16 @@ async def upload_document(http_request: Request, file: UploadFile = File(...), u
             f.write(content)
         file_path = str(dest_path)
 
+        import base64
+        base64_payload = base64.b64encode(content).decode("utf-8") if len(content) <= 12 * 1024 * 1024 else None
+
         doc = Document(
             user_id=resolved_user_id,
             file_name=safe_name,
             file_type=ext,
             file_size=len(content),
             file_path=file_path,
+            file_data_base64=base64_payload,
             status="processing",
             workspace_id=workspace_id,
         )
@@ -420,6 +427,19 @@ async def download_document(document_id: str, http_request: Request, download: b
             except Exception as err:
                 logger.warning(f"Failed to recover file {doc.file_name} from Drive: {err}")
 
+        if not os.path.exists(file_path) and doc.file_data_base64:
+            try:
+                import base64
+                file_bytes = base64.b64decode(doc.file_data_base64)
+                cached_path = Path(UPLOAD_DIR) / (Path(doc.file_path).name if doc.file_path else doc.file_name)
+                cached_path.write_bytes(file_bytes)
+                doc.file_path = str(cached_path)
+                await doc.save()
+                file_path = str(cached_path)
+                logger.info(f"Recovered file from MongoDB Base64 backup: {doc.file_name}")
+            except Exception as recovery_err:
+                logger.warning(f"Failed Base64 recovery for {doc.id}: {recovery_err}")
+
         if not os.path.exists(file_path):
             if doc.drive_web_view_link and not is_image:
                 from fastapi.responses import RedirectResponse
@@ -491,12 +511,24 @@ async def get_document_file(document_id: str):
             )
         raise HTTPException(status_code=404, detail="Document not found")
 
-    file_path = doc.file_path
+    file_path = doc.file_path or str(UPLOAD_DIR / doc.file_name)
     actual_path = Path(file_path)
     if not actual_path.exists():
         fallback_path = UPLOAD_DIR / actual_path.name
         if fallback_path.exists():
             file_path = str(fallback_path)
+        elif doc.file_data_base64:
+            try:
+                import base64
+                file_bytes = base64.b64decode(doc.file_data_base64)
+                fallback_path.write_bytes(file_bytes)
+                file_path = str(fallback_path)
+                doc.file_path = file_path
+                await doc.save()
+                logger.info(f"Recovered file from MongoDB Base64 backup for inline view: {doc.file_name}")
+            except Exception as recovery_err:
+                logger.warning(f"Failed Base64 recovery for inline view {doc.id}: {recovery_err}")
+                raise HTTPException(status_code=404, detail="File not found on disk")
         else:
             raise HTTPException(status_code=404, detail="File not found on disk")
 
