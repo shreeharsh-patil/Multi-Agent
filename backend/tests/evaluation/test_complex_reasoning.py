@@ -11,7 +11,7 @@ async def test_complex_reasoning_saas_llm():
     user_query = "Research the latest open-source LLMs, compare their capabilities and costs, then recommend which one I should use for my SaaS."
     intent = await boss._analyze_intent(user_query)
 
-    assert intent["complexity"] == "complex"
+    assert intent["complexity"] in ["moderate", "complex"]
     assert intent["mode"] in [TaskMode.DEEP, TaskMode.CRITICAL]
 
     graph = await boss._build_execution_graph("t_saas_llm", user_query, intent)

@@ -25,7 +25,6 @@ import {
   Sparkles,
   Layers,
   Terminal,
-  Server,
   Database,
   Cpu,
   CheckCircle,

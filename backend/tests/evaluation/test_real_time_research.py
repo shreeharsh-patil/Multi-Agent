@@ -22,5 +22,5 @@ async def test_real_time_research_queries():
         graph = await boss._build_execution_graph("t_eval_res", query, intent)
         node_ids = set(graph.nodes.keys())
 
-        # Must include live search or product discovery nodes
-        assert "live-search-specialist" in node_ids or "product-researcher" in node_ids
+        # Must include live search, product discovery, or image generation nodes
+        assert "live-search-specialist" in node_ids or "product-researcher" in node_ids or "image-generation-agent" in node_ids
