@@ -745,48 +745,8 @@ async def chat_stream(
             if automatic_mode and routed_agent_id != "image":
                 _chat_log(request_id, "orchestration", "start", plan_agents=[step.get("agent_id") for step in dynamic_plan.get("steps", [])])
 
-                # Specialized domain agents (calendar, contacts, drive, gmail, research, planner, etc.)
-                # must run through process_dynamic so they receive Google tokens and context.
-                plan_step_agents = {step.get("agent_id") for step in (dynamic_plan or {}).get("steps", [])}
-                msg_lower = body.message.lower()
-                is_shopping_msg = any(term in msg_lower for term in ["mouse", "keyboard", "laptop", "headphones", "earphones", "monitor", "ssd", "phone", "mobile", "buy", "purchase", "under ₹", "under rs", "under 500", "under 1000", "cheapest", "best under", "deals"])
-                is_scraping_msg = any(term in msg_lower for term in ["scrape", "scraping", "crawler", "extract page", "extract text from", "http://", "https://"])
-                is_api_msg = any(term in msg_lower for term in ["weather", "temperature", "bitcoin", "crypto", "ethereum", "solana", "game deal", "ip address", "exchange rate"])
-
-                is_domain_agent = bool(
-                    is_shopping_msg or is_scraping_msg or is_api_msg
-                    or routed_agent_id in {"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news", "custom", "product-researcher", "scraping-specialist", "boss"}
-                    or plan_step_agents.intersection({"calendar", "contacts", "drive", "gmail", "research", "deep_research", "doctor", "hacker", "planner", "tool", "weather_news", "product-researcher", "price-verification-agent", "scraping-specialist"})
-                )
-
-                if len(dynamic_plan.get("steps", [])) <= 1 and not is_domain_agent:
-                    stream_processor = process_fast_message_stream if fast_path else process_message_stream
-                    async for stream_event in stream_processor(
-                        message=augmented_message,
-                        user_id=user_id,
-                        conversation_id=conv_id,
-                    ):
-                        event_name = stream_event["event"]
-                        event_data = stream_event["data"]
-                        if event_name in {"start", "agent"}:
-                            continue
-                        if event_name == "chunk" and event_data.get("text"):
-                            accumulated_output += event_data["text"]
-                        if event_name == "complete":
-                            _chat_log(request_id, "stream", "complete", request_started_at, output_chars=len(event_data.get("output") or accumulated_output))
-                            final_output = event_data.get("output") or accumulated_output
-                            attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
-                            await _save_messages(
-                                conv_id=conv_id, user_id=user_id, user_message=body.message,
-                                agent_message=final_output, agent_id="boss_agent", is_new=is_new,
-                                attachments=attachments_data, workspace_id=body.workspace_id,
-                                citations=event_data.get("citations"),
-                            )
-                        yield f"event: {event_name}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
-                    return
-
                 # The queue lets the dynamic executor report live progress
-                # while specialist tasks run concurrently.
+                # while specialist tasks run concurrently via BossAgent.
                 async def on_dynamic_event(event_name: str, data: dict):
                     event_queue.append({"event": event_name, "data": data})
 
