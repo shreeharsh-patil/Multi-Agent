@@ -616,12 +616,19 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             }
         elif body.workspace_id:
             knowledge_agent = get_boss_agent().registry.get_agent("knowledge")
-            if not knowledge_agent:
-                raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
-            agent_result = await knowledge_agent.execute(
-                augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id, "conversation_history": history_snippet}
-            )
-            result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
+            if knowledge_agent:
+                agent_result = await knowledge_agent.execute(
+                    augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id, "conversation_history": history_snippet}
+                )
+                result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
+            else:
+                result = await get_boss_agent().process_dynamic(
+                    augmented_message,
+                    user_id,
+                    plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
+                    conv_id,
+                    context=google_agent_context,
+                )
         else:
             result = await process_message(message=augmented_message, user_id=user_id, conversation_id=conv_id)
 
@@ -650,7 +657,14 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
     except Exception as e:
         friendly_error = _friendly_chat_error(e)
         logger.error(f"Chat error: {e}", exc_info=True)
-        raise HTTPException(status_code=503, detail=friendly_error)
+        return ChatResponse(
+            conversation_id=conv_id,
+            output=friendly_error,
+            citations=[],
+            agent_traces=[],
+            events_count=0,
+            success=False,
+        )
 
 
 @router.post("/stream")
@@ -854,18 +868,17 @@ async def chat_stream(
 
             if body.workspace_id and body.agent_id in (None, "auto", "knowledge"):
                 knowledge_agent = get_boss_agent().registry.get_agent("knowledge")
-                if not knowledge_agent:
-                    raise HTTPException(status_code=503, detail="Knowledge Agent is not initialized")
-                agent_result = await knowledge_agent.execute(
-                    augmented_message, {**stream_google_context, "workspace_id": body.workspace_id, "conversation_id": conv_id}
-                )
-                yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
-                async for word in _word_chunks(agent_result.output):
-                    yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
-                accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
-                yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
-                return
+                if knowledge_agent:
+                    agent_result = await knowledge_agent.execute(
+                        augmented_message, {**stream_google_context, "workspace_id": body.workspace_id, "conversation_id": conv_id}
+                    )
+                    yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
+                    async for word in _word_chunks(agent_result.output):
+                        yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
+                    accumulated_output = agent_result.output
+                    await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
+                    yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
+                    return
 
 
             async for sse_event in process_message_stream(
