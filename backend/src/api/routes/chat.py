@@ -770,15 +770,20 @@ async def chat_stream(
                     on_event=on_dynamic_event,
                 ))
                 dynamic_deadline = asyncio.get_running_loop().time() + settings.chat_stream_timeout_seconds
+                last_heartbeat = asyncio.get_running_loop().time()
                 while not dynamic_task.done() or event_queue:
                     while event_queue:
                         queued = event_queue.pop(0)
                         yield f"event: {queued['event']}\ndata: {json.dumps(queued['data'], ensure_ascii=False)}\n\n"
                     if not dynamic_task.done():
-                        if asyncio.get_running_loop().time() >= dynamic_deadline:
+                        now = asyncio.get_running_loop().time()
+                        if now - last_heartbeat > 1.5:
+                            yield ": heartbeat\n\n"
+                            last_heartbeat = now
+                        if now >= dynamic_deadline:
                             dynamic_task.cancel()
                             raise TimeoutError("BossAgent execution timed out")
-                        await asyncio.sleep(0.02)
+                        await asyncio.sleep(0.05)
                 dynamic_result = await dynamic_task
                 _chat_log(request_id, "boss_agent", "complete", request_started_at, output_chars=len(dynamic_result.get("output") or ""))
                 accumulated_output = dynamic_result["output"]
@@ -918,11 +923,13 @@ async def chat_stream(
 
     return StreamingResponse(
         event_generator(),
-        media_type="text/event-stream",
+        media_type="text/event-stream; charset=utf-8",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
             "X-Request-ID": request_id,
         },
     )
