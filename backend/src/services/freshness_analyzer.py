@@ -48,9 +48,10 @@ class FreshnessAnalyzer:
     ]
 
     STATIC_PATTERNS = [
-        r"^what is (tcp|http|udp|ip|dns|html|css|json|sql|python|react)\??$",
-        r"^how does (a|an)?\s*(mouse|keyboard|sensor|cpu|gpu|engine|compiler)\s*work\??$",
-        r"^explain (gravity|relativity|photosynthesis|binary search)\??$",
+        r"^what is (a|an)?\s*(tcp|http|udp|ip|dns|html|css|json|sql|python|react|linked list|stack|queue|tree|graph|binary search|sorting|algorithm|array|hash table|pointer|matrix|class|function|oop)\??$",
+        r"^how does (a|an)?\s*(mouse|keyboard|sensor|cpu|gpu|engine|compiler|linked list|stack|queue|array)\s*work\??$",
+        r"^explain (gravity|relativity|photosynthesis|binary search|linked list|recursion|dynamic programming)\??$",
+        r"\b(analyze|plot|chart|compute|dataset|summary statistics|csv)\b",
     ]
 
     def analyze(self, query: str) -> Dict[str, Any]:
