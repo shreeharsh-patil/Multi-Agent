@@ -131,17 +131,15 @@ app = FastAPI(
 )
 
 origins = [o.strip().rstrip("/") for o in settings.allowed_origins.split(",") if o.strip()]
+if "https://multi-agent-yy93.onrender.com" not in origins:
+    origins.append("https://multi-agent-yy93.onrender.com")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    # Also support Vercel preview deployments without adding every generated
-    # preview URL to Render environment variables.
-    allow_origin_regex=r"^https://[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.vercel\.app$",
+    allow_origin_regex=r"^https?://.*$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    # The frontend sends integration tokens conditionally. Reflecting the
-    # requested headers prevents a newly added optional integration header
-    # from breaking the browser preflight on a deployed backend.
     allow_headers=["*"],
 )
 app.middleware("http")(jwt_auth_middleware)
