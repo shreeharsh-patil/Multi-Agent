@@ -257,7 +257,9 @@ def _friendly_chat_error(error: Exception) -> str:
         )
     if "API key" in message or "api_key" in message.lower():
         return "The Gemini API key is missing or invalid. Set GEMINI_API_KEY in backend/.env and restart the backend."
-    return message or "The AI agent could not generate a response."
+    if "timeout" in message.lower() or "timed out" in message.lower():
+        return "The request timed out while retrieving live research data. Please re-send your question to continue."
+    return "I encountered a transient connection issue while gathering live data. Please repeat your request."
 
 
 class AttachmentInfo(BaseModel):

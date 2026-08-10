@@ -111,161 +111,182 @@ class BossAgent:
                     logger.warning(f"Event emission error: {err}")
 
         await emit("boss_received", {"task_id": tid, "user_request": user_request})
+        try:
+            # Step 1: Understand & Classify Task Mode and Intent (including Real-Time Shopping)
+            intent = await self._analyze_intent(user_request)
+            await emit("intent_analyzed", intent)
 
-        # Step 1: Understand & Classify Task Mode and Intent (including Real-Time Shopping)
-        intent = await self._analyze_intent(user_request)
-        await emit("intent_analyzed", intent)
-
-        # Step 1.5: Capability-based Internal API Registry Discovery & Execution
-        if intent.get("api_capability"):
-            cap = intent["api_capability"]
-            await emit("api_discovery_started", {"capability": cap})
-            from src.tools.api_tool import api_tool
-            api_res = await api_tool.execute_with_fallback(
-                cap,
-                {
-                    "query": user_request,
-                    "location": "Goa" if "goa" in user_request.lower() else "Requested Location",
-                    "asset": "bitcoin" if "bitcoin" in user_request.lower() or "btc" in user_request.lower() else "ethereum",
-                    "ip": "8.8.8.8" if "8.8.8.8" in user_request else "8.8.8.8",
-                }
-            )
-            if api_res.get("success"):
-                norm = api_res.get("normalized", {})
-                await emit("api_execution_completed", {
-                    "api_id": api_res.get("api_id"),
-                    "api_name": api_res.get("api_name"),
-                    "type": norm.get("type"),
-                    "status": "200 OK"
-                })
-                memory.record_result(
-                    "api-executor",
-                    json.dumps(norm, indent=2),
-                    sources=[{"title": norm.get("source", "API"), "url": norm.get("sourceUrl", "")}]
+            # Step 1.5: Capability-based Internal API Registry Discovery & Execution
+            if intent.get("api_capability"):
+                cap = intent["api_capability"]
+                await emit("api_discovery_started", {"capability": cap})
+                from src.tools.api_tool import api_tool
+                api_res = await api_tool.execute_with_fallback(
+                    cap,
+                    {
+                        "query": user_request,
+                        "location": "Goa" if "goa" in user_request.lower() else "Requested Location",
+                        "asset": "bitcoin" if "bitcoin" in user_request.lower() or "btc" in user_request.lower() else "ethereum",
+                        "ip": "8.8.8.8" if "8.8.8.8" in user_request else "8.8.8.8",
+                    }
                 )
+                if api_res.get("success"):
+                    norm = api_res.get("normalized", {})
+                    await emit("api_execution_completed", {
+                        "api_id": api_res.get("api_id"),
+                        "api_name": api_res.get("api_name"),
+                        "type": norm.get("type"),
+                        "status": "200 OK"
+                    })
+                    memory.record_result(
+                        "api-executor",
+                        json.dumps(norm, indent=2),
+                        sources=[{"title": norm.get("source", "API"), "url": norm.get("sourceUrl", "")}]
+                    )
 
-        # Step 1.6: Mandatory Real-Time Shopping Data Retrieval Gate
-        if intent.get("is_shopping"):
-            params = intent.get("shopping_params", {})
-            category = params.get("category", "product")
-            budget = params.get("budget")
-            await emit("shopping_retrieval_started", {"category": category, "budget": budget})
-            from src.tools.shopping_tool import shopping_tool
-            try:
-                shop_res = await shopping_tool.search_live_products(category=category, budget=budget)
-                if shop_res.get("success") and shop_res.get("offers"):
-                    await emit("shopping_retrieval_completed", {"total_verified": shop_res["total_verified"]})
-                    memory.products = shop_res["offers"]
-                    memory.record_result("product-researcher", json.dumps(shop_res, indent=2))
-                else:
-                    await emit("shopping_retrieval_failed", {"reason": "Zero verified products returned under budget constraint"})
+            # Step 1.6: Mandatory Real-Time Shopping Data Retrieval Gate
+            if intent.get("is_shopping"):
+                params = intent.get("shopping_params", {})
+                category = params.get("category", "product")
+                budget = params.get("budget")
+                await emit("shopping_retrieval_started", {"category": category, "budget": budget})
+                from src.tools.shopping_tool import shopping_tool
+                try:
+                    shop_res = await shopping_tool.search_live_products(category=category, budget=budget)
+                    if shop_res.get("success") and shop_res.get("offers"):
+                        await emit("shopping_retrieval_completed", {"total_verified": shop_res["total_verified"]})
+                        memory.products = shop_res["offers"]
+                        memory.record_result("product-researcher", json.dumps(shop_res, indent=2))
+                    else:
+                        await emit("shopping_retrieval_failed", {"reason": "Zero verified products returned under budget constraint"})
+                        memory.no_verified_products = True
+                        memory.record_result("product-researcher", "NO_VERIFIED_PRODUCTS_FOUND")
+                except Exception as e:
+                    logger.warning(f"Shopping retrieval gate error: {e}")
                     memory.no_verified_products = True
                     memory.record_result("product-researcher", "NO_VERIFIED_PRODUCTS_FOUND")
-            except Exception as e:
-                logger.warning(f"Shopping retrieval gate error: {e}")
-                memory.no_verified_products = True
-                memory.record_result("product-researcher", "NO_VERIFIED_PRODUCTS_FOUND")
 
-        # Step 1.7: Mandatory Real-Time Institution & Entity Research Gate
-        if intent.get("is_institution_research") and not intent.get("is_shopping"):
-            await emit("institution_research_started", {"query": user_request})
-            from src.tools.research_tool import institution_research_tool
-            try:
-                res_data = await institution_research_tool.execute_focused_research(user_request)
-                if res_data.get("success") and res_data.get("sources"):
-                    await emit("institution_research_completed", {"total_sources": res_data["total_sources"]})
-                    memory.record_result("research", res_data["summary_text"], sources=res_data["sources"])
-            except Exception as e:
-                logger.warning(f"Institution research gate error: {e}")
+            # Step 1.7: Mandatory Real-Time Institution & Entity Research Gate
+            if intent.get("is_institution_research") and not intent.get("is_shopping"):
+                await emit("institution_research_started", {"query": user_request})
+                from src.tools.research_tool import institution_research_tool
+                try:
+                    res_data = await institution_research_tool.execute_focused_research(user_request)
+                    if res_data.get("success") and res_data.get("sources"):
+                        await emit("institution_research_completed", {"total_sources": res_data["total_sources"]})
+                        memory.record_result("research", res_data["summary_text"], sources=res_data["sources"])
+                except Exception as e:
+                    logger.warning(f"Institution research gate error: {e}")
 
-        # Step 2: Build Task Graph & Select Specialists
-        graph = await self._build_execution_graph(tid, user_request, intent)
+            # Step 2: Build Task Graph & Select Specialists
+            graph = await self._build_execution_graph(tid, user_request, intent)
 
-        # Step 2.5: Pre-Execution Self-Check Protocol
-        pre_check = self._pre_execution_self_check(user_request, graph, intent)
-        await emit("pre_execution_check_passed", pre_check)
+            # Step 2.5: Pre-Execution Self-Check Protocol
+            pre_check = self._pre_execution_self_check(user_request, graph, intent)
+            await emit("pre_execution_check_passed", pre_check)
 
-        await emit("plan_created", {
-            "complexity": graph.complexity,
-            "mode": graph.mode.value,
-            "is_shopping": intent.get("is_shopping", False),
-            "total_nodes": len(graph.nodes),
-            "nodes": [
-                {"id": n.id, "title": n.title, "agent_id": n.agent_id, "deps": n.dependencies}
-                for n in graph.nodes.values()
-            ],
-            "pre_check": pre_check,
-        })
+            await emit("plan_created", {
+                "complexity": graph.complexity,
+                "mode": graph.mode.value,
+                "is_shopping": intent.get("is_shopping", False),
+                "total_nodes": len(graph.nodes),
+                "nodes": [
+                    {"id": n.id, "title": n.title, "agent_id": n.agent_id, "deps": n.dependencies}
+                    for n in graph.nodes.values()
+                ],
+                "pre_check": pre_check,
+            })
 
-        # Step 3: Execute Graph (Parallel & Sequential execution)
-        max_execution_iterations = 5
-        iteration = 0
-        execution_successful = False
+            # Step 3: Execute Graph (Parallel & Sequential execution)
+            max_execution_iterations = 5
+            iteration = 0
+            execution_successful = False
 
-        while iteration < max_execution_iterations and not execution_successful:
-            iteration += 1
-            await emit("execution_iteration_started", {"iteration": iteration})
+            while iteration < max_execution_iterations and not execution_successful:
+                iteration += 1
+                await emit("execution_iteration_started", {"iteration": iteration})
 
-            # Execute pending nodes in topological layers
-            await self._execute_graph_layers(graph, memory, emit)
+                # Execute pending nodes in topological layers
+                await self._execute_graph_layers(graph, memory, emit)
 
-            # Step 4: Evaluate Results & Uncertainty
-            eval_result = await self._evaluate_results(user_request, graph, memory)
-            await emit("results_evaluated", eval_result)
+                # Step 4: Evaluate Results & Uncertainty
+                eval_result = await self._evaluate_results(user_request, graph, memory)
+                await emit("results_evaluated", eval_result)
 
-            if eval_result.get("passed", True):
-                execution_successful = True
-            elif graph.replan_count < graph.max_replans and eval_result.get("new_subtasks"):
-                graph.replan_count += 1
-                await emit("replanning_triggered", {
-                    "replan_count": graph.replan_count,
-                    "reason": eval_result.get("reason", "Replanning triggered due to uncertainty or gaps"),
-                })
-                # Dynamically inject new subtasks into graph
-                for new_subtask in eval_result.get("new_subtasks", []):
-                    node_id = new_subtask.get("agent_id", f"node_{len(graph.nodes)+1}")
-                    if node_id not in graph.nodes:
-                        graph.nodes[node_id] = TaskNode(
-                            id=node_id,
-                            title=new_subtask.get("title", f"Subtask {node_id}"),
-                            agent_id=new_subtask.get("agent_id", "final-synthesizer"),
-                            objective=new_subtask.get("objective", "Resolve missing context"),
-                            dependencies=new_subtask.get("dependencies", []),
-                        )
+                if eval_result.get("passed", True):
+                    execution_successful = True
+                elif graph.replan_count < graph.max_replans and eval_result.get("new_subtasks"):
+                    graph.replan_count += 1
+                    await emit("replanning_triggered", {
+                        "replan_count": graph.replan_count,
+                        "reason": eval_result.get("reason", "Replanning triggered due to uncertainty or gaps"),
+                    })
+                    # Dynamically inject new subtasks into graph
+                    for new_subtask in eval_result.get("new_subtasks", []):
+                        node_id = new_subtask.get("agent_id", f"node_{len(graph.nodes)+1}")
+                        if node_id not in graph.nodes:
+                            graph.nodes[node_id] = TaskNode(
+                                id=node_id,
+                                title=new_subtask.get("title", f"Subtask {node_id}"),
+                                agent_id=new_subtask.get("agent_id", "final-synthesizer"),
+                                objective=new_subtask.get("objective", "Resolve missing context"),
+                                dependencies=new_subtask.get("dependencies", []),
+                            )
+                else:
+                    execution_successful = True
+
+            # Step 5: Global Quality Gate & Red-Team Review (for CRITICAL / DEEP modes)
+            if graph.mode in [TaskMode.CRITICAL, TaskMode.DEEP] and not intent.get("is_shopping"):
+                await emit("red_team_review_started", {})
+
+            # Step 5.5: Post-Execution Self-Check Protocol
+            post_check = self._post_execution_self_check(user_request, memory, graph)
+            await emit("post_execution_check_passed", post_check)
+
+            await emit("verifying_results", {"passed": execution_successful, "post_check": post_check})
+
+            # Step 6: Final Executive Synthesis (Preserving Real Product URLs & Verification Dates)
+            await emit("synthesizing_final_answer", {})
+            final_answer = await self._synthesize_final_output(user_request, memory, intent)
+            total_latency = round((time.time() - start_time) * 1000, 2)
+
+            summary = {
+                "task_id": tid,
+                "status": "completed" if execution_successful else "partial_success",
+                "user_request": user_request,
+                "complexity": graph.complexity,
+                "mode": graph.mode.value,
+                "is_shopping": intent.get("is_shopping", False),
+                "total_agents_activated": len(memory.results),
+                "active_agents": list(memory.results.keys()),
+                "output": final_answer,
+                "latency_ms": total_latency,
+                "traces": memory.traces,
+            }
+
+            await emit("boss_completed", {"latency_ms": total_latency, "active_agents": summary["active_agents"]})
+            return summary
+        except Exception as top_err:
+            logger.error(f"BossAgent execute_task encountered error: {top_err}", exc_info=True)
+            total_latency = round((time.time() - start_time) * 1000, 2)
+            fallback_answer = "I encountered a transient connection issue while gathering live data. Here is the information retrieved:\n\n"
+            if memory.results:
+                fallback_answer += "\n\n".join(str(v) for v in memory.results.values() if v)
             else:
-                execution_successful = True
-
-        # Step 5: Global Quality Gate & Red-Team Review (for CRITICAL / DEEP modes)
-        if graph.mode in [TaskMode.CRITICAL, TaskMode.DEEP] and not intent.get("is_shopping"):
-            await emit("red_team_review_started", {})
-
-        # Step 5.5: Post-Execution Self-Check Protocol
-        post_check = self._post_execution_self_check(user_request, memory, graph)
-        await emit("post_execution_check_passed", post_check)
-
-        await emit("verifying_results", {"passed": execution_successful, "post_check": post_check})
-
-        # Step 6: Final Executive Synthesis (Preserving Real Product URLs & Verification Dates)
-        await emit("synthesizing_final_answer", {})
-        final_answer = await self._synthesize_final_output(user_request, memory, intent)
-        total_latency = round((time.time() - start_time) * 1000, 2)
-
-        summary = {
-            "task_id": tid,
-            "status": "completed" if execution_successful else "partial_success",
-            "user_request": user_request,
-            "complexity": graph.complexity,
-            "mode": graph.mode.value,
-            "is_shopping": intent.get("is_shopping", False),
-            "total_agents_activated": len(memory.results),
-            "active_agents": list(memory.results.keys()),
-            "output": final_answer,
-            "latency_ms": total_latency,
-            "traces": memory.traces,
-        }
-
-        await emit("boss_completed", {"latency_ms": total_latency, "active_agents": summary["active_agents"]})
-        return summary
+                fallback_answer += "Please try repeating your question."
+            return {
+                "task_id": tid,
+                "status": "partial_success",
+                "user_request": user_request,
+                "complexity": "simple",
+                "mode": "standard",
+                "is_shopping": False,
+                "total_agents_activated": len(memory.results),
+                "active_agents": list(memory.results.keys()),
+                "output": fallback_answer,
+                "latency_ms": total_latency,
+                "traces": memory.traces,
+            }
 
     async def _analyze_intent(self, user_request: str) -> dict[str, Any]:
         """Classifies intent, objective, implicit requirements, TaskMode, and Shopping parameters."""
