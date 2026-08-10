@@ -422,10 +422,21 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
 
 @router.get("/conversations/{conv_id}")
 async def get_conversation(conv_id: str, http_request: Request) -> dict:
-    """Get a conversation with all messages."""
+    """Get a conversation with all messages (returns new conversation structure if not yet persisted)."""
     conv = await Conversation.get(conv_id)
     user_id = (getattr(http_request.state, "user", None) or {}).get("sub", "default")
-    if not conv or not await can_access_conversation(conv, user_id):
+    if not conv:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        return {
+            "id": conv_id,
+            "title": "New Conversation",
+            "agentId": "boss_agent",
+            "workspaceId": None,
+            "messages": [],
+            "createdAt": now_iso,
+            "updatedAt": now_iso,
+        }
+    if not await can_access_conversation(conv, user_id):
         raise HTTPException(404, "Conversation not found")
 
     return {

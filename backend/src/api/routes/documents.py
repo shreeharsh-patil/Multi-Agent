@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, Response
 from typing import List
 import os
 import uuid
@@ -487,15 +487,23 @@ async def get_document_file(document_id: str):
     """Serve a document file inline (for generated images, uploads, and inline rendering)."""
     from beanie import PydanticObjectId
     doc = None
+    clean_id = document_id.rsplit(".", 1)[0] if "." in document_id else document_id
+
     if PydanticObjectId.is_valid(document_id):
         doc = await Document.get(document_id)
+    elif PydanticObjectId.is_valid(clean_id):
+        doc = await Document.get(clean_id)
+
     if not doc:
         # Fallback search by filename
-        doc = await Document.find_one(Document.file_name == document_id)
+        doc = await Document.find_one(Document.file_name == document_id) or await Document.find_one(Document.file_name == clean_id)
 
     if not doc:
         # Fallback direct disk check in UPLOAD_DIR
         disk_path = UPLOAD_DIR / Path(document_id).name
+        if not disk_path.exists() and "." in document_id:
+            disk_path = UPLOAD_DIR / Path(clean_id).name
+
         if disk_path.exists():
             ext = disk_path.suffix.lstrip(".").lower()
             media_type_map = {
@@ -509,7 +517,13 @@ async def get_document_file(document_id: str):
                 filename=disk_path.name,
                 content_disposition_type="inline",
             )
-        raise HTTPException(status_code=404, detail="Document not found")
+        fallback_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0f172a" rx="12"/>
+  <circle cx="200" cy="130" r="32" fill="#3b82f6" opacity="0.3"/>
+  <path d="M185 120 L215 120 L200 145 Z" fill="#60a5fa" opacity="0.8"/>
+  <text x="200" y="215" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#94a3b8" text-anchor="middle">Image Resource Unavailable</text>
+</svg>"""
+        return Response(content=fallback_svg, media_type="image/svg+xml")
 
     file_path = doc.file_path or str(UPLOAD_DIR / doc.file_name)
     actual_path = Path(file_path)
@@ -528,9 +542,21 @@ async def get_document_file(document_id: str):
                 logger.info(f"Recovered file from MongoDB Base64 backup for inline view: {doc.file_name}")
             except Exception as recovery_err:
                 logger.warning(f"Failed Base64 recovery for inline view {doc.id}: {recovery_err}")
-                raise HTTPException(status_code=404, detail="File not found on disk")
+                fallback_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0f172a" rx="12"/>
+  <circle cx="200" cy="130" r="32" fill="#3b82f6" opacity="0.3"/>
+  <path d="M185 120 L215 120 L200 145 Z" fill="#60a5fa" opacity="0.8"/>
+  <text x="200" y="215" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#94a3b8" text-anchor="middle">Image Resource Unavailable</text>
+</svg>"""
+                return Response(content=fallback_svg, media_type="image/svg+xml")
         else:
-            raise HTTPException(status_code=404, detail="File not found on disk")
+            fallback_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0f172a" rx="12"/>
+  <circle cx="200" cy="130" r="32" fill="#3b82f6" opacity="0.3"/>
+  <path d="M185 120 L215 120 L200 145 Z" fill="#60a5fa" opacity="0.8"/>
+  <text x="200" y="215" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#94a3b8" text-anchor="middle">Image Resource Unavailable</text>
+</svg>"""
+            return Response(content=fallback_svg, media_type="image/svg+xml")
 
     media_type_map = {
         "png": "image/png",
