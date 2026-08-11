@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-004"
 
     openrouter_api_key: str = ""
-    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    openrouter_model: str = "google/gemini-2.0-flash-exp:free"
     openrouter_base_url: str = "https://api.openrouter.ai/api/v1"
 
     nararouter_api_key: str = ""
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
 
     aiand_api_key: str = ""
-    aiand_model: str = "qwen/qwen3.6-27b"
+    aiand_model: str = "qwen/qwen-2.5-72b-instruct"
     aiand_base_url: str = "https://api.aiand.com/v1"
 
     kimi_api_key: str = ""

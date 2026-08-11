@@ -46,19 +46,25 @@ def _build_providers() -> list[BaseLLMProvider]:
         ))
 
     if settings.aiand_api_key:
+        aiand_model = settings.aiand_model
+        if "qwen3.6" in aiand_model or "27b" in aiand_model:
+            aiand_model = "qwen/qwen-2.5-72b-instruct"
         providers.append(OpenAICompatibleProvider(
             name="AIand",
             api_key=settings.aiand_api_key,
-            model=settings.aiand_model,
+            model=aiand_model,
             base_url=settings.aiand_base_url,
             timeout_seconds=60,  # Cold start on free tier can take ~30-60s
         ))
 
     if settings.openrouter_api_key:
+        openrouter_model = settings.openrouter_model
+        if "nemotron-3-ultra" in openrouter_model:
+            openrouter_model = "google/gemini-2.0-flash-exp:free"
         providers.append(OpenAICompatibleProvider(
             name="OpenRouter",
             api_key=settings.openrouter_api_key,
-            model=settings.openrouter_model,
+            model=openrouter_model,
             base_url=settings.openrouter_base_url,
             timeout_seconds=10,
         ))

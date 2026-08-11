@@ -248,18 +248,29 @@ async def _generate_image_message(
 
 
 def _friendly_chat_error(error: Exception) -> str:
-    """Return a useful client-facing message for common provider failures."""
+    """Return a useful, informative client-facing message for chat errors."""
     message = str(error)
-    if "429" in message or "RESOURCE_EXHAUSTED" in message or "quota" in message.lower():
-        return (
-            "The AI provider quota is exhausted for the configured Gemini API key. "
-            "Enable billing or use a Gemini key/model with available quota, then restart the backend."
-        )
-    if "API key" in message or "api_key" in message.lower():
-        return "The Gemini API key is missing or invalid. Set GEMINI_API_KEY in backend/.env and restart the backend."
-    if "timeout" in message.lower() or "timed out" in message.lower():
-        return "The request timed out while retrieving live research data. Please re-send your question to continue."
-    return "I encountered a transient connection issue while gathering live data. Please repeat your request."
+    lowered = message.lower()
+    err_type = type(error).__name__
+
+    # Actual connection / transport network failures
+    if any(net_err in err_type.lower() or net_err in lowered for net_err in ["connecterror", "connectionrefused", "clientconnecterror", "dnscounter", "socket.error"]):
+        return "Network connection failure: Unable to establish a connection to the remote AI service. Please check your connection and retry."
+
+    if "429" in message or "resource_exhausted" in lowered or "quota" in lowered or "rate limit" in lowered:
+        return "The AI provider quota or rate limit was reached. Please wait a few seconds and click Retry below."
+
+    if "api key" in lowered or "api_key" in lowered or "unauthenticated" in lowered or "invalid_key" in lowered:
+        return "AI Service Authentication Error: API key is missing, invalid, or unauthenticated. Please check the backend .env configuration."
+
+    if "timeout" in lowered or "timed out" in lowered:
+        return "The request timed out while generating the response. Please click Retry to try again."
+
+    # Return the clean error message so the user and developer know what failed
+    clean_msg = message.split("\n")[0] if "\n" in message else message
+    if len(clean_msg) > 200:
+        clean_msg = clean_msg[:200] + "..."
+    return f"Unable to complete the request: {clean_msg}. Please click Retry below to try again."
 
 
 class AttachmentInfo(BaseModel):

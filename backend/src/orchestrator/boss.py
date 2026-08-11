@@ -269,11 +269,12 @@ class BossAgent:
         except Exception as top_err:
             logger.error(f"BossAgent execute_task encountered error: {top_err}", exc_info=True)
             total_latency = round((time.time() - start_time) * 1000, 2)
-            fallback_answer = "I encountered a transient connection issue while gathering live data. Here is the information retrieved:\n\n"
+            err_msg = str(top_err).split("\n")[0]
             if memory.results:
+                fallback_answer = "Partially gathered information before encountering an error:\n\n"
                 fallback_answer += "\n\n".join(str(v) for v in memory.results.values() if v)
             else:
-                fallback_answer += "Please try repeating your question."
+                fallback_answer = f"The multi-agent workflow encountered an issue: {err_msg}. Please click Retry to try your request again."
             return {
                 "task_id": tid,
                 "status": "partial_success",
