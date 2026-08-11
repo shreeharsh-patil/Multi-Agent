@@ -436,7 +436,12 @@ async def list_conversations(http_request: Request, user_id: str = "default") ->
 @router.get("/conversations/{conv_id}")
 async def get_conversation(conv_id: str, http_request: Request) -> dict:
     """Get a conversation with all messages (returns new conversation structure if not yet persisted)."""
-    conv = await Conversation.get(conv_id)
+    try:
+        conv = await Conversation.get(conv_id)
+    except Exception as e:
+        logger.warning(f"Error fetching conversation {conv_id}: {e}")
+        conv = None
+
     user_id = (getattr(http_request.state, "user", None) or {}).get("sub", "default")
     if not conv:
         now_iso = datetime.now(timezone.utc).isoformat()

@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
-import { Send, Bot, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, CheckCircle2, Share2, ChevronDown, Copy, RefreshCw, Pencil } from 'lucide-react'
+import { Send, Bot, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, CheckCircle2, Share2, ChevronDown, Copy, RefreshCw, Pencil, AlertCircle } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
@@ -695,6 +695,9 @@ function ChatContent() {
 
 
 
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const activeFetchIdRef = useRef<number>(0)
+
   // Start a new conversation
   const startNewConversation = useCallback(() => {
     abortControllerRef.current?.abort()
@@ -708,7 +711,57 @@ function ChatContent() {
     setAttachments([])
     setShareUrl(null)
     setLoadingHistory(false)
+    setHistoryError(null)
     if (typeof window !== 'undefined') window.history.replaceState(null, '', '/chat')
+  }, [])
+
+  const loadConversation = useCallback((targetId: string) => {
+    if (!targetId) return
+    const fetchId = ++activeFetchIdRef.current
+    loadedIdRef.current = targetId
+    setConversationId(targetId)
+    setLoadingHistory(true)
+    setHistoryError(null)
+
+    api.chat.getConversation(targetId)
+      .then((res) => {
+        if (fetchId !== activeFetchIdRef.current) return
+        if (res.success && res.data) {
+          const conv = res.data
+          setChatTitle(conv.title || '')
+          if (conv.agentId) setSelectedAgent(conv.agentId)
+          if (Array.isArray(conv.messages)) {
+            setMessages(
+              conv.messages.map((m: any, idx: number) => ({
+                id: m.id || `msg_${idx}`,
+                role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+                content: m.content || '',
+                agentId: m.agentId,
+                attachments: m.metadata?.attachments,
+                citations: m.citations,
+              }))
+            )
+          } else {
+            setMessages([])
+          }
+          setHistoryError(null)
+        } else {
+          console.warn('Conversation not found or empty:', res.error)
+          setChatTitle('')
+          setMessages([])
+          setHistoryError(null)
+        }
+      })
+      .catch((err) => {
+        if (fetchId !== activeFetchIdRef.current) return
+        console.error('Failed to load chat history:', err)
+        setHistoryError('Unable to load this conversation. Please check your connection or retry.')
+      })
+      .finally(() => {
+        if (fetchId === activeFetchIdRef.current) {
+          setLoadingHistory(false)
+        }
+      })
   }, [])
 
   useEffect(() => {
@@ -740,77 +793,18 @@ function ChatContent() {
   const convParam = searchParams?.get('id') || searchParams?.get('c') || searchParams?.get('conversation_id') || searchParams?.get('conversation')
   useEffect(() => {
     if (!convParam) {
-      // If URL has no conversation ID and we previously loaded a URL conversation, reset to new chat
       if (loadedIdRef.current !== null && !locallyCreatedIds.current.has(conversationId || '')) {
         startNewConversation()
       }
       return
     }
 
-    // If this URL conversation ID is already active or was just created locally in this session, keep state intact
     if (loadedIdRef.current === convParam || locallyCreatedIds.current.has(convParam)) {
-      if (conversationId !== convParam) {
-        setConversationId(convParam)
-      }
       return
     }
 
-    // Fetch conversation messages from API
-    loadedIdRef.current = convParam
-    setConversationId(convParam)
-    setLoadingHistory(true)
-    let isCancelled = false
-
-    api.chat.getConversation(convParam)
-      .then((res) => {
-        if (isCancelled) return
-        if (res.success && res.data) {
-          const conv = res.data
-          setChatTitle(conv.title || '')
-          if (conv.agentId) setSelectedAgent(conv.agentId)
-          if (Array.isArray(conv.messages)) {
-            setMessages(
-              conv.messages.map((m: any, idx: number) => ({
-                id: m.id || `msg_${idx}`,
-                role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-                content: m.content || '',
-                agentId: m.agentId,
-                attachments: m.metadata?.attachments,
-                citations: m.citations,
-              }))
-            )
-          }
-        } else {
-          console.warn('Conversation not found or inaccessible, resetting to new chat:', res.error)
-          if (!isCancelled) {
-            loadedIdRef.current = null
-            setConversationId(undefined)
-            setChatTitle('')
-            setMessages([])
-            if (typeof window !== 'undefined') {
-              window.history.replaceState(null, '', '/chat')
-            }
-          }
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load chat history:', err)
-        if (!isCancelled) {
-          loadedIdRef.current = null
-          setConversationId(undefined)
-          setChatTitle('')
-          setMessages([])
-          if (typeof window !== 'undefined') {
-            window.history.replaceState(null, '', '/chat')
-          }
-        }
-      })
-      .finally(() => {
-        if (!isCancelled) setLoadingHistory(false)
-      })
-
-    return () => { isCancelled = true }
-  }, [convParam, conversationId, startNewConversation])
+    loadConversation(convParam)
+  }, [convParam, loadConversation, startNewConversation])
 
   const handleSend = useCallback(async (overrideText?: string) => {
     // Synchronous ref guard prevents double-submits even when state hasn't updated yet
@@ -1506,6 +1500,34 @@ function ChatContent() {
           {loadingHistory && messages.length === 0 ? (
             <div className="flex h-full items-center justify-center bg-background">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : historyError ? (
+            <div className="flex h-full flex-col items-center justify-center space-y-4 bg-background p-6 text-center select-none">
+              <div className="rounded-full bg-destructive/10 p-3 text-destructive">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-foreground">Unable to load this conversation</h3>
+                <p className="text-xs text-muted-foreground max-w-sm">{historyError}</p>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => convParam && loadConversation(convParam)}
+                  className="gap-2"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Retry
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => startNewConversation()}
+                >
+                  Go back to chats
+                </Button>
+              </div>
             </div>
           ) : messages.length === 0 ? (
             <div 
