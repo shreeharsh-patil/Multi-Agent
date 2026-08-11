@@ -189,10 +189,6 @@ function ChatContent() {
     if (agentParam && agents.concat(customAgents).some(a => a.id === agentParam)) {
       setSelectedAgent(agentParam)
     }
-    const convParam = searchParams?.get('id') || searchParams?.get('c') || searchParams?.get('conversation_id') || searchParams?.get('conversation')
-    if (convParam) {
-      setConversationId(convParam)
-    }
   }, [searchParams, customAgents])
   const [, setWorkspaces] = useState<Array<{ id: string; name: string; color: string; documentCount: number }>>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState('all')
@@ -510,6 +506,7 @@ function ChatContent() {
   // Track which conversationIds we created locally this session so we don't
   // re-fetch and overwrite in-progress streaming messages.
   const locallyCreatedIds = useRef<Set<string>>(new Set())
+  const loadedIdRef = useRef<string | null>(null)
   const [, setConversations] = useState<Array<{
     id: string
     title: string
@@ -520,75 +517,7 @@ function ChatContent() {
   }>>([])
   const [, setLoadingConversations] = useState(true)
   const [chatTitle, setChatTitle] = useState('')
-  const [, setLoadingHistory] = useState(false)
-
-  // Sync conversationId to the URL so refresh/back-nav restores the chat
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (conversationId) {
-      const url = new URL(window.location.href)
-      url.searchParams.set('id', conversationId)
-      window.history.replaceState(null, '', url.toString())
-    } else {
-      window.history.replaceState(null, '', '/chat')
-    }
-  }, [conversationId])
-
-  // Fetch conversation messages when conversationId is set/changed,
-  // but skip if we just created this id locally (already have the messages)
-  useEffect(() => {
-    if (!conversationId) return
-    // Don't re-fetch a conversation we just created — messages are already in state
-    if (locallyCreatedIds.current.has(conversationId)) return
-    let isCancelled = false
-    setLoadingHistory(true)
-    api.chat.getConversation(conversationId)
-      .then((res) => {
-        if (isCancelled) return
-        if (res.success && res.data) {
-          const conv = res.data
-          setChatTitle(conv.title || '')
-          if (conv.agentId) setSelectedAgent(conv.agentId)
-          if (Array.isArray(conv.messages)) {
-            setMessages(
-              conv.messages.map((m: any, idx: number) => ({
-                id: m.id || `msg_${idx}`,
-                role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-                content: m.content || '',
-                agentId: m.agentId,
-                attachments: m.metadata?.attachments,
-                citations: m.citations,
-              }))
-            )
-          }
-        } else {
-          // Conversation not found or invalid: reset ID so next message starts fresh
-          console.warn('Conversation not found or inaccessible, resetting to new chat:', res.error)
-          setConversationId(undefined)
-          setChatTitle('')
-          setMessages([])
-          if (typeof window !== 'undefined') {
-            window.history.replaceState(null, '', '/chat')
-          }
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load chat history:', err)
-        if (!isCancelled) {
-          setConversationId(undefined)
-          setChatTitle('')
-          setMessages([])
-          if (typeof window !== 'undefined') {
-            window.history.replaceState(null, '', '/chat')
-          }
-        }
-      })
-      .finally(() => {
-        if (!isCancelled) setLoadingHistory(false)
-      })
-
-    return () => { isCancelled = true }
-  }, [conversationId])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   // Persist unsent composer text per-conversation so it survives navigation
   // and refreshes. Keyed by conversation id ("new" for a fresh chat).
@@ -764,43 +693,7 @@ function ChatContent() {
     }).catch(() => {})
   }, [fetchConversations])
 
-  // Ref to prevent stale resets when searchParams changes during navigation
-  const loadedIdRef = useRef<string | null>(null)
-  const isLoadingRef = useRef(false)
 
-  // Load a conversation's messages
-  const loadConversation = useCallback(async (id: string) => {
-    if (isLoadingRef.current) return
-    isLoadingRef.current = true
-    loadedIdRef.current = id
-    try {
-      const res = await api.chat.getConversation(id)
-      // Only apply if we're still on the same conversation (not superseded by newer navigation)
-      if (loadedIdRef.current !== id) return
-      if (res.success && res.data) {
-        setConversationId(res.data.id)
-        setChatTitle(res.data.title)
-        setMessages(res.data.messages.map((m) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          agentId: m.agentId,
-          attachments: (m.metadata as { attachments?: Array<{ name: string; size: number; documentId?: string; driveFileId?: string; driveWebViewLink?: string }> } | undefined)?.attachments,
-          citations: m.citations,
-        })))
-      } else {
-        console.error('Failed to load conversation:', res.error)
-      }
-    } catch (e) {
-      if (loadedIdRef.current === id) {
-        console.error('Failed to load conversation:', e)
-      }
-    } finally {
-      if (loadedIdRef.current === id) {
-        isLoadingRef.current = false
-      }
-    }
-  }, [])
 
   // Start a new conversation
   const startNewConversation = useCallback(() => {
@@ -809,12 +702,12 @@ function ChatContent() {
     sendingRef.current = false
     setSending(false)
     loadedIdRef.current = null
-    isLoadingRef.current = false
     setConversationId(undefined)
     setChatTitle('')
     setMessages([])
     setAttachments([])
     setShareUrl(null)
+    setLoadingHistory(false)
     if (typeof window !== 'undefined') window.history.replaceState(null, '', '/chat')
   }, [])
 
@@ -843,15 +736,81 @@ function ChatContent() {
     return () => window.removeEventListener('keydown', onKey)
   }, [startNewConversation])
 
-  // Load conversation from search param
-  const idParam = searchParams?.get('id')
+  // Single source of truth for URL search parameter sync & conversation loading
+  const convParam = searchParams?.get('id') || searchParams?.get('c') || searchParams?.get('conversation_id') || searchParams?.get('conversation')
   useEffect(() => {
-    if (idParam) {
-      loadConversation(idParam)
-    } else {
-      startNewConversation()
+    if (!convParam) {
+      // If URL has no conversation ID and we previously loaded a URL conversation, reset to new chat
+      if (loadedIdRef.current !== null && !locallyCreatedIds.current.has(conversationId || '')) {
+        startNewConversation()
+      }
+      return
     }
-  }, [idParam, loadConversation, startNewConversation])
+
+    // If this URL conversation ID is already active or was just created locally in this session, keep state intact
+    if (loadedIdRef.current === convParam || locallyCreatedIds.current.has(convParam)) {
+      if (conversationId !== convParam) {
+        setConversationId(convParam)
+      }
+      return
+    }
+
+    // Fetch conversation messages from API
+    loadedIdRef.current = convParam
+    setConversationId(convParam)
+    setLoadingHistory(true)
+    let isCancelled = false
+
+    api.chat.getConversation(convParam)
+      .then((res) => {
+        if (isCancelled) return
+        if (res.success && res.data) {
+          const conv = res.data
+          setChatTitle(conv.title || '')
+          if (conv.agentId) setSelectedAgent(conv.agentId)
+          if (Array.isArray(conv.messages)) {
+            setMessages(
+              conv.messages.map((m: any, idx: number) => ({
+                id: m.id || `msg_${idx}`,
+                role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+                content: m.content || '',
+                agentId: m.agentId,
+                attachments: m.metadata?.attachments,
+                citations: m.citations,
+              }))
+            )
+          }
+        } else {
+          console.warn('Conversation not found or inaccessible, resetting to new chat:', res.error)
+          if (!isCancelled) {
+            loadedIdRef.current = null
+            setConversationId(undefined)
+            setChatTitle('')
+            setMessages([])
+            if (typeof window !== 'undefined') {
+              window.history.replaceState(null, '', '/chat')
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load chat history:', err)
+        if (!isCancelled) {
+          loadedIdRef.current = null
+          setConversationId(undefined)
+          setChatTitle('')
+          setMessages([])
+          if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', '/chat')
+          }
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingHistory(false)
+      })
+
+    return () => { isCancelled = true }
+  }, [convParam, conversationId, startNewConversation])
 
   const handleSend = useCallback(async (overrideText?: string) => {
     // Synchronous ref guard prevents double-submits even when state hasn't updated yet
@@ -1071,9 +1030,15 @@ function ChatContent() {
                 newConvId = data.conversation_id
                 // Mark this id as locally created so we don't refetch it
                 locallyCreatedIds.current.add(data.conversation_id)
+                loadedIdRef.current = data.conversation_id
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 accumulatedContent = data.output || accumulatedContent
                 setConversationId(data.conversation_id)
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href)
+                  url.searchParams.set('id', data.conversation_id)
+                  window.history.replaceState(null, '', url.toString())
+                }
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -1117,7 +1082,13 @@ function ChatContent() {
         ),
       )
       if (newConvId && newConvId !== currentConvId) {
+        loadedIdRef.current = newConvId
         setConversationId(newConvId)
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href)
+          url.searchParams.set('id', newConvId)
+          window.history.replaceState(null, '', url.toString())
+        }
       }
     } catch (err) {
       // User pressed Stop: keep whatever streamed so far, mark it as stopped.
@@ -1157,7 +1128,13 @@ function ChatContent() {
         }, googleAccessToken, googleRefreshToken)
         if (res.success && res.data) {
           locallyCreatedIds.current.add(res.data.conversation_id)
+          loadedIdRef.current = res.data.conversation_id
           setConversationId(res.data.conversation_id)
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href)
+            url.searchParams.set('id', res.data.conversation_id)
+            window.history.replaceState(null, '', url.toString())
+          }
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantId
@@ -1525,8 +1502,12 @@ function ChatContent() {
         )}
 
         {/* Message Feeds Scroll Area */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin relative min-h-0">
-          {messages.length === 0 ? (
+        <div className="flex-1 relative min-h-0 overflow-hidden">
+          {loadingHistory && messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center bg-background">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : messages.length === 0 ? (
             <div 
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
               onDrop={(e) => {
@@ -1536,7 +1517,7 @@ function ChatContent() {
                   handleFileSelect({ target: { files: e.dataTransfer.files } } as any);
                 }
               }}
-              className="absolute inset-0 flex flex-col items-center justify-center p-4 sm:p-8 text-center select-none bg-background overflow-y-auto scrollbar-thin"
+              className="h-full w-full flex flex-col items-center justify-center p-4 sm:p-8 text-center select-none bg-background overflow-y-auto scrollbar-thin"
             >
               <div className="max-w-xl w-full flex flex-col items-center justify-center space-y-6 py-8">
                 {/* Logo & Welcoming Header */}
