@@ -289,6 +289,97 @@ class BossAgent:
                 "traces": memory.traces,
             }
 
+    async def process_dynamic(
+        self,
+        user_input: str,
+        user_id: str,
+        plan: dict,
+        conversation_id: Optional[str] = None,
+        context: Optional[dict] = None,
+        on_event: Optional[Callable[[str, dict], Any]] = None,
+    ) -> dict:
+        """Executes a dynamic task graph via the BossAgent lifecycle."""
+        res = await self.execute_task(
+            user_request=user_input,
+            user_id=user_id,
+            task_id=conversation_id,
+            on_event=on_event,
+        )
+        return {
+            "output": res["output"],
+            "citations": [],
+            "agent_traces": [
+                {"agent_id": aid, "event_type": "BossAgentSpecialist", "has_content": True}
+                for aid in res.get("active_agents", [])
+            ],
+            "events_count": len(res.get("active_agents", [])),
+            "success": res["status"] in ["completed", "partial_success"],
+            "state": "SUCCESS" if res["status"] == "completed" else "PARTIAL_SUCCESS",
+            "latency_ms": res["latency_ms"],
+            "plan": plan,
+        }
+
+    async def process_team(
+        self,
+        user_input: str,
+        user_id: str,
+        agent_ids: list[str],
+        conversation_id: Optional[str] = None,
+        context: Optional[dict] = None,
+    ) -> dict:
+        """Runs a specialist handoff pipeline controlled by BossAgent."""
+        valid_agents = [agent_id for agent_id in agent_ids if self.registry.get_agent(agent_id)]
+        if not valid_agents:
+            return {
+                "output": "Teamwork mode requires at least one valid agent.",
+                "stages": [],
+                "agent_traces": [],
+                "events_count": 0,
+                "success": False,
+            }
+
+        handoff = user_input
+        stages = []
+        for index, agent_id in enumerate(valid_agents):
+            agent = self.registry.get_agent(agent_id)
+            if not agent:
+                continue
+            agent_context = {
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "team_index": index,
+                **(context or {}),
+            }
+            result = await agent.execute(handoff, agent_context)
+            stage = {
+                "agent_id": agent_id,
+                "output": result.output,
+                "success": result.success,
+                "error": result.error,
+            }
+            stages.append(stage)
+            if not result.success:
+                break
+            handoff = (
+                f"Original user request:\n{user_input}\n\n"
+                f"Previous specialist handoff from {agent_id}:\n{result.output}\n\n"
+                "Continue the request as the next specialist."
+            )
+
+        output = "\n\n".join(
+            f"### {stage['agent_id'].title()} Agent\n{stage['output']}" for stage in stages
+        )
+        return {
+            "output": output,
+            "stages": stages,
+            "agent_traces": [
+                {"agent_id": stage["agent_id"], "event_type": "TeamStage", "has_content": bool(stage["output"])}
+                for stage in stages
+            ],
+            "events_count": len(stages),
+            "success": all(stage["success"] for stage in stages),
+        }
+
     async def _analyze_intent(self, user_request: str) -> dict[str, Any]:
         """Classifies intent, objective, implicit requirements, TaskMode, and Shopping parameters."""
         text = user_request.casefold()

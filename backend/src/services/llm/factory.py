@@ -47,8 +47,8 @@ def _build_providers() -> list[BaseLLMProvider]:
 
     if settings.aiand_api_key:
         aiand_model = settings.aiand_model
-        if "qwen3.6" in aiand_model or "27b" in aiand_model:
-            aiand_model = "qwen/qwen-2.5-72b-instruct"
+        if "qwen3.6" in aiand_model or "27b" in aiand_model or "qwen-2.5" in aiand_model:
+            aiand_model = "qwen2.5-72b-instruct"
         providers.append(OpenAICompatibleProvider(
             name="AIand",
             api_key=settings.aiand_api_key,
