@@ -1110,8 +1110,12 @@ function ChatContent() {
         return
       }
 
-      // Fall back to non-streaming API request for seamless automatic recovery
-      try {
+      // Only retry through the non-streaming endpoint when the streaming
+      // request never reached the server. Once an SSE response is accepted,
+      // it may already be executing/persisting the request; replaying it
+      // would duplicate agent work and conversation messages.
+      if (!streamingAttempted) {
+        try {
         const res = await api.chat.send({
           message: text || `Uploaded ${attachmentCount} file(s)`,
           conversation_id: currentConvId,
@@ -1144,8 +1148,9 @@ function ChatContent() {
           )
           return
         }
-      } catch (fallbackErr) {
-        console.warn('Chat non-streaming fallback failed:', fallbackErr)
+        } catch (fallbackErr) {
+          console.warn('Chat non-streaming fallback failed:', fallbackErr)
+        }
       }
 
       const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'

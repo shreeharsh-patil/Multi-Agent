@@ -3,11 +3,14 @@
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from beanie import PydanticObjectId
 
 from src.models.user import User
+from src.config import settings
 from src.services.auth.service import create_access_token, verify_access_token
 from src.utils.logger import logger
 
@@ -66,6 +69,41 @@ async def get_current_user(request: Request) -> dict:
 # ── Routes ─────────────────────────────────────────────────────────────
 
 
+async def _verify_google_identity(access_token: str) -> dict:
+    """Validate an OAuth token server-side before trusting identity fields.
+
+    The frontend session is useful for the browser, but it is not proof to the
+    API that a caller owns an arbitrary email address. Google userinfo binds
+    the supplied token to the identity we persist and sign into a backend JWT.
+    """
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Google authentication token is required")
+    try:
+        timeout = httpx.Timeout(settings.oauth_verification_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.TimeoutException as exc:
+        logger.warning("Google identity verification timed out")
+        raise HTTPException(status_code=503, detail="Google identity verification timed out") from exc
+    except httpx.HTTPError as exc:
+        logger.warning("Google identity verification failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Google identity verification is unavailable") from exc
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Google authentication token is invalid or expired")
+    try:
+        identity = response.json()
+    except ValueError as exc:
+        logger.warning("Google identity verification returned invalid JSON")
+        raise HTTPException(status_code=503, detail="Google identity verification is unavailable") from exc
+    if not identity.get("email") or identity.get("email_verified") is not True:
+        raise HTTPException(status_code=401, detail="Google account email is not verified")
+    return identity
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(body: LoginRequest) -> LoginResponse:
     """Authenticate (or create) a user and return a JWT access token.
@@ -73,32 +111,47 @@ async def login(body: LoginRequest) -> LoginResponse:
     Called by the frontend after a successful Google OAuth sign-in via NextAuth.
     Creates a new user in MongoDB if one doesn't already exist for this email.
     """
-    # Look up existing user
-    user = await User.find_one(User.email == body.email)
+    # Production must never accept a caller-supplied email as proof of
+    # identity. A development-only login remains available for local work.
+    if settings.debug and not body.access_token:
+        verified_email = body.email.strip().casefold()
+        verified_name = body.name.strip() or verified_email
+        verified_google_id = body.google_id
+    else:
+        identity = await _verify_google_identity(body.access_token or "")
+        verified_email = str(identity["email"]).strip().casefold()
+        if verified_email != body.email.strip().casefold():
+            raise HTTPException(status_code=401, detail="Google identity does not match the requested email")
+        verified_name = str(identity.get("name") or body.name).strip() or verified_email
+        verified_google_id = str(identity.get("sub") or body.google_id or "") or None
+
+    # Look up existing user using the verified identity.
+    user = await User.find_one(User.email == verified_email)
 
     if not user:
         # Create new user
         user = User(
-            email=body.email,
-            name=body.name,
-            avatar=body.image,
-            google_id=body.google_id,
+            email=verified_email,
+            name=verified_name,
+            avatar=body.image if settings.debug else identity.get("picture"),
+            google_id=verified_google_id,
             access_token=body.access_token,
             refresh_token=body.refresh_token,
         )
         await user.insert()
-        logger.info(f"Created new user: {body.email} ({user.id})")
+        logger.info("Created new user: %s (%s)", user.email, user.id)
     else:
         # Update profile fields that may have changed
         needs_save = False
-        if body.name and user.name != body.name:
-            user.name = body.name
+        if user.name != verified_name:
+            user.name = verified_name
             needs_save = True
-        if body.image and user.avatar != body.image:
-            user.avatar = body.image
+        verified_avatar = body.image if settings.debug else identity.get("picture")
+        if verified_avatar and user.avatar != verified_avatar:
+            user.avatar = verified_avatar
             needs_save = True
-        if body.google_id and user.google_id != body.google_id:
-            user.google_id = body.google_id
+        if verified_google_id and user.google_id != verified_google_id:
+            user.google_id = verified_google_id
             needs_save = True
         if body.access_token and user.access_token != body.access_token:
             user.access_token = body.access_token

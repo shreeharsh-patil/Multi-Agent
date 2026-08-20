@@ -6,7 +6,6 @@ from src.utils.logger import logger
 from src.utils.exceptions import AppException
 from src.services.auth.service import verify_access_token
 import time
-import re
 
 # Paths that do NOT require authentication
 PUBLIC_PATHS = {
@@ -24,19 +23,7 @@ PUBLIC_PATHS = {
 PUBLIC_METHOD_PREFIXES = (
     ("GET", "/api/shares/chat/"),
     ("POST", "/api/voice/"),
-    ("GET", "/api/documents/"),
 )
-
-# Suffixes for GET routes the browser opens directly (<img src>, download/export
-# links) with no Authorization header, so they cannot be user-scoped and must
-# stay public regardless of the (dynamic) id in the middle of the path.
-PUBLIC_GET_SUFFIXES = (
-    "/download",
-    "/download/content",
-    "/file",
-    "/view",
-)
-
 
 def _is_public(method: str, path: str) -> bool:
     # PUBLIC_PATHS are matched exactly. Using a prefix match here would be a
@@ -45,8 +32,6 @@ def _is_public(method: str, path: str) -> bool:
     if path in PUBLIC_PATHS:
         return True
     if any(method == m and path.startswith(p) for m, p in PUBLIC_METHOD_PREFIXES):
-        return True
-    if method == "GET" and path.startswith("/api/") and any(path.endswith(s) for s in PUBLIC_GET_SUFFIXES):
         return True
     return False
 
@@ -146,8 +131,10 @@ async def jwt_auth_middleware(request: Request, call_next):
                         if changed:
                             await user.save()
                             logger.info(f"Updated Google tokens in database for user: {user.email}")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Token persistence is optional for this request; don't hide
+                # a storage outage from operational logs.
+                logger.warning("Could not persist connected Google tokens: %s", type(exc).__name__)
 
         return await call_next(request)
 
@@ -177,8 +164,8 @@ async def jwt_auth_middleware(request: Request, call_next):
                                 changed = True
                             if changed:
                                 await user.save()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Could not persist development Google tokens: %s", type(exc).__name__)
 
             return await call_next(request)
         # Even in dev mode, if there's absolutely no user context, use "default"
@@ -197,8 +184,7 @@ async def jwt_auth_middleware(request: Request, call_next):
 def _cors_headers(request: Request) -> dict:
     origins = [o.strip().rstrip("/") for o in settings.allowed_origins.split(",") if o.strip()]
     origin = request.headers.get("origin", "").rstrip("/")
-    is_vercel_origin = bool(re.match(r"^https://[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.vercel\.app$", origin))
-    if origin in origins or "*" in origins or is_vercel_origin:
+    if origin in origins:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",

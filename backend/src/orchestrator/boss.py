@@ -9,6 +9,7 @@ from src.agents.metadata import AgentMetadata, TaskObject, AgentResultObject, Ag
 from src.tools.registry import ToolRegistry
 from src.services.llm import llm_service
 from src.utils.logger import logger
+from src.config import settings
 
 
 @dataclass
@@ -41,9 +42,11 @@ class TaskGraph:
 class TaskMemoryManager:
     """Task-scoped shared memory for intermediate agent outputs and context."""
 
-    def __init__(self, task_id: str, user_request: str):
+    def __init__(self, task_id: str, user_request: str, user_id: str = "default", base_context: Optional[dict[str, Any]] = None):
         self.task_id = task_id
         self.user_request = user_request
+        self.user_id = user_id
+        self.base_context = base_context or {}
         self.results: dict[str, str] = {}
         self.sources: list[dict[str, Any]] = []
         self.traces: list[dict[str, Any]] = []
@@ -68,6 +71,8 @@ class TaskMemoryManager:
             if dep_id in self.results
         }
         return {
+            **self.base_context,
+            "user_id": self.user_id,
             "task_id": self.task_id,
             "user_request": self.user_request,
             "previous_results": upstream_results,
@@ -95,10 +100,11 @@ class BossAgent:
         user_id: str,
         task_id: Optional[str] = None,
         on_event: Optional[Callable[[str, dict], Any]] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         start_time = time.time()
         tid = task_id or f"boss_task_{int(time.time()*1000)}"
-        memory = TaskMemoryManager(tid, user_request)
+        memory = TaskMemoryManager(tid, user_request, user_id, context)
 
         async def emit(event_type: str, payload: dict) -> None:
             memory.record_trace({"event": event_type, "timestamp": time.time(), **payload})
@@ -304,6 +310,7 @@ class BossAgent:
             user_id=user_id,
             task_id=conversation_id,
             on_event=on_event,
+            context=context,
         )
         return {
             "output": res["output"],
@@ -653,6 +660,11 @@ class BossAgent:
                 )
             ]
 
+            # Bound fan-out so a broad prompt cannot stampede the LLM provider
+            # or exhaust request resources. Remaining independent nodes run in
+            # the next wave.
+            ready_nodes = ready_nodes[:settings.agentic_max_agents]
+
             if not ready_nodes:
                 break
 
@@ -677,7 +689,7 @@ class BossAgent:
                 try:
                     res = await asyncio.wait_for(
                         agent_inst.execute(node.objective, ctx),
-                        timeout=25.0,
+                        timeout=settings.agentic_agent_timeout_seconds,
                     )
                     elapsed = round((time.time() - start_t) * 1000, 2)
                     node.execution_time_ms = elapsed
@@ -685,8 +697,9 @@ class BossAgent:
                     if res.success and res.output and res.output.strip():
                         node.status = "completed"
                         node.result = res.output
-                        conf = res.metadata.get("confidence", 0.9)
-                        conf_lvl = res.metadata.get("confidence_level", "high")
+                        metadata = res.metadata or {}
+                        conf = metadata.get("confidence", 0.9)
+                        conf_lvl = metadata.get("confidence_level", "high")
                         node.confidence = conf
                         node.confidence_level = conf_lvl
 
@@ -699,9 +712,13 @@ class BossAgent:
                             "latency_ms": elapsed,
                         })
                     else:
-                        if node.retry_count < 2:
+                        # Empty responses can be transient. Retry them with a
+                        # bounded backoff; explicit agent failures are handled
+                        # as partial results rather than blindly re-executed.
+                        if node.retry_count < settings.agentic_max_retries and not res.error:
                             node.retry_count += 1
                             await emit("agent_retrying", {"node_id": node.id, "retry": node.retry_count})
+                            await asyncio.sleep(min(0.25 * (2 ** (node.retry_count - 1)), 1.0))
                             node.status = "pending"
                             await run_single_node(node)
                         else:
@@ -715,7 +732,17 @@ class BossAgent:
                     node.error = str(exc)
                     await emit("agent_failed", {"node_id": node.id, "error": str(exc)})
 
-            await asyncio.gather(*(run_single_node(n) for n in ready_nodes))
+            # Each node isolates its own failure, and this gather keeps an
+            # unexpected non-cancellation exception from collapsing an entire
+            # independent execution wave.
+            results = await asyncio.gather(*(run_single_node(n) for n in ready_nodes), return_exceptions=True)
+            for node, result in zip(ready_nodes, results):
+                if isinstance(result, BaseException):
+                    if isinstance(result, asyncio.CancelledError):
+                        raise result
+                    node.status = "failed"
+                    node.error = str(result)
+                    await emit("agent_failed", {"node_id": node.id, "agent_id": node.agent_id, "error": node.error})
 
     async def _evaluate_results(self, user_request: str, graph: TaskGraph, memory: TaskMemoryManager) -> dict[str, Any]:
         """Evaluates output quality and triggers uncertainty-aware execution or replanning."""

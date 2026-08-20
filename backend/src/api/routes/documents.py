@@ -483,7 +483,7 @@ async def download_document(document_id: str, http_request: Request, download: b
 @router.get("/{document_id}/file")
 @router.get("/{document_id}/view")
 @router.get("/file/{document_id}")
-async def get_document_file(document_id: str):
+async def get_document_file(document_id: str, http_request: Request):
     """Serve a document file inline (for generated images, uploads, and inline rendering)."""
     from beanie import PydanticObjectId
     doc = None
@@ -499,31 +499,14 @@ async def get_document_file(document_id: str):
         doc = await Document.find_one(Document.file_name == document_id) or await Document.find_one(Document.file_name == clean_id)
 
     if not doc:
-        # Fallback direct disk check in UPLOAD_DIR
-        disk_path = UPLOAD_DIR / Path(document_id).name
-        if not disk_path.exists() and "." in document_id:
-            disk_path = UPLOAD_DIR / Path(clean_id).name
+        # Never expose an arbitrary file from the uploads directory merely
+        # because its generated filename was guessed.
+        raise HTTPException(status_code=404, detail="Document not found")
 
-        if disk_path.exists():
-            ext = disk_path.suffix.lstrip(".").lower()
-            media_type_map = {
-                "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-                "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml",
-                "pdf": "application/pdf", "txt": "text/plain", "md": "text/markdown",
-            }
-            return FileResponse(
-                path=str(disk_path),
-                media_type=media_type_map.get(ext, "application/octet-stream"),
-                filename=disk_path.name,
-                content_disposition_type="inline",
-            )
-        fallback_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
-  <rect width="400" height="300" fill="#0f172a" rx="12"/>
-  <circle cx="200" cy="130" r="32" fill="#3b82f6" opacity="0.3"/>
-  <path d="M185 120 L215 120 L200 145 Z" fill="#60a5fa" opacity="0.8"/>
-  <text x="200" y="215" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#94a3b8" text-anchor="middle">Image Resource Unavailable</text>
-</svg>"""
-        return Response(content=fallback_svg, media_type="image/svg+xml")
+    auth_user = getattr(http_request.state, "user", None)
+    resolved_user_id = (auth_user.get("sub") if auth_user else None) or "default"
+    if not await can_access_document(doc, resolved_user_id):
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     file_path = doc.file_path or str(UPLOAD_DIR / doc.file_name)
     actual_path = Path(file_path)

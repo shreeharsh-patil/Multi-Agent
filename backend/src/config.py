@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     obscura_timeout_seconds: int = 30
     chat_stream_timeout_seconds: int = 45
     chat_context_timeout_seconds: int = 3
+    oauth_verification_timeout_seconds: int = 8
     deepgram_api_key: str = ""
 
     image_provider: str = "auto"

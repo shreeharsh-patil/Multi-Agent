@@ -1,4 +1,3 @@
-import ssl
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -36,13 +35,12 @@ async def lifespan(app: FastAPI):
 
     for uri in uris_to_try:
         try:
-            is_ssl = "mongodb+srv://" in uri or "ssl=true" in uri.lower() or "tls=true" in uri.lower()
             kwargs = {
                 "serverSelectionTimeoutMS": 10000,
             }
-            if is_ssl:
-                kwargs["tlsAllowInvalidCertificates"] = True
-                kwargs["tlsAllowInvalidHostnames"] = True
+            # Never disable certificate or hostname verification. Doing so
+            # makes database credentials and all persisted user data
+            # vulnerable to a network man-in-the-middle attack.
 
             client = AsyncIOMotorClient(uri, **kwargs)
             await client.admin.command("ping")
@@ -131,13 +129,9 @@ app = FastAPI(
 )
 
 origins = [o.strip().rstrip("/") for o in settings.allowed_origins.split(",") if o.strip()]
-if "https://multi-agent-yy93.onrender.com" not in origins:
-    origins.append("https://multi-agent-yy93.onrender.com")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"^https?://.*$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

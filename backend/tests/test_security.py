@@ -3,6 +3,10 @@
 import os
 import pytest
 
+# Import while conftest's strong test secret is active. Individual tests then
+# safely mutate environment variables to exercise fresh Settings instances.
+from src.config import Settings
+
 
 # ---------------------------------------------------------------------------
 # Config fail-closed behaviour
@@ -112,6 +116,32 @@ class TestCanAccessDocument:
         from src.api.routes.documents import can_access_document
         assert await can_access_document(_doc(user_id="default"), "u2") is True
         assert await can_access_document(_doc(user_id="default"), "default") is True
+
+
+def test_private_document_routes_are_not_middleware_public():
+    """A browser request must authenticate before any document route runs."""
+    from src.api.middleware import _is_public
+    assert _is_public("GET", "/api/documents/abc123/file") is False
+    assert _is_public("GET", "/api/documents/abc123/download") is False
+
+
+def test_chat_request_rejects_oversized_agent_fanout():
+    from pydantic import ValidationError
+    from src.api.routes.chat import ChatRequest
+
+    with pytest.raises(ValidationError):
+        ChatRequest(message="hello", team_agents=["agent"] * 9)
+
+
+def test_google_login_requires_a_token_in_production(monkeypatch):
+    """Caller-supplied email alone can never mint a production JWT."""
+    from src.api.routes import auth
+
+    monkeypatch.setattr(auth.settings, "debug", False)
+    with pytest.raises(Exception) as exc_info:
+        import asyncio
+        asyncio.run(auth._verify_google_identity(""))
+    assert getattr(exc_info.value, "status_code", None) == 401
 
 
 def _doc(**kwargs):

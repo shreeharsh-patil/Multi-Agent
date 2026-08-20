@@ -174,3 +174,18 @@ def test_tool_registry():
 
     exec_res = ToolRegistry.execute_tool("web_search", query="TCP protocol")
     assert exec_res["success"] is True
+
+
+def test_task_memory_propagates_user_and_request_context():
+    memory = TaskMemoryManager(
+        "task-1",
+        "Summarize my private workspace",
+        "user-123",
+        {"workspace_id": "workspace-9", "conversation_history": "recent context"},
+    )
+    node = TaskNode(id="research", title="Research", agent_id="research", objective="Research the request")
+    context = memory.get_context_for_node(node)
+
+    assert context["user_id"] == "user-123"
+    assert context["workspace_id"] == "workspace-9"
+    assert context["conversation_history"] == "recent context"

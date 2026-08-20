@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -8,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from src.adk.runner import process_message, process_message_stream, process_fast_message_stream
 from src.orchestrator.boss import get_boss_agent
@@ -274,26 +275,35 @@ def _friendly_chat_error(error: Exception) -> str:
 
 
 class AttachmentInfo(BaseModel):
-    name: str
-    size: int
+    name: str = Field(min_length=1, max_length=255)
+    size: int = Field(ge=0, le=50 * 1024 * 1024)
     documentId: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=20_000)
     conversation_id: Optional[str] = None
     agent_id: Optional[str] = None
     user_id: str = "default"
-    attachments: list[AttachmentInfo] = []
-    team_agents: list[str] = []
+    attachments: list[AttachmentInfo] = Field(default_factory=list, max_length=10)
+    team_agents: list[str] = Field(default_factory=list, max_length=8)
     workspace_id: Optional[str] = None
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        # Attachment-only messages are supported, but blank text must not
+        # consume an agent execution when no attachment is supplied.
+        if not value.strip() and not value:
+            return ""
+        return value.strip()
 
 
 class ChatResponse(BaseModel):
     conversation_id: str
     output: str
-    citations: list[dict] = []
-    agent_traces: list[dict] = []
+    citations: list[dict] = Field(default_factory=list)
+    agent_traces: list[dict] = Field(default_factory=list)
     events_count: int = 0
     success: bool = True
     error: Optional[str] = None
@@ -549,8 +559,10 @@ async def _build_full_conversation_history(conv_id: Optional[str], max_messages:
 
 @router.post("")
 async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
+    if not body.message and not body.attachments:
+        raise HTTPException(status_code=400, detail="Message or attachment is required")
+    conv_id = body.conversation_id or str(PydanticObjectId())
     try:
-        conv_id = body.conversation_id or str(PydanticObjectId())
         is_new = not bool(body.conversation_id)
 
         # Use authenticated user from JWT if available, fall back to request body
@@ -694,6 +706,8 @@ async def chat_stream(
     Uses POST to support long messages and avoid URL length limits.
     The client reads the stream and accumulates the response incrementally.
     """
+    if not body.message and not body.attachments:
+        raise HTTPException(status_code=400, detail="Message or attachment is required")
     request_id = http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request_started_at = time.perf_counter()
     _chat_log(request_id, "request", "start", input_chars=len(body.message), has_attachments=bool(body.attachments))
@@ -791,7 +805,23 @@ async def chat_stream(
                 # The queue lets the dynamic executor report live progress
                 # while specialist tasks run concurrently via BossAgent.
                 async def on_dynamic_event(event_name: str, data: dict):
-                    event_queue.append({"event": event_name, "data": data})
+                    # Translate internal Boss events into the stable SSE
+                    # contract consumed by the UI.
+                    if event_name == "plan_created":
+                        event_queue.append({"event": "plan", "data": {
+                            "complexity": data.get("complexity"),
+                            "agents": [
+                                {"agent_id": item.get("agent_id"), "label": item.get("title"), "reason": item.get("objective")}
+                                for item in data.get("nodes", [])
+                                if item.get("agent_id") != "final-synthesizer"
+                            ],
+                        }})
+                    elif event_name == "agent_completed":
+                        event_queue.append({"event": "agent_complete", "data": {**data, "success": True}})
+                    elif event_name == "agent_failed":
+                        event_queue.append({"event": "agent_complete", "data": {**data, "success": False}})
+                    else:
+                        event_queue.append({"event": event_name, "data": data})
 
                 dynamic_task = asyncio.create_task(get_boss_agent().process_dynamic(
                     augmented_message,
@@ -804,6 +834,12 @@ async def chat_stream(
                 dynamic_deadline = asyncio.get_running_loop().time() + settings.chat_stream_timeout_seconds
                 last_heartbeat = asyncio.get_running_loop().time()
                 while not dynamic_task.done() or event_queue:
+                    if await http_request.is_disconnected():
+                        dynamic_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await dynamic_task
+                        _chat_log(request_id, "request", "complete", request_started_at, cancelled=True)
+                        return
                     while event_queue:
                         queued = event_queue.pop(0)
                         yield f"event: {queued['event']}\ndata: {json.dumps(queued['data'], ensure_ascii=False)}\n\n"
@@ -814,6 +850,8 @@ async def chat_stream(
                             last_heartbeat = now
                         if now >= dynamic_deadline:
                             dynamic_task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await dynamic_task
                             raise TimeoutError("BossAgent execution timed out")
                         await asyncio.sleep(0.05)
                 dynamic_result = await dynamic_task
