@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from typing import Dict, Any, List, Optional
 from src.services.api_registry import ApiRegistry, ApiMetadata
 from src.utils.logger import logger
+from src.config import settings
 
 # SSRF Protection: Block access to internal/private IP ranges and localhost
 BLOCKED_HOSTS = {
@@ -76,7 +77,7 @@ class ApiTool:
             req_headers.update(headers)
 
         try:
-            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=settings.tool_timeout_seconds, follow_redirects=True) as client:
                 if method_upper == "GET":
                     res = await client.get(endpoint_url, params=params, headers=req_headers)
                 else:
@@ -342,45 +343,8 @@ class ApiTool:
                     "api_name": api_meta.name,
                     "normalized": normalized,
                 }
-            elif api_meta.id == "coingecko":
-                # Resilient rate-limit fallback for CoinGecko API
-                fallback_data = {
-                    "bitcoin": {"inr": 7737425, "usd": 89450, "inr_24h_change": 3.42, "usd_24h_change": 3.42},
-                    "ethereum": {"inr": 280260, "usd": 3240, "inr_24h_change": -1.15, "usd_24h_change": -1.15},
-                    "solana": {"inr": 16002, "usd": 185, "inr_24h_change": 5.80, "usd_24h_change": 5.80}
-                }
-                normalized = self.normalize_result(api_meta.id, fallback_data, query_context)
-                return {
-                    "success": True,
-                    "api_id": api_meta.id,
-                    "api_name": api_meta.name,
-                    "normalized": normalized,
-                }
-            elif api_meta.id == "open-meteo":
-                fallback_data = {
-                    "current_weather": {"temperature": 28.5, "windspeed": 14.2, "weathercode": 1},
-                    "latitude": 15.2993, "longitude": 74.1240
-                }
-                normalized = self.normalize_result(api_meta.id, fallback_data, query_context)
-                return {
-                    "success": True,
-                    "api_id": api_meta.id,
-                    "api_name": api_meta.name,
-                    "normalized": normalized,
-                }
-            elif api_meta.id == "frankfurter":
-                fallback_data = {
-                    "amount": 1.0, "base": "USD", "date": "2026-08-10", "rates": {"INR": 86.50, "EUR": 0.92, "GBP": 0.79}
-                }
-                normalized = self.normalize_result(api_meta.id, fallback_data, query_context)
-                return {
-                    "success": True,
-                    "api_id": api_meta.id,
-                    "api_name": api_meta.name,
-                    "normalized": normalized,
-                }
             else:
-                logger.warning(f"API candidate '{api_meta.id}' failed, attempting fallback...")
+                logger.warning("API candidate '%s' failed, attempting configured fallback", api_meta.id)
 
         return {"success": False, "error": f"All candidate APIs failed for capability '{capability}'"}
 

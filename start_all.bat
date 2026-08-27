@@ -16,7 +16,13 @@ timeout /t 2 /nobreak >nul
 
 :: Start Backend
 echo [2/3] Starting Backend (port 8000)...
-start "Backend" cmd /c "cd /d D:\Multi agents\backend && python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
+if not exist "D:\Multi agents\backend\.venv\Scripts\python.exe" (
+    echo ERROR: Backend virtual environment is missing.
+    echo Run: cd /d "D:\Multi agents\backend" ^&^& python -m venv .venv ^&^& .venv\Scripts\python -m pip install -r requirements.txt
+    pause
+    exit /b 1
+)
+start "Backend" cmd /c "cd /d D:\Multi agents\backend && .venv\Scripts\python.exe -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
 timeout /t 5 /nobreak >nul
 
 :: Start OpenDocuments (Optional, runs on port 5001)

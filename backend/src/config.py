@@ -151,7 +151,13 @@ class Settings(BaseSettings):
     agentic_max_retries: int = 2
     agentic_max_alternates: int = 1
     agentic_max_replan_rounds: int = 2
+    # Hard execution limits.  These are deliberately separate from planning
+    # limits so a bad plan or a delegating agent cannot consume a request
+    # indefinitely.
+    max_agent_iterations: int = 3
+    max_delegation_depth: int = 2
     agentic_agent_timeout_seconds: int = 45
+    tool_timeout_seconds: int = 15
     agentic_think_timeout_seconds: int = 40
     agentic_include_reviewers: bool = True
     agentic_auto_evaluate: bool = True

@@ -162,33 +162,6 @@ class ShoppingTool:
             )
             verified_offers.append(offer)
 
-        # Fallback for catalog/demo items if live search snippet parsing was sparse
-        if not verified_offers and (budget is None or budget >= 250):
-            # Seed verified realistic marketplace items under typical budget thresholds
-            if "mouse" in category.lower():
-                seed_items = [
-                    ("Logitech B175 Wireless Optical Mouse", 299.0, "https://www.amazon.in/dp/B0093H4VBU"),
-                    ("Dell WM126 Wireless Optical Mouse", 349.0, "https://www.amazon.in/dp/B01BGA94PE"),
-                    ("Quantum QHM240 Wired Gaming Mouse", 349.0, "https://www.amazon.in/dp/B01MQV2490"),
-                    ("HP Z5000 Ergonomic Wired Mouse", 399.0, "https://www.amazon.in/s?k=HP+Z5000+Mouse"),
-                    ("Zebronics Zeb-Transformer Gaming Mouse", 499.0, "https://www.amazon.in/dp/B07898VCNP"),
-                ]
-                for name, p, u in seed_items:
-                    if budget is None or p <= budget:
-                        verified_offers.append(
-                            ProductOffer(
-                                name=name,
-                                brand=name.split()[0],
-                                model="Mouse",
-                                price=p,
-                                currency="INR",
-                                seller="Amazon India",
-                                productUrl=u,
-                                sourceUrl=u,
-                                specifications=["Optical Sensor", "Plug & Play USB"],
-                            )
-                        )
-
         # Sort by price ascending
         verified_offers.sort(key=lambda o: o.price)
 
@@ -199,6 +172,7 @@ class ShoppingTool:
             "currency": currency,
             "total_verified": len(verified_offers),
             "offers": [o.to_dict() for o in verified_offers],
+            "error": None if verified_offers else "No live, verifiable product listings were found.",
             "retrieved_at": datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
         }
 

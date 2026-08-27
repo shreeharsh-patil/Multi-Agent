@@ -588,6 +588,13 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 raise HTTPException(status_code=404, detail="Workspace not found")
         routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
         automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
+        automatic_plan = plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)) if automatic_mode else None
+        # Automatic requests use one explicitly selected specialist by default.
+        # Escalate to the supervisor only when the structured plan requires
+        # multiple independent responsibilities.
+        planned_agent_id = (automatic_plan or {}).get("steps", [{}])[0].get("agent_id") if automatic_plan else None
+        effective_agent_id = routed_agent_id if routed_agent_id != "auto" else planned_agent_id
+        use_dynamic_orchestration = bool(automatic_mode and len((automatic_plan or {}).get("steps", [])) > 1)
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
@@ -603,7 +610,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             "conversation_history": history_snippet,
         }
 
-        registry_agent = get_boss_agent().registry.get_agent(routed_agent_id) if routed_agent_id and routed_agent_id != "auto" else None
+        registry_agent = get_boss_agent().registry.get_agent(effective_agent_id) if effective_agent_id else None
 
         if routed_agent_id == "image":
             drive_token = http_request.headers.get("X-Drive-Access-Token") or google_access_token
@@ -613,11 +620,11 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
                 drive_access_token=drive_token, drive_refresh_token=drive_refresh
             )
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
-        elif automatic_mode:
+        elif use_dynamic_orchestration:
             result = await get_boss_agent().process_dynamic(
                 augmented_message,
                 user_id,
-                plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
+                automatic_plan,
                 conv_id,
                 context=google_agent_context,
             )
@@ -635,11 +642,16 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif registry_agent:
-            agent_result = await registry_agent.execute(augmented_message, google_agent_context)
+            agent_result = await asyncio.wait_for(
+                registry_agent.execute(augmented_message, google_agent_context),
+                timeout=settings.agentic_agent_timeout_seconds,
+            )
+            if not agent_result.success or not (agent_result.output or "").strip():
+                raise RuntimeError(agent_result.error or "Selected agent returned an empty response")
             result = {
                 "output": agent_result.output,
                 "citations": getattr(agent_result, "citations", []),
-                "agent_traces": [{"agent_id": routed_agent_id, "event_type": f"{routed_agent_id.title()}Action", "has_content": bool(agent_result.output)}],
+                "agent_traces": [{"agent_id": effective_agent_id, "event_type": f"{effective_agent_id.title()}Action", "has_content": bool(agent_result.output)}],
                 "events_count": 1,
             }
         elif body.workspace_id:
@@ -730,6 +742,9 @@ async def chat_stream(
     routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
     automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
     dynamic_plan = plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)) if automatic_mode else None
+    planned_agent_id = (dynamic_plan or {}).get("steps", [{}])[0].get("agent_id") if dynamic_plan else None
+    effective_agent_id = routed_agent_id if routed_agent_id != "auto" else planned_agent_id
+    use_dynamic_orchestration = bool(automatic_mode and len((dynamic_plan or {}).get("steps", [])) > 1)
     fast_path = bool(
         automatic_mode
         and not body.attachments
@@ -738,7 +753,7 @@ async def chat_stream(
         and len((dynamic_plan or {}).get("steps", [])) <= 1
         and not re.search(r"(?i)\b(research|latest|current|search|calculate|calendar|drive|file|pdf|web)\b", body.message)
     )
-    _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=routed_agent_id, automatic=automatic_mode)
+    _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=effective_agent_id, automatic=automatic_mode, supervisor=use_dynamic_orchestration)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
 
     accumulated_output = ""
@@ -799,7 +814,7 @@ async def chat_stream(
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
-            if automatic_mode and routed_agent_id != "image":
+            if use_dynamic_orchestration and routed_agent_id != "image":
                 _chat_log(request_id, "orchestration", "start", plan_agents=[step.get("agent_id") for step in dynamic_plan.get("steps", [])])
 
                 # The queue lets the dynamic executor report live progress
@@ -907,11 +922,16 @@ async def chat_stream(
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
-            target_agent_id = routed_agent_id if (routed_agent_id and routed_agent_id != "auto") else (body.agent_id if body.agent_id and body.agent_id != "auto" else None)
+            target_agent_id = effective_agent_id or (body.agent_id if body.agent_id and body.agent_id != "auto" else None)
             registry_agent = get_boss_agent().registry.get_agent(target_agent_id) if target_agent_id else None
 
             if registry_agent:
-                agent_result = await registry_agent.execute(augmented_message, stream_google_context)
+                agent_result = await asyncio.wait_for(
+                    registry_agent.execute(augmented_message, stream_google_context),
+                    timeout=settings.agentic_agent_timeout_seconds,
+                )
+                if not agent_result.success or not (agent_result.output or "").strip():
+                    raise RuntimeError(agent_result.error or "Selected agent returned an empty response")
                 yield f"event: agent\ndata: {json.dumps({'agent_id': target_agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
@@ -997,8 +1017,6 @@ async def chat_stream(
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
             "X-Request-ID": request_id,
         },
     )

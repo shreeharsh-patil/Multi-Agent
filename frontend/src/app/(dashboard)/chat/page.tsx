@@ -1,5 +1,3 @@
-// @ts-nocheck
-/* eslint-disable */
 'use client'
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
@@ -10,13 +8,12 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
-import { Send, Bot, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, Sparkles, CheckCircle2, Share2, ChevronDown, Copy, RefreshCw, Pencil, AlertCircle } from 'lucide-react'
+import { Send, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, CheckCircle2, ChevronDown, Copy, RefreshCw, Pencil, AlertCircle, Terminal } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
-import { FileCode, Globe, Play, Code as CodeIcon, GraduationCap } from 'lucide-react'
+import { FileCode, Play, Code as CodeIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -25,6 +22,7 @@ import { preprocessLaTeX } from '@/lib/latex'
 import { ImagePreviewCard } from '@/components/image-preview-card'
 import { MermaidWorkspace, repairMermaidMarkdown } from '@/components/mermaid-workspace'
 import { getAccessToken } from '@/lib/auth-store'
+import { downloadSecureFile } from '@/lib/download'
 
 const typingKeyframes = `
 @keyframes typing-dot {
@@ -71,8 +69,6 @@ const agents = [
   { id: 'art', name: 'Art & Design Agent' },
 ]
 
-const teamworkAgents = agents.filter((agent) => agent.id !== 'auto' && agent.id !== 'tool')
-
 const isImage = (file: File) => file.type.startsWith('image/')
 
 interface Attachment {
@@ -91,6 +87,21 @@ const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 const resolveApiUrl = (url?: string) => url?.startsWith('/api/') ? `${backendUrl}${url}` : url
+
+async function safelyReadResponse(response: Response): Promise<{ message?: string; requestId?: string; body?: unknown }> {
+  const raw = await response.text().catch(() => '')
+  if (!raw) return { requestId: response.headers.get('x-request-id') || undefined }
+  try {
+    const body = JSON.parse(raw) as { error?: unknown; detail?: unknown; message?: unknown; requestId?: unknown }
+    const error = body.error
+    const nestedMessage = typeof error === 'object' && error !== null ? (error as { message?: unknown }).message : undefined
+    const message = [nestedMessage, body.message, error, body.detail].find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    const requestId = typeof body.requestId === 'string' ? body.requestId : response.headers.get('x-request-id') || undefined
+    return { message, requestId, body }
+  } catch {
+    return { message: raw.slice(0, 500), requestId: response.headers.get('x-request-id') || undefined }
+  }
+}
 
 const toSpeechText = (content: string) => content
   .replace(/!\[[^\]]*\]\([^)]*\)/g, 'Generated image.')
@@ -136,11 +147,8 @@ function ChatContent() {
   const [input, setInput] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<string>('auto')
   const [customAgents, setCustomAgents] = useState<Array<{ id: string; name: string }>>([])
-  const [teamMode, setTeamMode] = useState(false)
-  const toggleTeamMode = useCallback(() => {
-    setTeamMode((current) => !current)
-  }, [])
-  const [teamAgents, setTeamAgents] = useState<string[]>(['research', 'coding', 'planner'])
+  const [teamMode] = useState(false)
+  const [teamAgents] = useState<string[]>(['research', 'coding', 'planner'])
 
   // Hybrid layout UI states
   const [tabs, setTabs] = useState<PanelTab[]>([])
@@ -195,11 +203,10 @@ function ChatContent() {
   const [voiceMode, setVoiceMode] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [speakingId, setSpeakingId] = useState<string | null>(null)
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [sending, setSending] = useState(false)
   const [chatDebug, setChatDebug] = useState<{ requestId?: string; status: string; agent?: string; step?: string; startedAt: number; error?: string } | null>(null)
-  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [showDebugPanel] = useState(false)
   const [orchestration, setOrchestration] = useState<{ complexity?: string; domain?: string; agents: Array<{ agent_id: string; label: string; reason?: string; status?: 'queued' | 'working' | 'complete' | 'failed' }> } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -516,7 +523,7 @@ function ChatContent() {
     updatedAt: string
   }>>([])
   const [, setLoadingConversations] = useState(true)
-  const [chatTitle, setChatTitle] = useState('')
+  const [, setChatTitle] = useState('')
   const [loadingHistory, setLoadingHistory] = useState(false)
 
   // Persist unsent composer text per-conversation so it survives navigation
@@ -542,58 +549,6 @@ function ChatContent() {
       // ignore storage failures
     }
   }, [input, draftKey])
-
-  const shareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => () => {
-    if (shareTimerRef.current) clearTimeout(shareTimerRef.current)
-  }, [])
-
-  const shareConversation = useCallback(async () => {
-    if (!conversationId) {
-      setShareUrl('error')
-      return
-    }
-    // Clear any existing dismiss timer
-    if (shareTimerRef.current) clearTimeout(shareTimerRef.current)
-    try {
-      const res = await api.chat.createShare(conversationId)
-      if (res.success && res.data) {
-        const url = `${window.location.origin}/shared/chat/${res.data.token}`
-        setShareUrl(url)
-        await navigator.clipboard?.writeText(url)
-        // Auto-dismiss after 8 seconds
-        shareTimerRef.current = setTimeout(() => setShareUrl(null), 8000)
-      } else {
-        setShareUrl('error')
-        console.error('Share failed:', res.error || 'Unknown error')
-      }
-    } catch (e) {
-      setShareUrl('error')
-      console.error('Share failed:', e)
-    }
-  }, [conversationId])
-
-  // Export the current conversation as a downloadable Markdown file.
-  const exportConversation = useCallback(() => {
-    if (messages.length === 0) return
-    const title = chatTitle || 'Conversation'
-    const lines = [`# ${title}`, '']
-    for (const m of messages) {
-      if (!m.content) continue
-      lines.push(m.role === 'user' ? '## You' : '## Assistant')
-      lines.push('', m.content, '')
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${title.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'conversation'}.md`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }, [messages, chatTitle])
 
   // Fetch conversations list
   const fetchConversations = useCallback(async () => {
@@ -709,7 +664,6 @@ function ChatContent() {
     setChatTitle('')
     setMessages([])
     setAttachments([])
-    setShareUrl(null)
     setLoadingHistory(false)
     setHistoryError(null)
     if (typeof window !== 'undefined') window.history.replaceState(null, '', '/chat')
@@ -876,6 +830,7 @@ function ChatContent() {
     let streamCompleted = false
     let streamRequestId = ''
     let accumulatedContent = ''
+    let frameId: number | null = null
 
     try {
       const requestPayload = {
@@ -904,7 +859,15 @@ function ChatContent() {
         throw lastOpenError || new Error('Unable to connect to the chat service')
       }
       if (!streamResponse.ok) {
-        throw lastOpenError || new Error(`HTTP ${streamResponse.status}`)
+        const errorBody = await safelyReadResponse(streamResponse)
+        console.error('Chat API failed', {
+          status: streamResponse.status,
+          statusText: streamResponse.statusText,
+          requestId: errorBody.requestId,
+          error: errorBody.body ?? errorBody.message,
+        })
+        streamRequestId = errorBody.requestId || streamRequestId
+        throw new Error(errorBody.message || `Chat request failed with status ${streamResponse.status}`)
       }
 
       const contentType = streamResponse.headers.get('content-type') || ''
@@ -943,7 +906,6 @@ function ChatContent() {
       // Accumulate content in a ref and flush to React state at ~60 fps
       // to avoid hundreds of re-renders per second during streaming.
       const pendingContentRef = { current: '' }
-      let frameId: number | null = null
       const flushState = () => {
         frameId = null
         if (pendingContentRef.current === accumulatedContent) return

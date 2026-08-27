@@ -77,6 +77,10 @@ class TaskMemoryManager:
             "user_request": self.user_request,
             "previous_results": upstream_results,
             "all_completed_agents": list(self.results.keys()),
+            # Workers receive a scoped, read-only view of this execution.
+            # They are not given a Boss instance or a delegation callback.
+            "delegation_depth": 0,
+            "max_delegation_depth": settings.max_delegation_depth,
         }
 
 
@@ -204,7 +208,7 @@ class BossAgent:
             })
 
             # Step 3: Execute Graph (Parallel & Sequential execution)
-            max_execution_iterations = 5
+            max_execution_iterations = settings.max_agent_iterations
             iteration = 0
             execution_successful = False
 
@@ -304,7 +308,33 @@ class BossAgent:
         context: Optional[dict] = None,
         on_event: Optional[Callable[[str, dict], Any]] = None,
     ) -> dict:
-        """Executes a dynamic task graph via the BossAgent lifecycle."""
+        """Executes a dynamic task graph via the BossAgent lifecycle.
+
+        A single-step plan is executed directly, avoiding a needless
+        supervisor graph.  Multi-step work still enters the validated Boss
+        workflow, where dependency and timeout controls apply.
+        """
+        steps = plan.get("steps", []) if isinstance(plan, dict) else []
+        if len(steps) == 1:
+            agent_id = steps[0].get("agent_id")
+            agent = self.registry.get_agent(agent_id) if agent_id else None
+            if agent:
+                result = await asyncio.wait_for(
+                    agent.execute(user_input, {**(context or {}), "user_id": user_id, "conversation_id": conversation_id}),
+                    timeout=settings.agentic_agent_timeout_seconds,
+                )
+                if not result.success or not (result.output or "").strip():
+                    raise RuntimeError(result.error or "Selected agent returned an empty response")
+                return {
+                    "output": result.output,
+                    "citations": result.citations,
+                    "agent_traces": [{"agent_id": agent_id, "event_type": "Specialist", "has_content": True}],
+                    "events_count": 1,
+                    "success": True,
+                    "state": "SUCCESS",
+                    "latency_ms": 0,
+                    "plan": plan,
+                }
         res = await self.execute_task(
             user_request=user_input,
             user_id=user_id,
