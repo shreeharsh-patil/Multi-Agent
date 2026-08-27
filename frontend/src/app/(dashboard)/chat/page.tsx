@@ -83,6 +83,14 @@ interface Attachment {
   driveWebViewLink?: string
 }
 
+type SentAttachment = {
+  name: string
+  size: number
+  documentId?: string
+  driveFileId?: string
+  driveWebViewLink?: string
+}
+
 const isImageExt = (name: string) => /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -691,6 +699,7 @@ function ChatContent() {
                 role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
                 content: m.content || '',
                 agentId: m.agentId,
+                requestId: m.metadata?.request_id,
                 attachments: m.metadata?.attachments,
                 citations: m.citations,
               }))
@@ -758,16 +767,21 @@ function ChatContent() {
     }
 
     loadConversation(convParam)
-  }, [convParam, loadConversation, startNewConversation])
+  }, [convParam, conversationId, loadConversation, startNewConversation])
 
-  const handleSend = useCallback(async (overrideText?: string) => {
+  const handleSend = useCallback(async (
+    overrideText?: string,
+    retryRequestId?: string,
+    retryAttachments: SentAttachment[] = [],
+  ) => {
     // Synchronous ref guard prevents double-submits even when state hasn't updated yet
     if (sendingRef.current) return
     const isRegenerate = typeof overrideText === 'string'
     if (!isRegenerate && ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0))) return
 
     const text = isRegenerate ? overrideText!.trim() : input.trim()
-    const attachmentCount = attachments.length
+    const attachmentCount = isRegenerate ? retryAttachments.length : attachments.length
+    const clientRequestId = retryRequestId || crypto.randomUUID()
     const currentConvId = conversationId
     const currentAgent = teamMode || selectedAgent === 'auto' ? undefined : selectedAgent
     const currentWorkspace = selectedWorkspace === 'all' ? undefined : selectedWorkspace === 'unfiled' ? '__unfiled__' : selectedWorkspace
@@ -781,7 +795,7 @@ function ChatContent() {
     // upload; only kick off a fresh upload for ones that never started
     // (e.g. added programmatically) or previously errored.
     // On regenerate there are no new attachments to process.
-    const uploadedAttachments: Array<{ name: string; size: number; documentId?: string; driveFileId?: string; driveWebViewLink?: string }> = []
+    const uploadedAttachments: SentAttachment[] = [...retryAttachments]
     if (!isRegenerate) {
       for (const att of attachments) {
         let updated: Attachment
@@ -809,6 +823,7 @@ function ChatContent() {
         role: 'user' as const,
         content: text || `Uploaded ${attachmentCount} file(s)`,
         attachments: uploadedAttachments,
+        requestId: clientRequestId,
       }
       setMessages((prev) => [...prev, userMsg])
       setInput('')
@@ -835,6 +850,7 @@ function ChatContent() {
 
     try {
       const requestPayload = {
+        request_id: clientRequestId,
         message: text || `Uploaded ${attachmentCount} file(s)`,
         conversation_id: currentConvId,
         agent_id: currentAgent,
@@ -896,7 +912,7 @@ function ChatContent() {
                 const timeout = new Error('The chat response timed out while waiting for data.')
                 timeout.name = 'StreamTimeout'
                 reject(timeout)
-              }, 45000)
+              }, 75000)
             }),
           ])
         } finally {
@@ -1094,6 +1110,7 @@ function ChatContent() {
           console.warn('Chat conversation is unavailable; retrying as a new conversation', { conversationId: currentConvId })
         }
         const res = await api.chat.send({
+          request_id: clientRequestId,
           message: text || `Uploaded ${attachmentCount} file(s)`,
           conversation_id: staleConversation ? undefined : currentConvId,
           agent_id: currentAgent,
@@ -1181,7 +1198,7 @@ function ChatContent() {
       // Drop everything after the last user message (i.e. the assistant reply).
       const trimmed = prev.slice(0, lastUserIdx + 1)
       // Kick off regeneration after state settles.
-      setTimeout(() => handleSend(lastUser.content), 0)
+      setTimeout(() => handleSend(lastUser.content, lastUser.requestId, lastUser.attachments || []), 0)
       return trimmed
     })
   }, [handleSend])
@@ -1212,7 +1229,8 @@ function ChatContent() {
       const trimmed = prev.slice(0, idx + 1).map((m) =>
         m.id === id ? { ...m, content: newText } : m,
       )
-      setTimeout(() => handleSend(newText), 0)
+      const edited = prev[idx]
+      setTimeout(() => handleSend(newText, edited?.requestId, edited?.attachments || []), 0)
       return trimmed
     })
   }, [editText, handleSend])
@@ -1802,7 +1820,7 @@ function ChatContent() {
                                   onClick={() => {
                                     const previousUser = [...messages].slice(0, idx).reverse().find((candidate) => candidate.role === 'user')
                                     setMessages((prev) => prev.filter((m) => m.id !== msg.id))
-                                    if (previousUser?.content) handleSend(previousUser.content)
+                                    if (previousUser?.content) handleSend(previousUser.content, previousUser.requestId, previousUser.attachments || [])
                                   }}
                                   className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/30 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
                                 >

@@ -64,6 +64,21 @@ class EmptyProviderResponse(RuntimeError):
     """Raised when a provider completes without returning usable text."""
 
 
+def _is_retryable_provider_error(error: Exception) -> bool:
+    """Return whether retrying the same provider can reasonably succeed."""
+    message = str(error).lower()
+    permanent_markers = (
+        "400", "401", "402", "403", "404", "invalid api key",
+        "model_not_found", "not found", "unsupported model", "insufficient credits",
+    )
+    if any(marker in message for marker in permanent_markers):
+        return False
+    return any(marker in message for marker in (
+        "408", "409", "429", "500", "502", "503", "504", "timeout",
+        "timed out", "rate limit", "quota", "resource_exhausted", "connection",
+    ))
+
+
 class RotatingProvider(BaseLLMProvider):
     """Wraps multiple LLM providers and rotates through them transparently.
 
@@ -144,7 +159,7 @@ class RotatingProvider(BaseLLMProvider):
                     logger.warning(
                         f"Provider rotation: {name} {kind} for '{method}' retry {retry + 1}/3. Error: {err_msg}."
                     )
-                    if retry < 2:
+                    if retry < 2 and _is_retryable_provider_error(e):
                         await asyncio.sleep(0.5 * (2 ** retry))
                         continue
                     break
@@ -174,9 +189,6 @@ class RotatingProvider(BaseLLMProvider):
                     func = getattr(provider, method)
                     gen = func(**kwargs)
 
-                    async with self._lock:
-                        self._current_idx = idx
-
                     async for chunk in gen:
                         if chunk:
                             emitted = True
@@ -184,9 +196,16 @@ class RotatingProvider(BaseLLMProvider):
 
                     if not emitted:
                         raise EmptyProviderResponse(f"{name} returned an empty stream")
+                    async with self._lock:
+                        self._current_idx = idx
                     return
 
                 except Exception as e:
+                    # Once text reached the client it is unsafe to replay the
+                    # prompt against this or another provider: that would mix
+                    # two generations and duplicate chunks in one message.
+                    if emitted:
+                        raise
                     last_error = e
                     err_msg = str(e)
                     is_rate_limit = (
@@ -201,7 +220,7 @@ class RotatingProvider(BaseLLMProvider):
                     logger.warning(
                         f"Provider rotation: {name} {kind} for '{method}' retry {retry + 1}/3. Error: {err_msg}."
                     )
-                    if retry < 2:
+                    if retry < 2 and _is_retryable_provider_error(e):
                         await asyncio.sleep(0.5 * (2 ** retry))
                         continue
                     break

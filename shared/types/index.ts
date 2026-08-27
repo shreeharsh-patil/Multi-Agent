@@ -164,6 +164,7 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 }
 
 export interface ChatRequest {
+  request_id?: string
   conversation_id?: string
   message: string
   agent_id?: string

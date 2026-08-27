@@ -7,7 +7,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
@@ -52,6 +52,35 @@ async def _word_chunks(text: str):
     for word in re.findall(r"\S+\s*|\s+", text):
         yield word
         await asyncio.sleep(0)
+
+
+async def _await_with_heartbeats(awaitable, http_request: Request, timeout_seconds: float):
+    """Await non-streaming work while keeping SSE alive and cancellable."""
+    task = asyncio.create_task(awaitable)
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    try:
+        while True:
+            if await http_request.is_disconnected():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                raise asyncio.CancelledError
+
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                raise TimeoutError("Agent execution timed out")
+
+            done, _ = await asyncio.wait({task}, timeout=min(1.5, remaining))
+            if done:
+                yield True, task.result()
+                return
+            yield False, None
+    finally:
+        if not task.done():
+            task.cancel()
 
 
 async def _load_attachment_text(doc: Document) -> str:
@@ -250,29 +279,34 @@ async def _generate_image_message(
 
 
 def _friendly_chat_error(error: Exception) -> str:
-    """Return a useful, informative client-facing message for chat errors."""
+    """Return a safe client-facing message; full details stay in server logs."""
     message = str(error)
     lowered = message.lower()
     err_type = type(error).__name__
 
     # Actual connection / transport network failures
     if any(net_err in err_type.lower() or net_err in lowered for net_err in ["connecterror", "connectionrefused", "clientconnecterror", "dnscounter", "socket.error"]):
-        return "Network connection failure: Unable to establish a connection to the remote AI service. Please check your connection and retry."
+        return "The AI provider is temporarily unavailable. Please retry."
 
     if "429" in message or "resource_exhausted" in lowered or "quota" in lowered or "rate limit" in lowered:
-        return "The AI provider quota or rate limit was reached. Please wait a few seconds and click Retry below."
+        return "The AI provider rate limit was reached. Please wait a moment and retry."
 
     if "api key" in lowered or "api_key" in lowered or "unauthenticated" in lowered or "invalid_key" in lowered:
-        return "AI Service Authentication Error: API key is missing, invalid, or unauthenticated. Please check the backend .env configuration."
+        return "The AI service is not configured correctly. Please contact the administrator."
 
     if "timeout" in lowered or "timed out" in lowered:
-        return "The request timed out while generating the response. Please click Retry to try again."
+        return "Agent execution timed out. Please retry."
 
-    # Return the clean error message so the user and developer know what failed
-    clean_msg = message.split("\n")[0] if "\n" in message else message
-    if len(clean_msg) > 200:
-        clean_msg = clean_msg[:200] + "..."
-    return f"Unable to complete the request: {clean_msg}. Please click Retry below to try again."
+    return "Unable to generate a response. Please retry."
+
+
+def _chat_error_status(error: Exception) -> int:
+    message = str(error).lower()
+    if "429" in message or "rate limit" in message or "quota" in message:
+        return 429
+    if "timeout" in message or "timed out" in message:
+        return 504
+    return 503
 
 
 class AttachmentInfo(BaseModel):
@@ -282,6 +316,7 @@ class AttachmentInfo(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    request_id: Optional[str] = Field(default=None, min_length=8, max_length=128)
     message: str = Field(max_length=20_000)
     conversation_id: Optional[str] = None
     agent_id: Optional[str] = None
@@ -308,6 +343,8 @@ class ChatResponse(BaseModel):
     events_count: int = 0
     success: bool = True
     error: Optional[str] = None
+    error_code: Optional[str] = None
+    request_id: Optional[str] = None
 
 
 async def can_access_conversation(conv: Conversation, user_id: str) -> bool:
@@ -354,12 +391,15 @@ async def _save_messages(
     attachments: Optional[list[dict]] = None,
     workspace_id: Optional[str] = None,
     citations: Optional[list[dict]] = None,
+    request_id: Optional[str] = None,
 ):
-    """Save user and assistant messages to the Conversation in MongoDB with LLM topic generation."""
+    """Persist one exchange idempotently using the client request ID."""
     try:
         user_metadata = {}
         if attachments:
             user_metadata["attachments"] = attachments
+        if request_id:
+            user_metadata["request_id"] = request_id
 
         now = datetime.now(timezone.utc)
         user_msg = Message(
@@ -373,19 +413,34 @@ async def _save_messages(
             content=agent_message,
             agent_id=agent_id,
             citations=[Citation(**c) for c in citations] if citations else [],
+            metadata={"request_id": request_id} if request_id else {},
         )
 
         conv = await Conversation.get(conv_id)
         if conv:
-            conv.messages.extend([user_msg, assistant_msg])
+            matching_indexes = [
+                index for index, message in enumerate(conv.messages)
+                if request_id and message.metadata.get("request_id") == request_id
+            ]
+            if matching_indexes:
+                # A retry replaces the prior assistant result while retaining
+                # exactly one copy of the original user request.
+                first = matching_indexes[0]
+                conv.messages = [
+                    message for index, message in enumerate(conv.messages)
+                    if index not in matching_indexes
+                ]
+                conv.messages[first:first] = [user_msg, assistant_msg]
+            else:
+                conv.messages.extend([user_msg, assistant_msg])
             conv.updated_at = now
             if workspace_id:
                 conv.workspace_id = workspace_id
             if is_new or conv.title in ["New Conversation", "New Chat"] or len(conv.messages) <= 2:
-                conv.title = await _generate_chat_topic(user_message, agent_message)
+                conv.title = user_message.strip()[:60] or "New Conversation"
             await conv.save()
         else:
-            title = await _generate_chat_topic(user_message, agent_message)
+            title = user_message.strip()[:60] or "New Conversation"
             conv = Conversation(
                 id=conv_id,
                 user_id=user_id,
@@ -407,11 +462,16 @@ async def _save_messages(
             assistant_message=agent_message,
             conversation_id=conv_id,
         ))
-        task.add_done_callback(
-            lambda completed: completed.exception() if not completed.cancelled() else None
-        )
+        def _log_extraction_failure(completed: asyncio.Task):
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error:
+                logger.warning("memory_extraction_failed", extra={"request_id": request_id, "error": str(error)[:500]})
+
+        task.add_done_callback(_log_extraction_failure)
     except Exception as e:
-        logger.error(f"Failed to save messages: {e}")
+        logger.error("chat_persistence_failed", extra={"request_id": request_id, "conversation_id": conv_id, "error": str(e)[:500]}, exc_info=True)
 
 
 @router.get("/conversations")
@@ -450,8 +510,8 @@ async def get_conversation(conv_id: str, http_request: Request) -> dict:
     try:
         conv = await Conversation.get(conv_id)
     except Exception as e:
-        logger.warning(f"Error fetching conversation {conv_id}: {e}")
-        conv = None
+        logger.error("conversation_load_failed", extra={"conversation_id": conv_id, "error": str(e)[:500]}, exc_info=True)
+        raise HTTPException(status_code=503, detail="Conversation storage is temporarily unavailable") from e
 
     user_id = (getattr(http_request.state, "user", None) or {}).get("sub", "default")
     if not conv:
@@ -480,6 +540,7 @@ async def get_conversation(conv_id: str, http_request: Request) -> dict:
                 "content": m.content,
                 "agentId": m.agent_id,
                 "metadata": m.metadata,
+                "citations": [citation.model_dump() for citation in m.citations],
             }
             for i, m in enumerate(conv.messages)
         ],
@@ -559,39 +620,44 @@ async def _build_full_conversation_history(conv_id: Optional[str], max_messages:
 
 
 @router.post("")
-async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
+async def chat(http_request: Request, body: ChatRequest, response: Response) -> ChatResponse:
     if not body.message and not body.attachments:
         raise HTTPException(status_code=400, detail="Message or attachment is required")
     conv_id = body.conversation_id or str(PydanticObjectId())
+    request_id = body.request_id or http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request_started_at = time.perf_counter()
     try:
         is_new = not bool(body.conversation_id)
 
         # Use authenticated user from JWT if available, fall back to request body
         auth_user = getattr(http_request.state, "user", None)
         user_id = (auth_user.get("sub") if auth_user else None) or body.user_id
-        from src.services.memory.service import memory_service
-        memory_context, attachment_context, history_snippet = await asyncio.gather(
-            memory_service.build_context(user_id, body.message),
-            _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
-            _build_full_conversation_history(body.conversation_id),
-        )
-
-        history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
-        augmented_message = history_prefix + memory_context + attachment_context + body.message
-
+        # Authorize stored state before it can be read into the LLM context.
         if body.conversation_id:
             existing = await Conversation.get(body.conversation_id)
             if existing and not await can_access_conversation(existing, user_id):
                 raise HTTPException(status_code=404, detail="Conversation not found")
-            # The GET route deliberately represents a missing conversation as
-            # a new client-side chat.  Accept the same ID on first send and
-            # create it during persistence; otherwise refreshing a new chat
-            # URL makes its first POST fail with a misleading 404.
             is_new = existing is None
         if body.workspace_id:
             workspace = await Workspace.get(body.workspace_id)
             if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
                 raise HTTPException(status_code=404, detail="Workspace not found")
+
+        from src.services.memory.service import memory_service
+        try:
+            async with asyncio.timeout(settings.chat_context_timeout_seconds):
+                memory_context, attachment_context, history_snippet = await asyncio.gather(
+                    memory_service.build_context(user_id, body.message),
+                    _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
+                    _build_full_conversation_history(body.conversation_id),
+                )
+        except TimeoutError:
+            _chat_log(request_id, "context", "error", request_started_at, error="context timeout")
+            memory_context, attachment_context, history_snippet = "", "", ""
+
+        history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
+        augmented_message = history_prefix + memory_context + attachment_context + body.message
+
         routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
         automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
         automatic_plan = plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)) if automatic_mode else None
@@ -614,9 +680,18 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             "google_refresh_token": google_refresh_token,
             "current_datetime": now_str,
             "conversation_history": history_snippet,
+            "has_attachments": bool(body.attachments),
+            "request_id": request_id,
         }
 
         registry_agent = get_boss_agent().registry.get_agent(effective_agent_id) if effective_agent_id else None
+        if body.agent_id not in (None, "auto", "image") and not body.agent_id.startswith("custom_") and not registry_agent:
+            raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
+        if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
+            raise HTTPException(status_code=422, detail="Unknown or disabled custom agent")
+        invalid_team_agents = [agent_id for agent_id in body.team_agents if not get_boss_agent().registry.get_agent(agent_id)]
+        if invalid_team_agents:
+            raise HTTPException(status_code=422, detail=f"Unknown or disabled team agent: {invalid_team_agents[0]}")
 
         if routed_agent_id == "image":
             drive_token = http_request.headers.get("X-Drive-Access-Token") or google_access_token
@@ -645,7 +720,10 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         elif custom_config:
             custom_agent = CustomAgent(custom_config)
             get_boss_agent().registry.register(custom_agent)
-            agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
+            agent_result = await asyncio.wait_for(
+                custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet, "request_id": request_id}),
+                timeout=settings.agentic_agent_timeout_seconds,
+            )
             result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
         elif registry_agent:
             agent_result = await asyncio.wait_for(
@@ -685,11 +763,12 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             user_id=user_id,
             user_message=body.message,
             agent_message=result["output"],
-            agent_id=body.agent_id,
+            agent_id=effective_agent_id or body.agent_id,
             is_new=is_new,
             attachments=attachments_data,
             workspace_id=body.workspace_id,
             citations=result.get("citations"),
+            request_id=request_id,
         )
 
         return ChatResponse(
@@ -699,6 +778,7 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             agent_traces=result.get("agent_traces", []),
             events_count=result.get("events_count", 0),
             success=True,
+            request_id=request_id,
         )
     except HTTPException:
         # Preserve real client errors (notably conversation authorization) as
@@ -707,7 +787,9 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
         raise
     except Exception as e:
         friendly_error = _friendly_chat_error(e)
-        logger.error(f"Chat error: {e}", exc_info=True)
+        response.status_code = _chat_error_status(e)
+        _chat_log(request_id, "request", "error", request_started_at, error=str(e)[:500])
+        logger.error(f"Chat error [{request_id}]: {e}", exc_info=True)
         return ChatResponse(
             conversation_id=conv_id,
             output=friendly_error,
@@ -715,6 +797,9 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             agent_traces=[],
             events_count=0,
             success=False,
+            error=friendly_error,
+            error_code="CHAT_REQUEST_FAILED",
+            request_id=request_id,
         )
 
 
@@ -731,7 +816,7 @@ async def chat_stream(
     """
     if not body.message and not body.attachments:
         raise HTTPException(status_code=400, detail="Message or attachment is required")
-    request_id = http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request_id = body.request_id or http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request_started_at = time.perf_counter()
     _chat_log(request_id, "request", "start", input_chars=len(body.message), has_attachments=bool(body.attachments))
     conv_id = body.conversation_id or str(PydanticObjectId())
@@ -770,6 +855,14 @@ async def chat_stream(
     )
     _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=effective_agent_id, automatic=automatic_mode, supervisor=use_dynamic_orchestration)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
+    explicit_registry_agent = get_boss_agent().registry.get_agent(effective_agent_id) if effective_agent_id else None
+    if body.agent_id not in (None, "auto", "image") and not body.agent_id.startswith("custom_") and not explicit_registry_agent:
+        raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
+    if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
+        raise HTTPException(status_code=422, detail="Unknown or disabled custom agent")
+    invalid_team_agents = [agent_id for agent_id in body.team_agents if not get_boss_agent().registry.get_agent(agent_id)]
+    if invalid_team_agents:
+        raise HTTPException(status_code=422, detail=f"Unknown or disabled team agent: {invalid_team_agents[0]}")
 
     accumulated_output = ""
 
@@ -807,6 +900,8 @@ async def chat_stream(
                 "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", ""),
                 "current_datetime": now_str,
                 "conversation_history": history_snippet,
+                "has_attachments": bool(body.attachments),
+                "request_id": request_id,
             }
 
             event_queue: list[dict] = []
@@ -814,10 +909,18 @@ async def chat_stream(
             if routed_agent_id == "image":
                 drive_token = http_request.headers.get("X-Drive-Access-Token") or stream_google_context["google_access_token"]
                 drive_refresh = http_request.headers.get("X-Drive-Refresh-Token") or stream_google_context["google_refresh_token"]
-                accumulated_output = await _generate_image_message(
-                    body.message, user_id, body.workspace_id,
-                    drive_access_token=drive_token, drive_refresh_token=drive_refresh
-                )
+                async for done, value in _await_with_heartbeats(
+                    _generate_image_message(
+                        body.message, user_id, body.workspace_id,
+                        drive_access_token=drive_token, drive_refresh_token=drive_refresh,
+                    ),
+                    http_request,
+                    settings.chat_stream_timeout_seconds,
+                ):
+                    if not done:
+                        yield ": heartbeat\n\n"
+                    else:
+                        accumulated_output = value
                 yield f"event: agent\ndata: {json.dumps({'agent_id': 'image'})}\n\n"
                 yield f"event: chunk\ndata: {json.dumps({'text': accumulated_output})}\n\n"
                 attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
@@ -825,6 +928,7 @@ async def chat_stream(
                     conv_id=conv_id, user_id=user_id, user_message=body.message,
                     agent_message=accumulated_output, agent_id="image", is_new=is_new,
                     attachments=attachments_data, workspace_id=body.workspace_id,
+                    request_id=request_id,
                 )
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
@@ -895,18 +999,30 @@ async def chat_stream(
                     agent_message=accumulated_output, agent_id="boss_agent", is_new=is_new,
                     attachments=attachments_data, workspace_id=body.workspace_id,
                     citations=dynamic_result.get("citations"),
+                    request_id=request_id,
                 )
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': dynamic_result.get('citations', [])})}\n\n"
                 return
 
             if body.team_agents:
-                team_result = await get_boss_agent().process_team(
-                    augmented_message,
-                    user_id,
-                    body.team_agents,
-                    conv_id,
-                    context={"google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", ""), "conversation_history": history_snippet},
-                )
+                team_result = None
+                async for done, value in _await_with_heartbeats(
+                    get_boss_agent().process_team(
+                        augmented_message,
+                        user_id,
+                        body.team_agents,
+                        conv_id,
+                        context={"google_access_token": http_request.headers.get("X-Google-Access-Token", ""), "google_refresh_token": http_request.headers.get("X-Google-Refresh-Token", ""), "conversation_history": history_snippet},
+                    ),
+                    http_request,
+                    settings.chat_stream_timeout_seconds,
+                ):
+                    if not done:
+                        yield ": heartbeat\n\n"
+                    else:
+                        team_result = value
+                if not team_result or not team_result.get("success"):
+                    raise RuntimeError((team_result or {}).get("output") or "Team execution failed")
                 for stage in team_result["stages"]:
                     yield f"event: agent\ndata: {json.dumps({'agent_id': stage['agent_id']})}\n\n"
                     yield f"event: team_stage\ndata: {json.dumps({'agent_id': stage['agent_id'], 'status': 'complete'})}\n\n"
@@ -920,6 +1036,7 @@ async def chat_stream(
                     agent_message=accumulated_output, agent_id="teamwork", is_new=is_new,
                     attachments=attachments_data,
                     workspace_id=body.workspace_id,
+                    request_id=request_id,
                 )
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
@@ -927,13 +1044,24 @@ async def chat_stream(
             if custom_config:
                 custom_agent = CustomAgent(custom_config)
                 get_boss_agent().registry.register(custom_agent)
-                agent_result = await custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet})
+                agent_result = None
+                async for done, value in _await_with_heartbeats(
+                    custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet, "request_id": request_id}),
+                    http_request,
+                    settings.agentic_agent_timeout_seconds,
+                ):
+                    if not done:
+                        yield ": heartbeat\n\n"
+                    else:
+                        agent_result = value
+                if not agent_result.success or not (agent_result.output or "").strip():
+                    raise RuntimeError(agent_result.error or "Selected agent returned an empty response")
                 yield f"event: agent\ndata: {json.dumps({'agent_id': custom_config.agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
                 attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new, attachments=attachments_data, workspace_id=body.workspace_id)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=custom_config.agent_id, is_new=is_new, attachments=attachments_data, workspace_id=body.workspace_id, request_id=request_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
@@ -941,31 +1069,48 @@ async def chat_stream(
             registry_agent = get_boss_agent().registry.get_agent(target_agent_id) if target_agent_id else None
 
             if registry_agent:
-                agent_result = await asyncio.wait_for(
+                agent_result = None
+                async for done, value in _await_with_heartbeats(
                     registry_agent.execute(augmented_message, stream_google_context),
-                    timeout=settings.agentic_agent_timeout_seconds,
-                )
+                    http_request,
+                    settings.agentic_agent_timeout_seconds,
+                ):
+                    if not done:
+                        yield ": heartbeat\n\n"
+                    else:
+                        agent_result = value
                 if not agent_result.success or not (agent_result.output or "").strip():
                     raise RuntimeError(agent_result.error or "Selected agent returned an empty response")
                 yield f"event: agent\ndata: {json.dumps({'agent_id': target_agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=target_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=target_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations, request_id=request_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                 return
 
             if body.workspace_id and body.agent_id in (None, "auto", "knowledge"):
                 knowledge_agent = get_boss_agent().registry.get_agent("knowledge")
                 if knowledge_agent:
-                    agent_result = await knowledge_agent.execute(
-                        augmented_message, {**stream_google_context, "workspace_id": body.workspace_id, "conversation_id": conv_id}
-                    )
+                    agent_result = None
+                    async for done, value in _await_with_heartbeats(
+                        knowledge_agent.execute(
+                            augmented_message, {**stream_google_context, "workspace_id": body.workspace_id, "conversation_id": conv_id}
+                        ),
+                        http_request,
+                        settings.agentic_agent_timeout_seconds,
+                    ):
+                        if not done:
+                            yield ": heartbeat\n\n"
+                        else:
+                            agent_result = value
+                    if not agent_result.success or not (agent_result.output or "").strip():
+                        raise RuntimeError(agent_result.error or "Knowledge agent returned an empty response")
                     yield f"event: agent\ndata: {json.dumps({'agent_id': 'knowledge'})}\n\n"
                     async for word in _word_chunks(agent_result.output):
                         yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                     accumulated_output = agent_result.output
-                    await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations)
+                    await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id="knowledge", is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations, request_id=request_id)
                     yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                     return
 
@@ -998,11 +1143,12 @@ async def chat_stream(
                         user_id=user_id,
                         user_message=body.message,
                         agent_message=data.get("output", accumulated_output),
-                        agent_id=body.agent_id,
+                        agent_id=effective_agent_id or body.agent_id,
                         is_new=is_new,
                         attachments=attachments_data,
                         workspace_id=body.workspace_id,
                         citations=data.get("citations"),
+                        request_id=request_id,
                     )
 
                 yield f"event: {event_type}\n"
@@ -1019,10 +1165,11 @@ async def chat_stream(
                     user_id=user_id,
                     user_message=body.message,
                     agent_message=accumulated_output,
-                    agent_id=body.agent_id,
+                    agent_id=effective_agent_id or body.agent_id,
                     is_new=is_new,
+                    request_id=request_id,
                 )
-            yield f"event: error\ndata: {json.dumps({'error': friendly_error})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'error': friendly_error, 'code': 'CHAT_REQUEST_FAILED', 'request_id': request_id})}\n\n"
             yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
 
     return StreamingResponse(

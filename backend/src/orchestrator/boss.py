@@ -387,7 +387,10 @@ class BossAgent:
                 "team_index": index,
                 **(context or {}),
             }
-            result = await agent.execute(handoff, agent_context)
+            result = await asyncio.wait_for(
+                agent.execute(handoff, agent_context),
+                timeout=settings.agentic_agent_timeout_seconds,
+            )
             stage = {
                 "agent_id": agent_id,
                 "output": result.output,

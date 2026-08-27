@@ -1,4 +1,5 @@
 from src.agents.base import BaseAgent, AgentManifest, AgentResult
+from src.utils.logger import logger
 
 
 class KnowledgeAgent(BaseAgent):
@@ -13,9 +14,6 @@ class KnowledgeAgent(BaseAgent):
 
     async def execute(self, user_input: str, context: dict) -> AgentResult:
         from src.services.llm import llm_service
-        from src.services.rag.retriever import get_retriever
-
-        retriever = get_retriever()
         user_id = context.get("user_id", "")
 
         # Isolate the actual current user prompt from conversation history prefix
@@ -54,12 +52,33 @@ class KnowledgeAgent(BaseAgent):
                 pass
 
 
-        docs = await retriever.retrieve(
-            user_input,
-            user_id=user_id,
-            workspace_id=context.get("workspace_id"),
-            top_k=5,
+        # Do not initialize the embedding/vector stack for ordinary chat. It
+        # adds substantial latency and makes a greeting depend on a separate
+        # embedding credential. Retrieval is only relevant when the request
+        # has an explicit document/workspace scope.
+        has_document_scope = bool(
+            context.get("workspace_id")
+            or context.get("has_attachments")
+            or context.get("document_ids")
         )
+        docs = []
+        if has_document_scope:
+            try:
+                from src.services.rag.retriever import get_retriever
+
+                docs = await get_retriever().retrieve(
+                    user_input,
+                    user_id=user_id,
+                    workspace_id=context.get("workspace_id"),
+                    top_k=5,
+                )
+            except Exception as exc:
+                # Attachment text is already injected by the chat endpoint.
+                # A vector-store outage must not take down the whole chat.
+                logger.warning(
+                    "knowledge_retrieval_failed",
+                    extra={"user_id_present": bool(user_id), "error": str(exc)[:500]},
+                )
 
 
         if docs:
