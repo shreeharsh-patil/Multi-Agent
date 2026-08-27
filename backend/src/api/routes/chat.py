@@ -624,7 +624,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
     if not body.message and not body.attachments:
         raise HTTPException(status_code=400, detail="Message or attachment is required")
     conv_id = body.conversation_id or str(PydanticObjectId())
-    request_id = body.request_id or http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request_id = body.request_id or getattr(http_request.state, "request_id", None) or http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request_started_at = time.perf_counter()
     try:
         is_new = not bool(body.conversation_id)
@@ -816,7 +816,7 @@ async def chat_stream(
     """
     if not body.message and not body.attachments:
         raise HTTPException(status_code=400, detail="Message or attachment is required")
-    request_id = body.request_id or http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request_id = body.request_id or getattr(http_request.state, "request_id", None) or http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request_started_at = time.perf_counter()
     _chat_log(request_id, "request", "start", input_chars=len(body.message), has_attachments=bool(body.attachments))
     conv_id = body.conversation_id or str(PydanticObjectId())

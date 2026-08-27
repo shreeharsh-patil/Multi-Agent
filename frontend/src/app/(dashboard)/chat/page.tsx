@@ -21,7 +21,7 @@ import rehypeKatex from 'rehype-katex'
 import { preprocessLaTeX } from '@/lib/latex'
 import { ImagePreviewCard } from '@/components/image-preview-card'
 import { MermaidWorkspace, repairMermaidMarkdown } from '@/components/mermaid-workspace'
-import { getAccessToken } from '@/lib/auth-store'
+import { clearAccessToken, getAccessToken, setAccessToken } from '@/lib/auth-store'
 import { downloadSecureFile } from '@/lib/download'
 
 const typingKeyframes = `
@@ -130,9 +130,31 @@ interface PanelTab {
 }
 
 function ChatContent() {
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const googleAccessToken = (session as any)?.accessToken as string | undefined
   const googleRefreshToken = (session as any)?.refreshToken as string | undefined
+  const ensureBackendAuth = useCallback(async (forceRefresh = false): Promise<string> => {
+    const existing = getAccessToken()
+    if (existing && !forceRefresh) return existing
+    if (sessionStatus !== 'authenticated' || !session?.user?.email || !googleAccessToken) {
+      throw new Error('Your session is not ready. Please sign in again.')
+    }
+
+    if (forceRefresh) clearAccessToken()
+    const result = await api.auth.login({
+      email: session.user.email,
+      name: session.user.name || session.user.email,
+      image: session.user.image || undefined,
+      google_id: (session.user as { id?: string }).id,
+      access_token: googleAccessToken,
+      refresh_token: googleRefreshToken,
+    })
+    if (!result.success || !result.data?.access_token) {
+      throw new Error(result.error || 'Unable to establish a backend session.')
+    }
+    setAccessToken(result.data.access_token)
+    return result.data.access_token
+  }, [googleAccessToken, googleRefreshToken, session, sessionStatus])
   const [messages, setMessages] = useState<Array<{
     id: string
     role: 'user' | 'assistant'
@@ -791,6 +813,34 @@ function ChatContent() {
     setOrchestration(null)
     setChatDebug({ status: 'connecting', step: 'frontend_request', startedAt: Date.now() })
 
+    // NextAuth and the backend use different JWTs. The bridge exchanges the
+    // Google session in the background, but a user can press Send before that
+    // exchange finishes. Establish it here before uploads or chat requests.
+    try {
+      await ensureBackendAuth()
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : 'Authentication failed.'
+      const failedRequestId = retryRequestId || crypto.randomUUID()
+      if (!isRegenerate) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: text || `Uploaded ${attachmentCount} file(s)`,
+          requestId: failedRequestId,
+        }])
+      }
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: message,
+        error: true,
+      }])
+      setChatDebug((current) => current ? { ...current, status: 'error', step: 'authentication', error: message } : current)
+      sendingRef.current = false
+      setSending(false)
+      return
+    }
+
     // Attachments already began uploading on select. Await any in-flight
     // upload; only kick off a fresh upload for ones that never started
     // (e.g. added programmatically) or previously errored.
@@ -864,6 +914,10 @@ function ChatContent() {
         try {
           streamResponse = await api.chat.stream(requestPayload, googleAccessToken, abortController.signal, googleRefreshToken)
           if (streamResponse.ok) break
+          if (streamResponse.status === 401 && attempt === 0) {
+            await ensureBackendAuth(true)
+            continue
+          }
           lastOpenError = new Error(`HTTP ${streamResponse.status}`)
           if (streamResponse.status < 500 && streamResponse.status !== 429) break
         } catch (openError) {
@@ -1068,6 +1122,7 @@ function ChatContent() {
         }
       }
     } catch (err) {
+      let terminalError: unknown = err
       // User pressed Stop: keep whatever streamed so far, mark it as stopped.
       if (err instanceof DOMException && err.name === 'AbortError') {
         setMessages((prev) =>
@@ -1142,7 +1197,9 @@ function ChatContent() {
           )
           return
         }
+        throw new Error(res.error || 'The non-streaming chat request failed.')
         } catch (fallbackErr) {
+          terminalError = fallbackErr
           console.error('Chat non-streaming fallback failed:', {
             requestId: streamRequestId || undefined,
             error: fallbackErr instanceof Error ? fallbackErr.message : fallbackErr,
@@ -1150,7 +1207,10 @@ function ChatContent() {
         }
       }
 
-      const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'
+      const rawErrorMessage = terminalError instanceof Error ? terminalError.message : 'The chat request failed.'
+      const errorMessage = /(?:HTTP\s*)?401|authentication required|not authenticated/i.test(rawErrorMessage)
+        ? 'Your session expired. Please sign in again and retry.'
+        : rawErrorMessage
       console.error('Chat request failed', {
         requestId: streamRequestId || undefined,
         error: errorMessage,
@@ -1180,7 +1240,7 @@ function ChatContent() {
       window.dispatchEvent(new Event('refresh-documents-list'))
       window.dispatchEvent(new Event('refresh-conversations-list'))
     }
-  }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, googleRefreshToken])
+  }, [input, attachments, uploadAttachment, conversationId, selectedAgent, teamMode, teamAgents, selectedWorkspace, googleAccessToken, googleRefreshToken, ensureBackendAuth])
 
   // Stop an in-flight streaming generation.
   const handleStop = useCallback(() => {

@@ -6,6 +6,7 @@ from src.utils.logger import logger
 from src.utils.exceptions import AppException
 from src.services.auth.service import verify_access_token
 import time
+import uuid
 
 # Paths that do NOT require authentication
 PUBLIC_PATHS = {
@@ -89,6 +90,8 @@ async def jwt_auth_middleware(request: Request, call_next):
     X-User-Id header or user_id query param if no JWT is provided.
     """
     path = request.url.path
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
 
     # Skip auth for public paths
     if _is_public(request.method, path):
@@ -176,8 +179,12 @@ async def jwt_auth_middleware(request: Request, call_next):
     # Production: reject unauthenticated requests
     return JSONResponse(
         status_code=401,
-        content={"success": False, "error": "Authentication required. Provide a Bearer token in the Authorization header."},
-        headers=_cors_headers(request),
+        content={
+            "success": False,
+            "error": "Authentication required. Provide a Bearer token in the Authorization header.",
+            "requestId": request_id,
+        },
+        headers={**_cors_headers(request), "X-Request-ID": request_id},
     )
 
 

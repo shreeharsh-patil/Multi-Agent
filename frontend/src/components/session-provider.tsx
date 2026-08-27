@@ -32,9 +32,13 @@ function AuthTokenBridge() {
           setAccessToken(res.data.access_token)
           exchanged.current = true
           window.dispatchEvent(new Event('refresh-conversations-list'))
+        } else {
+          console.error('Backend authentication exchange failed', { error: res.error || 'No access token returned' })
         }
-      } catch {
-        // Silently fail
+      } catch (error) {
+        console.error('Backend authentication exchange failed', {
+          error: error instanceof Error ? error.message : 'Unknown authentication error',
+        })
       }
     }
 
