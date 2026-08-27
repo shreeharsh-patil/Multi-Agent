@@ -830,6 +830,7 @@ function ChatContent() {
     let streamCompleted = false
     let streamRequestId = ''
     let accumulatedContent = ''
+    let streamServerError = ''
     let frameId: number | null = null
 
     try {
@@ -1003,6 +1004,7 @@ function ChatContent() {
                   ),
                 )
             } else if (currentEvent === 'error' && data.error) {
+                streamServerError = String(data.error)
                 setChatDebug((current) => current ? { ...current, status: 'error', step: 'server_error', error: data.error } : current)
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 setMessages((prev) =>
@@ -1021,6 +1023,9 @@ function ChatContent() {
 
       // A clean network close without a completion event is not a successful
       // response. Treat it as a failure so the assistant bubble never stays blank.
+      if (streamServerError) {
+        throw new Error(streamServerError)
+      }
       if (!streamCompleted) {
         throw new Error(`Chat stream closed before completion${streamRequestId ? ` (request ${streamRequestId})` : ''}.`)
       }
@@ -1121,17 +1126,31 @@ function ChatContent() {
           return
         }
         } catch (fallbackErr) {
-          console.warn('Chat non-streaming fallback failed:', fallbackErr)
+          console.error('Chat non-streaming fallback failed:', {
+            requestId: streamRequestId || undefined,
+            error: fallbackErr instanceof Error ? fallbackErr.message : fallbackErr,
+          })
         }
       }
 
       const errorMessage = err instanceof Error ? err.message : 'The chat request failed.'
+      console.error('Chat request failed', {
+        requestId: streamRequestId || undefined,
+        error: errorMessage,
+        streamOpened: streamingAttempted,
+        streamServerError: streamServerError || undefined,
+      })
       setChatDebug((current) => current ? { ...current, status: 'error', step: 'request_error', error: errorMessage } : current)
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
-            ? { ...msg, content: accumulatedContent || "The chat request encountered an error. Please click retry below to try again.", error: true, requestId: streamRequestId || undefined }
+            ? {
+                ...msg,
+                content: accumulatedContent || `Unable to generate a response. Please retry.${streamRequestId ? ` (Request ID: ${streamRequestId})` : ''}`,
+                error: true,
+                requestId: streamRequestId || undefined,
+              }
             : msg,
         ),
       )
