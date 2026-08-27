@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from src.config import settings
 from src.adk.runner import process_message, process_message_stream, process_fast_message_stream
 from src.orchestrator.boss import get_boss_agent
 from src.orchestrator.router import AgentRouter
