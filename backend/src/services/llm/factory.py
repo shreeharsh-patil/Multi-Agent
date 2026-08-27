@@ -34,9 +34,9 @@ def _build_providers() -> list[BaseLLMProvider]:
         # Older deployments commonly retained this model after Groq removed
         # it. Upgrade at runtime so an unchanged Render environment cannot
         # take down the entire provider chain.
-        if groq_model in {"mixtral-8x7b-32768", "llama3-8b-8192", "openai/gpt-oss-20b"}:
-            logger.warning("GROQ_MODEL %s is invalid/retired; using llama-3.3-70b-versatile instead", groq_model)
-            groq_model = "llama-3.3-70b-versatile"
+        if groq_model in {"mixtral-8x7b-32768", "llama3-8b-8192", "llama-3.3-70b-versatile"}:
+            logger.warning("GROQ_MODEL %s is invalid/retired; using openai/gpt-oss-20b instead", groq_model)
+            groq_model = "openai/gpt-oss-20b"
         providers.append(OpenAICompatibleProvider(
             name="Groq",
             api_key=settings.groq_api_key,
@@ -47,8 +47,9 @@ def _build_providers() -> list[BaseLLMProvider]:
 
     if settings.aiand_api_key:
         aiand_model = settings.aiand_model
-        if "qwen3.6" in aiand_model or "27b" in aiand_model or "qwen-2.5" in aiand_model:
-            aiand_model = "qwen2.5-72b-instruct"
+        if "qwen-2.5" in aiand_model or "qwen2.5" in aiand_model:
+            logger.warning("AIAND_MODEL %s is invalid/retired; using qwen/qwen3.6-27b instead", aiand_model)
+            aiand_model = "qwen/qwen3.6-27b"
         providers.append(OpenAICompatibleProvider(
             name="AIand",
             api_key=settings.aiand_api_key,
@@ -59,8 +60,9 @@ def _build_providers() -> list[BaseLLMProvider]:
 
     if settings.openrouter_api_key:
         openrouter_model = settings.openrouter_model
-        if "nemotron-3-ultra" in openrouter_model:
-            openrouter_model = "google/gemini-2.0-flash-exp:free"
+        if openrouter_model == "google/gemini-2.0-flash-exp:free":
+            logger.warning("OPENROUTER_MODEL %s has no active endpoints; using nvidia/nemotron-3-ultra-550b-a55b:free instead", openrouter_model)
+            openrouter_model = "nvidia/nemotron-3-ultra-550b-a55b:free"
         providers.append(OpenAICompatibleProvider(
             name="OpenRouter",
             api_key=settings.openrouter_api_key,
