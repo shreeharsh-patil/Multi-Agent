@@ -580,8 +580,13 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
 
         if body.conversation_id:
             existing = await Conversation.get(body.conversation_id)
-            if not existing or not await can_access_conversation(existing, user_id):
+            if existing and not await can_access_conversation(existing, user_id):
                 raise HTTPException(status_code=404, detail="Conversation not found")
+            # The GET route deliberately represents a missing conversation as
+            # a new client-side chat.  Accept the same ID on first send and
+            # create it during persistence; otherwise refreshing a new chat
+            # URL makes its first POST fail with a misleading 404.
+            is_new = existing is None
         if body.workspace_id:
             workspace = await Workspace.get(body.workspace_id)
             if not workspace or (workspace.user_id != user_id and user_id not in workspace.member_ids):
@@ -694,6 +699,11 @@ async def chat(http_request: Request, body: ChatRequest) -> ChatResponse:
             events_count=result.get("events_count", 0),
             success=True,
         )
+    except HTTPException:
+        # Preserve real client errors (notably conversation authorization) as
+        # their intended HTTP status instead of turning them into a 200 chat
+        # payload that looks like a model failure.
+        raise
     except Exception as e:
         friendly_error = _friendly_chat_error(e)
         logger.error(f"Chat error: {e}", exc_info=True)
@@ -732,8 +742,12 @@ async def chat_stream(
     _chat_log(request_id, "authentication", "complete", request_started_at, authenticated=bool(auth_user), user_id_present=bool(user_id))
     if body.conversation_id:
         existing = await Conversation.get(body.conversation_id)
-        if not existing or not await can_access_conversation(existing, user_id):
+        if existing and not await can_access_conversation(existing, user_id):
             raise HTTPException(status_code=404, detail="Conversation not found")
+        # Keep stream and non-stream semantics aligned with GET
+        # /conversations/{id}: an unknown, valid ID represents a new chat,
+        # while an existing conversation owned by somebody else remains 404.
+        is_new = existing is None
     _chat_log(request_id, "conversation", "complete", request_started_at, conversation_id=conv_id, is_new=is_new)
     if body.workspace_id:
         workspace = await Workspace.get(body.workspace_id)

@@ -1078,9 +1078,19 @@ function ChatContent() {
       // would duplicate agent work and conversation messages.
       if (!streamingAttempted) {
         try {
+        const staleConversation = /(?:^|\b)(?:404:\s*)?conversation not found\b/i.test(
+          err instanceof Error ? err.message : '',
+        )
+        if (staleConversation && currentConvId) {
+          // Do not weaken backend authorization for a conversation owned by
+          // another user. Retry the original request once as a new chat with
+          // no conversation ID; the already-rendered user message and the
+          // existing assistant placeholder are reused.
+          console.warn('Chat conversation is unavailable; retrying as a new conversation', { conversationId: currentConvId })
+        }
         const res = await api.chat.send({
           message: text || `Uploaded ${attachmentCount} file(s)`,
-          conversation_id: currentConvId,
+          conversation_id: staleConversation ? undefined : currentConvId,
           agent_id: currentAgent,
           team_agents: teamMode ? teamAgents as AgentId[] : undefined,
           workspace_id: currentWorkspace,
