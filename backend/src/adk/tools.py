@@ -696,12 +696,23 @@ async def _jina_scrape(url: str) -> str:
 async def scrape_page(url: str) -> str:
     """Scrape a web page concurrently across multiple specialized extraction engines in parallel.
 
-    Executes Trafilatura, Next.js SPA Hydration Scanner, Jina AI Reader, Readability, Open REST APIs,
-    TLS Impersonator, and Rotated User-Agent Scrapers simultaneously using asyncio.gather.
-    Evaluates extracted markdown using a multi-metric quality scorer and returns the highest quality text.
+    Enforces strict SSRF protections, removes HTML clutter, extracts title, headings,
+    publication date, and relevant text, and returns clean structured output with
+    untrusted content boundaries.
     """
-    if not _validate_outbound_url(url):
-        return "The requested URL was blocked by the server's SSRF protection (only public http/https URLs are allowed)."
+    from src.adk.url_reader import URLReaderSecurity, URLReaderService
+
+    is_valid, reason = URLReaderSecurity.validate_url(url)
+    if not is_valid:
+        return f"Security Policy: {reason}"
+
+    # First attempt extraction via URLReaderService (fast clean HTML parser with metadata)
+    try:
+        extract = await URLReaderService.read_url(url)
+        if not extract.error and extract.relevant_text and len(extract.relevant_text.strip()) > 50:
+            return extract.to_structured_text()
+    except Exception as e:
+        logger.debug(f"URLReaderService initial parse failed for {url}: {e}")
 
     if settings.obscura_cdp_url:
         try:
@@ -1591,6 +1602,106 @@ async def fetch_live_weather(city: str) -> str:
         return f"Weather lookup temporarily unavailable for '{clean_city}': {e}"
 
 
+def create_search_plan(
+    user_prompt: str,
+    mode: str = "STANDARD",
+) -> str:
+    """Generate a structured, non-repetitive search plan decomposing a complex user request
+    across domain-specific Google Search and Internet Intelligence specialists.
+
+    Args:
+        user_prompt: The user query or research topic to decompose into targeted angles.
+        mode: Planning depth mode ('QUICK', 'STANDARD', 'DEEP', 'CRITICAL').
+
+    Returns:
+        JSON string representing the structured search_plan with objective, mode, and deduplicated queries.
+    """
+    from src.adk.search_plan import IntelligentSearchPlanner, SearchPlanMode
+    try:
+        plan_mode = SearchPlanMode(mode.upper())
+    except ValueError:
+        plan_mode = SearchPlanMode.STANDARD
+
+    plan = IntelligentSearchPlanner.generate_plan(user_prompt, mode=plan_mode)
+    return json.dumps(plan.to_dict(), indent=2)
+
+
+def rank_search_results(
+    query: str,
+    results: list[dict[str, Any]],
+    max_selected: int = 5,
+) -> str:
+    """Rank discovered Google Search results by relevance, primary authority, freshness, credibility, and diversity.
+
+    Args:
+        query: The user research query or objective.
+        results: List of raw search result dictionaries (with 'url', 'title', 'snippet', 'published_date').
+        max_selected: Maximum number of top sources to select (typically 3-8).
+
+    Returns:
+        JSON string containing selected_sources, rejected_sources, and concise reasoning_summary.
+    """
+    from src.adk.search_ranker import SearchResultRanker
+    ranking = SearchResultRanker.rank_sources(query=query, results=results, max_selected=max_selected)
+    return json.dumps(ranking.to_dict(), indent=2)
+
+
+def split_page_into_passages(
+    text: str,
+    url: str,
+    title: str = "Web Document",
+    page: Optional[int] = None,
+) -> str:
+    """Split clean webpage text into structured section passages with heading metadata and provenance.
+
+    Args:
+        text: Clean extracted webpage or documentation text.
+        url: Source webpage URL.
+        title: Page or document title.
+        page: Optional page number if extracted from a PDF.
+
+    Returns:
+        JSON string containing list of extracted PassageChunk objects.
+    """
+    from src.adk.passage_extractor import ContentExtractorEngine
+    chunks = ContentExtractorEngine.split_into_sections(
+        text=text,
+        url=url,
+        title=title,
+        page=page,
+    )
+    return json.dumps([c.to_dict() for c in chunks], indent=2)
+
+
+def rank_and_select_passages(
+    query: str,
+    passages_json: str,
+    top_k: int = 5,
+) -> str:
+    """Rank extracted passage chunks and select only the top K most relevant passages without losing provenance.
+
+    Args:
+        query: User query or specific research objective.
+        passages_json: JSON string representing list of PassageChunk objects.
+        top_k: Number of top relevant passages to select (default 5).
+
+    Returns:
+        JSON string containing ExtractedPassagesPacket with selected passages.
+    """
+    from src.adk.passage_extractor import PassageChunk, PassageRankerEngine
+    try:
+        raw_list = json.loads(passages_json) if isinstance(passages_json, str) else passages_json
+        if isinstance(raw_list, dict) and "selected_passages" in raw_list:
+            raw_list = raw_list["selected_passages"]
+        chunks = [PassageChunk.from_dict(item) for item in raw_list]
+    except Exception as e:
+        logger.warning(f"Error parsing passages JSON: {e}")
+        chunks = []
+
+    packet = PassageRankerEngine.rank_and_select(query=query, passages=chunks, top_k=top_k)
+    return json.dumps(packet.to_dict(), indent=2)
+
+
 # Export all tools as FunctionTool instances for ADK agents
 knowledge_search_tool = FunctionTool(func=knowledge_search)
 memory_store_tool = FunctionTool(func=memory_store)
@@ -1606,4 +1717,8 @@ drive_delete_tool = FunctionTool(func=drive_delete)
 contacts_list_tool = FunctionTool(func=contacts_list)
 calendar_list_tool = FunctionTool(func=calendar_list)
 calendar_create_tool = FunctionTool(func=calendar_create)
+create_search_plan_tool = FunctionTool(func=create_search_plan)
+rank_search_results_tool = FunctionTool(func=rank_search_results)
+split_page_into_passages_tool = FunctionTool(func=split_page_into_passages)
+rank_and_select_passages_tool = FunctionTool(func=rank_and_select_passages)
 

@@ -178,6 +178,16 @@ class Settings(BaseSettings):
     internet_research_max_iterations: int = 5
     internet_max_concurrency: int = 8
 
+    # ---- ADK Search Planning Mode Limits ----
+    search_plan_quick_min_queries: int = 1
+    search_plan_quick_max_queries: int = 2
+    search_plan_standard_min_queries: int = 3
+    search_plan_standard_max_queries: int = 5
+    search_plan_deep_min_queries: int = 5
+    search_plan_deep_max_queries: int = 10
+    search_plan_critical_min_queries: int = 8
+    search_plan_critical_max_queries: int = 15
+
     model_config = {
         # Resolve both env files so startup works from either the repository
         # root or backend directory. The backend file contains service keys;

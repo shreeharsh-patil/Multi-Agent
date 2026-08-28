@@ -34,7 +34,7 @@ def test_adk_planning_agents_are_real_llm_agents():
     assert isinstance(planner, LlmAgent)
     assert planner.name == "search_planner"
     assert "research objectives" in planner.instruction.lower()
-    assert len(planner.tools) == 0  # Does not perform web searches yet
+    assert len(planner.tools) == 1  # Equipped with create_search_plan_tool (does not perform web searches yet)
 
 
 def test_internet_intelligence_manager_hierarchy():

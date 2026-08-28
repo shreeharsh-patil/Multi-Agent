@@ -1422,6 +1422,42 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         icon="FileText",
     ),
     AgentMetadata(
+        id="content-extractor",
+        name="Content Extractor",
+        department=AgentDepartment.RESEARCH,
+        description="Splits clean webpage and documentation text into discrete heading-anchored section passages while retaining full citation metadata.",
+        capabilities=["internet-intelligence", "content-extraction", "section-splitting", "heading-anchoring", "provenance-preservation"],
+        responsibilities=["Split long web pages into semantic section chunks", "Preserve heading context, URLs, titles, and retrieval timestamps", "Prevent sending massive raw web pages to downstream models"],
+        required_tools=["split_page_into_passages"],
+        specialized_instruction=(
+            "You are the Content Extractor Agent (content_extractor). "
+            "Split clean webpage and document text into discrete section chunks based on headings and paragraphs. "
+            "Every chunk must preserve source_id, URL, title, heading, text, page number (if PDF), and retrieval timestamp. "
+            "Do not lose citation provenance."
+        ),
+        domain_quality_criteria=["Heading Alignment", "Section Integrity", "Provenance Preservation", "Zero Data Loss"],
+        priority=10,
+        icon="Scissors",
+    ),
+    AgentMetadata(
+        id="passage-ranker",
+        name="Passage Ranker",
+        department=AgentDepartment.RESEARCH,
+        description="Ranks extracted passage chunks and selects only the most relevant passages for the user's specific query.",
+        capabilities=["internet-intelligence", "passage-ranking", "semantic-scoring", "relevance-filtering", "context-compression"],
+        responsibilities=["Score and rank passage chunks against the user query", "Filter 50+ page chunks down to top 3-8 relevant passages", "Pass only relevant grounded passages to downstream verification"],
+        required_tools=["rank_and_select_passages"],
+        specialized_instruction=(
+            "You are the Passage Ranker Agent (passage_ranker). "
+            "Evaluate extracted passage chunks against the user's query and select only the top relevant chunks. "
+            "Ensure every selected passage retains its complete citation provenance (source_id, URL, title, heading, text, timestamp). "
+            "Deliver only focused, high-relevance evidence to verification."
+        ),
+        domain_quality_criteria=["Relevance Precision", "Provenance Fidelity", "Context Economy", "Zero Hallucination"],
+        priority=10,
+        icon="Filter",
+    ),
+    AgentMetadata(
         id="google-search-fact-checker",
         name="Google Fact Checker",
         department=AgentDepartment.RESEARCH,
