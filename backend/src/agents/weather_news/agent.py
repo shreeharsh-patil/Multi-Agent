@@ -352,10 +352,15 @@ class WeatherNewsAgent(BaseAgent):
         if not city:
             import re
             m = re.search(
-                r"(?:weather|forecast|temperature|climate)\s+(?:in|for|at|of)?\s*([a-z ]{2,30})",
+                r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,30})",
                 lower,
             )
-            city = m.group(1).strip().title() if m else "India"
+            if m:
+                raw_city = m.group(1).strip().strip("?.,!\"'")
+                raw_city = re.sub(r"\b(today|tomorrow|now|right now|currently|this week|outside)\b", "", raw_city, flags=re.IGNORECASE).strip()
+                city = raw_city.title() if raw_city else "Mumbai"
+            else:
+                city = "Mumbai"
 
         # Detect news category
         category = context.get("news_category", DEFAULT_CATEGORY)

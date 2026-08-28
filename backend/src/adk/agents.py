@@ -42,6 +42,7 @@ from src.adk.tools import (
     contacts_list_tool,
     calendar_list_tool,
     calendar_create_tool,
+    weather_tool,
 )
 
 MODEL = settings.gemini_model
@@ -127,6 +128,10 @@ ADK_TOOL_MAP: dict[str, Any] = {
     "contacts_list": contacts_list_tool,
     "calendar_list": calendar_list_tool,
     "calendar_create": calendar_create_tool,
+    "weather": weather_tool,
+    "weather_tool": weather_tool,
+    "fetch_weather": weather_tool,
+    "live_weather": weather_tool,
 }
 
 
@@ -562,6 +567,22 @@ def create_art_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
         ),
         tools=[web_search_tool],
         description="Art history, technique, and design study tutor.",
+    )
+
+
+def create_weather_news_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("weather_news")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        instruction=(
+            "You are the Weather & News Agent (weather_news). Fetch real-time live meteorological data, current temperatures in °C, "
+            "conditions, wind speed, and 3-day weather forecasts, as well as breaking news headlines. "
+            "When the user asks about the weather for ANY city or location (e.g. 'what is the weather in Mumbai?', 'how is the weather in London?'), "
+            "ALWAYS use the weather_tool to get exact live data and provide a comprehensive structured report with current temperature, condition, and 3-day forecast."
+        ),
+        tools=[weather_tool, google_search],
+        description="Real-time live weather forecasts, current temperature in °C, and news headlines worldwide.",
     )
 
 
@@ -1415,6 +1436,8 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "music": create_music_agent,
     "fitness": create_fitness_agent,
     "art": create_art_agent,
+    "weather_news": create_weather_news_agent,
+    "weather-news": create_weather_news_agent,
     # 46 Internet Intelligence Specialists
     "search-planner": create_search_planner_agent,
     "google-search-general": create_google_search_general_agent,

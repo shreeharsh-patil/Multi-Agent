@@ -273,3 +273,14 @@ def test_adk_hierarchy_telemetry_counts():
     assert summary["division_managers"] == 1
     assert summary["root_agents"] == 1
     assert summary["total_adk_nodes"] == summary["adk_specialists"] + 12
+
+
+def test_weather_news_agent_tools_and_factory():
+    """Test weather_news specialist is equipped with weather_tool and google_search."""
+    specialists = build_all_adk_specialists()
+    assert "weather_news" in specialists or "weather-news" in specialists
+    weather_agent = specialists.get("weather_news") or specialists.get("weather-news")
+    assert weather_agent is not None
+    assert len(weather_agent.tools) == 2
+    tool_names = [getattr(t, "name", str(t)) for t in weather_agent.tools]
+    assert any("fetch_live_weather" in n or "weather" in n for n in tool_names)

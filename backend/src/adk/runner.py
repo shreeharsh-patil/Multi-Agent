@@ -412,7 +412,7 @@ async def _fallback_process_message(
 
         capability_detected = None
         msg_lower = message.lower()
-        if "weather" in msg_lower or "forecast" in msg_lower or "temperature in" in msg_lower:
+        if any(w in msg_lower for w in ["weather", "forecast", "temperature", "climate", "rain in", "is it raining"]):
             capability_detected = "current_weather"
         elif any(c in msg_lower for c in ["bitcoin", "btc", "crypto", "ethereum", "solana"]) and any(w in msg_lower for w in ["price", "cost", "right now", "rate", "value", "worth"]):
             capability_detected = "crypto_price"
@@ -424,7 +424,15 @@ async def _fallback_process_message(
             capability_detected = "exchange_rate"
 
         if capability_detected:
-            location = "Goa" if "goa" in msg_lower else "Location"
+            location = "Mumbai"
+            if capability_detected == "current_weather":
+                import re
+                loc_match = re.search(r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,30})", msg_lower)
+                if loc_match:
+                    location = loc_match.group(1).strip().strip("?.,!").title()
+            elif "goa" in msg_lower:
+                location = "Goa"
+
             query_asset = "bitcoin" if ("bitcoin" in msg_lower or "btc" in msg_lower) else ("ethereum" if "ethereum" in msg_lower or "eth" in msg_lower else "solana")
             ip_val = "8.8.8.8" if "8.8.8.8" in msg_lower else "8.8.8.8"
 
@@ -602,6 +610,48 @@ async def _fallback_process_message_stream(
 
     from datetime import datetime, timezone
     now_utc = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
+
+    # Live API capability check for stream fallback
+    from src.tools.api_tool import api_tool
+    msg_lower = message.lower()
+    capability_detected = None
+    if any(w in msg_lower for w in ["weather", "forecast", "temperature", "climate", "rain in", "is it raining"]):
+        capability_detected = "current_weather"
+    elif any(c in msg_lower for c in ["bitcoin", "btc", "crypto", "ethereum", "solana"]) and any(w in msg_lower for w in ["price", "cost", "right now", "rate", "value", "worth"]):
+        capability_detected = "crypto_price"
+    elif any(g in msg_lower for g in ["steam", "game deal", "gta v", "gta 5", "cyberpunk", "witcher"]) and any(w in msg_lower for w in ["deal", "cheap", "price", "discount", "sale"]):
+        capability_detected = "game_deals"
+    elif "ip " in msg_lower or "8.8.8.8" in msg_lower or "ip address" in msg_lower or "geolocation" in msg_lower:
+        capability_detected = "ip_geolocation"
+    elif "usd to inr" in msg_lower or "exchange rate" in msg_lower or "forex" in msg_lower or "currency rate" in msg_lower:
+        capability_detected = "exchange_rate"
+
+    if capability_detected:
+        location = "Mumbai"
+        if capability_detected == "current_weather":
+            import re
+            loc_match = re.search(r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,30})", msg_lower)
+            if loc_match:
+                location = loc_match.group(1).strip().strip("?.,!").title()
+        elif "goa" in msg_lower:
+            location = "Goa"
+
+        query_asset = "bitcoin" if ("bitcoin" in msg_lower or "btc" in msg_lower) else ("ethereum" if "ethereum" in msg_lower or "eth" in msg_lower else "solana")
+        ip_val = "8.8.8.8" if "8.8.8.8" in msg_lower else "8.8.8.8"
+
+        try:
+            api_res = await api_tool.execute_with_fallback(capability_detected, {"query": message, "location": location, "asset": query_asset, "ip": ip_val})
+            if api_res.get("success"):
+                norm = api_res.get("normalized", {})
+                prompt_with_context = (
+                    f"{prompt_with_context}\n\n"
+                    f"LIVE VERIFIED API DATA (from internal API registry tool '{api_res.get('api_name')}'):\n"
+                    f"{json.dumps(norm, indent=2)}\n\n"
+                    f"INSTRUCTIONS: Use the live verified API data above to answer the user's question directly. "
+                    f"Always preserve and render the source link or product URL as a clickable markdown link [Source Name](url)."
+                )
+        except Exception as e:
+            logger.warning(f"Fallback live API execution error in stream: {e}")
 
     accumulated = ""
     system_instruction = (

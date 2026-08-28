@@ -684,7 +684,8 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
             "request_id": request_id,
         }
 
-        registry_agent = get_boss_agent().registry.get_agent(effective_agent_id) if effective_agent_id else None
+        explicit_agent_id = body.agent_id if (body.agent_id and body.agent_id not in ("auto", "image") and not body.agent_id.startswith("custom_")) else None
+        registry_agent = get_boss_agent().registry.get_agent(explicit_agent_id) if explicit_agent_id else None
         if body.agent_id not in (None, "auto", "image") and not body.agent_id.startswith("custom_") and not registry_agent:
             raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
         if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
@@ -735,7 +736,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
             result = {
                 "output": agent_result.output,
                 "citations": getattr(agent_result, "citations", []),
-                "agent_traces": [{"agent_id": effective_agent_id, "event_type": f"{effective_agent_id.title()}Action", "has_content": bool(agent_result.output)}],
+                "agent_traces": [{"agent_id": explicit_agent_id, "event_type": f"{explicit_agent_id.title()}Action", "has_content": bool(agent_result.output)}],
                 "events_count": 1,
             }
         elif body.workspace_id:
@@ -1065,8 +1066,8 @@ async def chat_stream(
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
 
-            target_agent_id = effective_agent_id or (body.agent_id if body.agent_id and body.agent_id != "auto" else None)
-            registry_agent = get_boss_agent().registry.get_agent(target_agent_id) if target_agent_id else None
+            explicit_agent_id = body.agent_id if (body.agent_id and body.agent_id not in ("auto", "image") and not body.agent_id.startswith("custom_")) else None
+            registry_agent = get_boss_agent().registry.get_agent(explicit_agent_id) if explicit_agent_id else None
 
             if registry_agent:
                 agent_result = None
@@ -1081,11 +1082,11 @@ async def chat_stream(
                         agent_result = value
                 if not agent_result.success or not (agent_result.output or "").strip():
                     raise RuntimeError(agent_result.error or "Selected agent returned an empty response")
-                yield f"event: agent\ndata: {json.dumps({'agent_id': target_agent_id})}\n\n"
+                yield f"event: agent\ndata: {json.dumps({'agent_id': explicit_agent_id})}\n\n"
                 async for word in _word_chunks(agent_result.output):
                     yield f"event: chunk\ndata: {json.dumps({'text': word})}\n\n"
                 accumulated_output = agent_result.output
-                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=target_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations, request_id=request_id)
+                await _save_messages(conv_id=conv_id, user_id=user_id, user_message=body.message, agent_message=accumulated_output, agent_id=explicit_agent_id, is_new=is_new, workspace_id=body.workspace_id, citations=agent_result.citations, request_id=request_id)
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id, 'citations': agent_result.citations})}\n\n"
                 return
 

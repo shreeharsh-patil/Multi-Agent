@@ -1472,6 +1472,91 @@ async def calendar_create(user_id: str, summary: str, start: str, end: str = "",
         return f"Failed to create calendar event: {e}"
 
 
+async def fetch_live_weather(city: str) -> str:
+    """Fetch live meteorological data, current temperature in °C, and 3-day forecast for any city worldwide via Open-Meteo.
+
+    Args:
+        city: City or region name (e.g. 'Mumbai', 'London', 'Tokyo', 'New York')
+
+    Returns:
+        Formatted weather report with current conditions and 3-day forecast.
+    """
+    clean_city = (city or "Mumbai").strip().strip("?,.!\"'")
+    if not clean_city:
+        clean_city = "Mumbai"
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            geo_resp = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": clean_city, "count": 1, "language": "en", "format": "json"},
+            )
+            if geo_resp.status_code != 200:
+                return f"Could not find coordinates for location '{clean_city}'."
+            geo_data = geo_resp.json()
+            results = geo_data.get("results", [])
+            if not results:
+                return f"Location '{clean_city}' was not recognized. Please check the spelling."
+
+            loc = results[0]
+            lat = loc.get("latitude")
+            lon = loc.get("longitude")
+            location_name = f"{loc.get('name', clean_city)}, {loc.get('country', '')}".strip(", ")
+
+            w_resp = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current_weather": "true",
+                    "daily": "weathercode,temperature_2m_max,temperature_2m_min",
+                    "timezone": "auto",
+                },
+            )
+            if w_resp.status_code != 200:
+                return f"Could not fetch weather data for '{location_name}'."
+            w_data = w_resp.json()
+            cur = w_data.get("current_weather", {})
+            temp_c = cur.get("temperature", "N/A")
+            wind = cur.get("windspeed", "N/A")
+            code = cur.get("weathercode", 0)
+
+            wmo_codes = {
+                0: "Clear Sky ☀️", 1: "Mainly Clear 🌤", 2: "Partly Cloudy ⛅", 3: "Overcast ☁️",
+                45: "Fog 🌫", 48: "Depositing Rime Fog 🌫", 51: "Light Drizzle 🌧", 53: "Moderate Drizzle 🌧",
+                55: "Dense Drizzle 🌧", 61: "Slight Rain 🌧", 63: "Moderate Rain 🌧", 65: "Heavy Rain 🌧",
+                71: "Slight Snow ❄️", 73: "Moderate Snow ❄️", 75: "Heavy Snow ❄️",
+                80: "Slight Showers 🌦", 81: "Moderate Showers 🌦", 82: "Violent Showers ⛈",
+                95: "Thunderstorm 🌩", 96: "Thunderstorm with Slight Hail ⛈", 99: "Thunderstorm with Heavy Hail ⛈"
+            }
+            condition = wmo_codes.get(code, "Clear")
+
+            daily = w_data.get("daily", {})
+            dates = daily.get("time", [])
+            maxs = daily.get("temperature_2m_max", [])
+            mins = daily.get("temperature_2m_min", [])
+            codes = daily.get("weathercode", [])
+
+            forecast_lines = []
+            for i in range(min(3, len(dates))):
+                d_code = codes[i] if i < len(codes) else 0
+                d_cond = wmo_codes.get(d_code, "Clear")
+                forecast_lines.append(f"- **{dates[i]}**: {d_cond}, {mins[i]}°C to {maxs[i]}°C")
+
+            forecast_str = "\n".join(forecast_lines) if forecast_lines else "No extended forecast available."
+
+            return (
+                f"### 🌤 Current Weather in {location_name}\n"
+                f"- **Condition**: {condition}\n"
+                f"- **Temperature**: {temp_c}°C\n"
+                f"- **Wind Speed**: {wind} km/h\n\n"
+                f"### 📅 3-Day Forecast\n{forecast_str}\n\n"
+                f"Source: [Open-Meteo](https://open-meteo.com/)"
+            )
+    except Exception as e:
+        logger.warning(f"Live weather tool error for '{clean_city}': {e}")
+        return f"Weather lookup temporarily unavailable for '{clean_city}': {e}"
+
+
 # Export all tools as FunctionTool instances for ADK agents
 knowledge_search_tool = FunctionTool(func=knowledge_search)
 memory_store_tool = FunctionTool(func=memory_store)
@@ -1479,6 +1564,7 @@ memory_search_tool = FunctionTool(func=memory_search)
 calculator_tool = FunctionTool(func=calculator)
 web_search_tool = FunctionTool(func=web_search)
 scrape_page_tool = FunctionTool(func=scrape_page)
+weather_tool = FunctionTool(func=fetch_live_weather)
 drive_list_tool = FunctionTool(func=drive_list)
 drive_read_tool = FunctionTool(func=drive_read_file)
 drive_upload_tool = FunctionTool(func=drive_upload)
