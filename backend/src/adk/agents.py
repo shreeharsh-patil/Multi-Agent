@@ -870,6 +870,7 @@ def create_evidence_synthesizer_agent(meta: Optional[AgentMetadata] = None) -> L
 
 
 INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
+    # Original 19 Internet Intelligence Specialists
     "search_planner",
     "google_search_general",
     "google_news_researcher",
@@ -889,12 +890,441 @@ INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
     "google_search_travel",
     "community_researcher",
     "evidence_synthesizer",
+    # Advanced Research Layer (27 Specialists)
+    "query_optimizer",
+    "multi_query_generator",
+    "research_scope_controller",
+    "search_result_ranker",
+    "primary_source_hunter",
+    "citation_auditor",
+    "contradiction_detector",
+    "bias_detector",
+    "evidence_quality_judge",
+    "timeline_researcher",
+    "entity_researcher",
+    "company_intelligence_agent",
+    "startup_researcher",
+    "public_osint_researcher",
+    "documentation_reader",
+    "api_documentation_researcher",
+    "release_notes_agent",
+    "benchmark_researcher",
+    "dataset_researcher",
+    "standards_researcher",
+    "paper_comparison_agent",
+    "methodology_reviewer",
+    "patent_researcher",
+    "regulation_researcher",
+    "price_monitor_researcher",
+    "availability_checker",
+    "internet_evidence_judge",
 }
+
+
+def create_query_optimizer_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("query-optimizer")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Transforms raw or poorly framed user queries into targeted, high-yield search queries without altering original intent.",
+        instruction=(
+            "You are the Query Optimizer. Transform ambiguous, conversational, or poorly framed user queries into high-quality, targeted search queries. "
+            "Preserve the user's actual intent while generating keyword-rich queries (e.g. 'best ai thing for coding' -> 'best AI coding assistants 2026', 'Cursor vs GitHub Copilot vs Windsurf'). "
+            "Never invent facts or change the user's core question."
+        ),
+        tools=[],
+    )
+
+
+def create_multi_query_generator_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("multi-query-generator")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Generates diverse, non-redundant search queries across broad, primary-source, recency, comparative, and limitation angles.",
+        instruction=(
+            "You are the Multi-Query Generator. For a given research objective, produce diverse, non-repetitive search queries covering:\n"
+            "1. Broad query (landscape/overview)\n"
+            "2. Primary-source query (official announcements, vendor docs)\n"
+            "3. Recency query (latest updates, this year's changes)\n"
+            "4. Comparison query (competing solutions, benchmarks)\n"
+            "5. Criticism/limitations query (known flaws, trade-offs, security)\n"
+            "Avoid redundant or slightly reworded duplicates."
+        ),
+        tools=[],
+    )
+
+
+def create_research_scope_controller_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("research-scope-controller")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Calibrates research depth and execution mode (QUICK, STANDARD, DEEP, CRITICAL, MASSIVE) based on query complexity.",
+        instruction=(
+            "You are the Research Scope Controller. Determine the optimal research depth and search budget:\n"
+            "- QUICK: 1-2 searches for straightforward facts\n"
+            "- STANDARD: 3-5 searches for general technical/product questions\n"
+            "- DEEP: 5-12 searches for comprehensive multi-domain analyses\n"
+            "- CRITICAL: Multi-source independent verification & contradiction checks for sensitive claims\n"
+            "- MASSIVE: Large distributed multi-agent team for wide-scope intelligence\n"
+            "Do not waste search budget on simple timeless questions."
+        ),
+        tools=[],
+    )
+
+
+def create_search_result_ranker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("search-result-ranker")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Ranks discovered web search results by relevance, domain authority, freshness, primary-source status, and evidence quality.",
+        instruction=(
+            "You are the Search Result Ranker. Rank discovered search results by relevance, domain authority, freshness, primary-source status, and evidence quality. "
+            "Filter out SEO content farms and low-signal blogs. Deliver top prioritized links for detailed extraction."
+        ),
+        tools=[],
+    )
+
+
+def create_primary_source_hunter_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("primary-source-hunter")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Tracks down canonical original sources (vendor advisories, official press releases, NVD CVE records, original papers) behind claims.",
+        instruction=(
+            "You are the Primary Source Hunter. Trace claims reported in third-party news or blogs back to their canonical original origin. "
+            "For news: find the official company announcement. For CVEs: find the vendor advisory or NVD entry. For software releases: find the official repository or changelog. "
+            "Never rely solely on secondary summary blogs."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_citation_auditor_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("citation-auditor")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Audits citation validity, verifying whether referenced URLs directly substantiate assertions with SUPPORTED/PARTIAL/UNSUPPORTED verdicts.",
+        instruction=(
+            "You are the Citation Auditor. Verify whether cited URLs genuinely substantiate the specific claims made. "
+            "Assign strict verdicts: SUPPORTED, PARTIAL, UNSUPPORTED, or INACCESSIBLE. "
+            "Never approve citations solely because a title looks relevant. Flag misattributed or hallucinated citations immediately."
+        ),
+        tools=[],
+    )
+
+
+def create_contradiction_detector_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("contradiction-detector")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Compares evidence across sources to uncover conflicting claims, discrepancies, and competing interpretations with resolution analysis.",
+        instruction=(
+            "You are the Contradiction Detector. Cross-examine extracted evidence across multiple independent sources. "
+            "Identify conflicting statements, divergent metrics, or opposing claims. Output structured reports with:\n"
+            "{\n  'claim': '...',\n  'source_a': '...',\n  'source_b': '...',\n  'conflict': '...',\n  'likely_resolution': '...'\n}\n"
+            "Never conceal discrepancies."
+        ),
+        tools=[],
+    )
+
+
+def create_bias_detector_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("bias-detector")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Identifies promotional content, vendor-sponsored benchmarks, affiliate framing, and one-sided narratives to balance evidence.",
+        instruction=(
+            "You are the Bias Detector. Audit research findings for commercial bias, sponsored content, affiliate incentives, vendor-favorable framing, or ideological bias. "
+            "Do not automatically discard biased sources if they contain verifiable specs; instead, label the bias clearly and balance with independent evidence."
+        ),
+        tools=[],
+    )
+
+
+def create_evidence_quality_judge_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("evidence-quality-judge")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Scores research evidence across authority, freshness, directness, independence, specificity, and consistency.",
+        instruction=(
+            "You are the Evidence Quality Judge. Score extracted evidence packets across 6 core criteria: Authority, Freshness, Directness, Independence, Specificity, and Consistency. "
+            "Provide calibrated confidence metrics and ensure only high-yield, verified evidence progresses to final response generation."
+        ),
+        tools=[],
+    )
+
+
+def create_timeline_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("timeline-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Constructs structured chronological event timelines with validated dates, occurrences, confidence scores, and source citations.",
+        instruction=(
+            "You are the Timeline Researcher. Build chronological timelines for product development, security incidents, corporate history, AI releases, and legal/regulatory milestones. "
+            "Structure outputs clearly with Date, Event, Source URL, and Confidence. Never guess event dates."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_entity_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("entity-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Builds comprehensive, verified profiles for companies, public projects, technologies, organizations, and products.",
+        instruction=(
+            "You are the Entity Researcher. Build factual profiles for public entities (companies, open-source projects, technologies, institutions, products). "
+            "Capture: Name, Official Website, Core Description, History, Current Operational Status, Key Developments, and Primary Sources. Verify all claims."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_company_intelligence_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("company-intelligence-agent")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches public corporate data: products, executive leadership, public funding, partnerships, market position, and launches.",
+        instruction=(
+            "You are the Company Intelligence Agent. Investigate public corporate developments: product roadmaps, executive leadership, partnerships, public funding, market share, and competitors. "
+            "Rely strictly on official disclosures and reputable financial outlets. Strictly separate verified facts from market speculation."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_startup_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("startup-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches emerging startups from public sources: value proposition, publicly announced funding, founders, traction, and competitors.",
+        instruction=(
+            "You are the Startup Researcher. Research early-stage and high-growth startups from public announcements, launch posts, and venture news. "
+            "Capture: Core Product, Target Market, Publicly Announced Funding Rounds, Disclosed Founders, Public Traction Indicators, and Competitors. Never infer private metrics."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_public_osint_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("public-osint-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Conducts lawful, public open-source intelligence research across public repositories, domain info, infrastructure footprints, and archives.",
+        instruction=(
+            "You are the Public OSINT Researcher. Conduct lawful, ethical open-source research across publicly indexable web footprints, domain metadata, public repos, and news archives. "
+            "Strictly avoid private, stolen, leaked, or password-protected data. Cite all public sources."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_documentation_reader_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("documentation-reader")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Specializes in reading and extracting targeted sections from large official documentation guides, API manuals, and knowledge portals.",
+        instruction=(
+            "You are the Documentation Reader. Use web scraping tools to ingest and extract targeted sections from large official documentation portals. "
+            "Focus on the exact relevant headings and technical parameters. Preserve documentation anchor links and never fabricate API behavior."
+        ),
+        tools=[scrape_page_tool],
+    )
+
+
+def create_api_documentation_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("api-documentation-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Discovers canonical API specifications, endpoints, authentication flows, SDK parameters, rate limits, and error schemas.",
+        instruction=(
+            "You are the API Documentation Researcher. Search for canonical API documentation, developer reference portals, and official SDK specs. "
+            "Extract: Endpoints, Request/Response payloads, Authentication mechanisms, Rate limits, and Error codes. Prioritize official vendor documentation."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_release_notes_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("release-notes-agent")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Tracks software, framework, SDK, and AI model release notes, version changelogs, breaking changes, and migration guides.",
+        instruction=(
+            "You are the Release Notes Agent. Track version releases, changelogs, and upgrade notes across frameworks, SDKs, libraries, and AI models. "
+            "Report: Exact Version, Release Date, Breaking Changes, New Features, Deprecations, and Migration Steps. Rely on official changelogs."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_benchmark_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("benchmark-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Investigates performance benchmarks, evaluation datasets, hardware environments, measurement metrics, and test setups.",
+        instruction=(
+            "You are the Benchmark Researcher. Search for empirical performance benchmark claims across AI models, hardware, databases, and runtimes. "
+            "Capture: Benchmark Name, Model/Version, Hardware Testbed, Dataset, Score/Measurement, and Source. Highlight incompatible measurement conditions."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_dataset_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("dataset-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Locates public datasets, official download repositories, license terms, schema formats, sample sizes, and data collection methodology.",
+        instruction=(
+            "You are the Dataset Researcher. Discover public datasets across machine learning, scientific research, and industry domains. "
+            "Report: Dataset Name, Source Portal, License, Size/Rows, Format, Domain, Download URL, and Known Limitations. Prefer authoritative repositories."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_standards_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("standards-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches authoritative technical standards and specifications from RFC, W3C, IEEE, IETF, WHATWG, and ECMA.",
+        instruction=(
+            "You are the Standards Researcher. Research formal technical standards and protocol specifications (RFC, W3C, IEEE, IETF, WHATWG, ECMA). "
+            "Extract normative specification clauses, status (draft, proposed, standard, obsolete), and authoritative references. Never confuse drafts with adopted standards."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_paper_comparison_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("paper-comparison-agent")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Compares academic research papers side-by-side across objectives, methodology, datasets, empirical results, and novelty.",
+        instruction=(
+            "You are the Paper Comparison Agent. Compare scientific and machine learning research papers across Objectives, Methodology, Datasets, Results, Limitations, and Novelty. "
+            "Examine full methodologies and benchmark comparisons rather than merely reading abstracts."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_methodology_reviewer_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("methodology-reviewer")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Critically evaluates research experimental design, sample size, control groups, metric validity, and reproducibility claims.",
+        instruction=(
+            "You are the Methodology Reviewer. Critically audit research methodologies, experimental designs, ablation studies, and evaluation metrics. "
+            "Check: Sample size, baseline fairness, control variables, reproducibility, and potential data contamination. Provide objective, evidence-backed critique."
+        ),
+        tools=[],
+    )
+
+
+def create_patent_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("patent-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Searches public patent disclosures, patent numbers, assignees, publication dates, and technical summaries without legal advice.",
+        instruction=(
+            "You are the Patent Researcher. Search public patent records across Google Patents, USPTO, and international patent offices. "
+            "Capture: Title, Patent/Application Number, Assignee, Disclosed Inventors, Filing/Publication Date, Abstract, and Technical Claims. Never give legal counsel."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_regulation_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("regulation-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches official regulatory announcements, government legislation, compliance mandates, and distinguishes laws from proposed rules.",
+        instruction=(
+            "You are the Regulation Researcher. Research official public regulations, government statutes, and regulatory mandates. "
+            "Strictly distinguish: Enacted Law, Proposed Rule/Draft, Regulatory Guidance, and News Commentary. Rely on official government and regulatory publications."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_price_monitor_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("price-monitor-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Gathers current public pricing, subscription tiers, enterprise deals, and discounts with INR (₹) conversion and retrieval timestamps.",
+        instruction=(
+            "You are the Price Monitor Researcher. Retrieve live public pricing for software, APIs, cloud services, hardware, and subscriptions. "
+            "Track: Product/Service, Price (INR / ₹ default, 1 USD = 86.5 INR), Plan/Tier, Source URL, and Retrieval Timestamp. Never use stale training memory for pricing questions."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_availability_checker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("availability-checker")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Verifies current public availability status (available, unavailable, limited, waitlist, deprecated) for services, APIs, and products.",
+        instruction=(
+            "You are the Availability Checker. Verify public availability, regional access, beta rollout status, or deprecation of products, features, and APIs. "
+            "Output: Status (Available / Unavailable / Limited / Waitlist / Deprecated / Unknown), Region/Scope, and Verifying Evidence with Source URLs."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_internet_evidence_judge_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("internet-evidence-judge")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Acts as the final research gatekeeper: verifies primary citations, freshness, independence, resolves contradictions, and filters unverified claims.",
+        instruction=(
+            "You are the Internet Evidence Judge — the final quality gatekeeper of the Internet Intelligence System. "
+            "Review synthesized evidence packets before delivery to BossAgent. Verify:\n"
+            "1. Are all primary claims supported by cited sources?\n"
+            "2. Are citations active, valid canonical URLs?\n"
+            "3. Is time-sensitive data fresh and verified?\n"
+            "4. Are sources independent rather than circular re-blogs?\n"
+            "5. Are contradictions resolved with clear rationale?\n"
+            "6. Are unsupported claims purged?\n"
+            "7. Is the overall confidence score calibrated?\n"
+            "Approve only verified, grounded evidence packets."
+        ),
+        tools=[],
+    )
 
 
 def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> LlmAgent:
     """Create the Internet Intelligence Manager responsible for orchestrating
-    the 19 real-time search, documentation, fact-checking, and evidence synthesis specialists.
+    the 46 real-time search, documentation, fact-checking, and evidence synthesis specialists.
     """
     specialist_summaries = []
     for sp in search_specialists:
@@ -904,40 +1334,56 @@ def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> 
 
     instruction = (
         "You are the Internet Intelligence Manager (internet_intelligence_manager) within the Research Department.\n\n"
-        "Your role is to orchestrate and delegate queries across the specialized Internet Intelligence division:\n"
+        "Your role is to orchestrate, plan, and delegate queries across the 46 specialized Internet Intelligence agents:\n"
         f"{specialists_roster}\n\n"
         "ROUTING MATRIX & QUERY STRATEGY:\n"
-        "- Breaking news, sports scores, today's events -> google_news_researcher\n"
-        "- Technical docs, library versions, APIs -> official_docs_researcher + google_search_technology\n"
-        "- GitHub repositories, open-source projects, READMEs -> github_researcher + google_search_technology\n"
-        "- Academic papers, scientific literature, arXiv -> google_search_academic\n"
-        "- Verifying claims, rumors, assertions -> google_search_fact_checker + source_verifier\n"
-        "- Reading specific webpage URLs or docs -> url_reader\n"
+        "- Vague / poor search queries -> query_optimizer -> multi_query_generator\n"
+        "- Research budget & scope -> research_scope_controller (QUICK, STANDARD, DEEP, CRITICAL, MASSIVE)\n"
+        "- Ranking discovered links -> search_result_ranker\n"
+        "- Finding original official announcements / CVE advisories -> primary_source_hunter\n"
+        "- Breaking news, current events, live updates -> google_news_researcher\n"
+        "- Official docs & framework specs -> official_docs_researcher + documentation_reader + google_search_technology\n"
+        "- API references, endpoints, SDKs -> api_documentation_researcher\n"
+        "- Version releases, breaking changes, changelogs -> release_notes_agent\n"
+        "- Benchmarks, hardware conditions, MMLU/evals -> benchmark_researcher\n"
+        "- Open datasets, licensing, download URLs -> dataset_researcher\n"
+        "- Protocol standards (RFC, W3C, IEEE, IETF, WHATWG) -> standards_researcher\n"
+        "- GitHub repos, open source projects, commits -> github_researcher\n"
+        "- Academic papers, arXiv preprints, studies -> google_search_academic + paper_comparison_agent + methodology_reviewer\n"
         "- Defensive cybersecurity, CVEs, patches -> cybersecurity_researcher\n"
-        "- Financial markets, company funding, competitor teardowns -> google_search_market + google_news_researcher\n"
-        "- Product specs, pricing comparisons (INR ₹ default) -> google_search_products\n"
-        "- Places, local businesses, operating hours -> google_search_local\n"
-        "- Travel itineraries, logistics, advisories -> google_search_travel\n"
-        "- User feedback, forum sentiment, practical workarounds -> community_researcher\n"
-        "- Multi-angle deep investigations -> search_planner + deep_web_researcher + source_verifier + evidence_synthesizer\n\n"
-        "SOURCE AUTHORITY TIERS:\n"
-        "- TIER 1 (Primary): Official docs (react.dev, python.org), government, vendor bulletins, company releases, official repos, original papers.\n"
-        "- TIER 2 (Independent): Reputable tech publications, major news outlets, established research institutions.\n"
-        "- TIER 3 (Community): Reddit, forums, blogs (use solely for opinion/workaround context, never as sole factual proof).\n\n"
-        "EXECUTION & QUALITY RULES:\n"
-        "1. For single-focus queries, delegate to the single most specific specialist.\n"
-        "2. For complex queries (e.g. AI assistant market comparison), engage search_planner and parallel specialists.\n"
-        "3. Live search is MANDATORY for 'latest', 'today', 'current', 'recent', 'price', 'release', 'version', 'new'.\n"
-        "4. Deduplicate all search results by canonical URL and preserve source metadata.\n"
-        "5. For simple timeless queries (e.g. 'What is a linked list?'), answer directly without burning search quota unless sources are requested.\n"
-        "6. Never fabricate URLs, dates, or citations. Deliver authoritative, grounded synthesis."
+        "- Patents, prior art, filings -> patent_researcher\n"
+        "- Regulations, compliance laws vs proposed rules -> regulation_researcher\n"
+        "- Live pricing (INR ₹ default, 1 USD = 86.5 INR) -> price_monitor_researcher + google_search_products\n"
+        "- Live service availability, outages, beta waitlists -> availability_checker\n"
+        "- Corporate intelligence, leadership, public funding -> company_intelligence_agent + startup_researcher\n"
+        "- Public OSINT, infrastructure footprints -> public_osint_researcher\n"
+        "- Chronological timelines of incidents/releases -> timeline_researcher\n"
+        "- Entity dossiers -> entity_researcher\n"
+        "- Community sentiment, Reddit discussions -> community_researcher\n"
+        "- Fact checking -> google_search_fact_checker + source_verifier + citation_auditor\n"
+        "- Detecting conflicting claims -> contradiction_detector\n"
+        "- Identifying promotional/vendor bias -> bias_detector\n"
+        "- Scoring evidence quality -> evidence_quality_judge\n"
+        "- Final research quality gate -> internet_evidence_judge\n"
+        "- Packet compression & canonical deduplication -> evidence_synthesizer\n\n"
+        "MULTI-STAGE DEEP RESEARCH PIPELINE:\n"
+        "1. PLAN: search_planner -> query_optimizer -> multi_query_generator -> research_scope_controller\n"
+        "2. SEARCH: parallel domain researchers (GoogleNewsResearcher, TechnologyResearcher, OfficialDocsResearcher, GitHubResearcher, etc.)\n"
+        "3. RANK & READ: search_result_ranker -> url_reader / documentation_reader\n"
+        "4. AUDIT: source_verifier -> citation_auditor -> contradiction_detector -> bias_detector -> evidence_quality_judge\n"
+        "5. JUDGE & SYNTHESIZE: internet_evidence_judge -> evidence_synthesizer -> compressed evidence packet upward to BossAgent\n\n"
+        "CONTEXT COMPRESSION & EFFICIENCY RULES:\n"
+        "- Never pass raw uncompressed HTML/pages to BossAgent. Always compress via specialist notes and evidence_synthesizer.\n"
+        "- Simple timeless queries (e.g. 'What is a linked list?') bypass live search.\n"
+        "- Live search is MANDATORY for 'latest', 'today', 'current', 'recent', 'price', 'release', 'version', 'new'.\n"
+        "- Never fabricate citations, dates, or URLs. Deduplicate by canonical URL."
     )
     return LlmAgent(
         name="internet_intelligence_manager",
         model=MODEL,
         instruction=instruction,
         sub_agents=search_specialists,
-        description="Internet Intelligence Manager orchestrating 19 real-time search, documentation, fact-checking, and evidence synthesis specialists.",
+        description="Internet Intelligence Manager orchestrating 46 real-time search, documentation, fact-checking, and evidence synthesis specialists.",
     )
 
 
@@ -969,7 +1415,7 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "music": create_music_agent,
     "fitness": create_fitness_agent,
     "art": create_art_agent,
-    # 19 Internet Intelligence Specialists
+    # 46 Internet Intelligence Specialists
     "search-planner": create_search_planner_agent,
     "google-search-general": create_google_search_general_agent,
     "google-news-researcher": create_google_news_researcher_agent,
@@ -989,6 +1435,34 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "google-search-travel": create_google_search_travel_agent,
     "community-researcher": create_community_researcher_agent,
     "evidence-synthesizer": create_evidence_synthesizer_agent,
+    # Advanced Research Layer (27 Specialists)
+    "query-optimizer": create_query_optimizer_agent,
+    "multi-query-generator": create_multi_query_generator_agent,
+    "research-scope-controller": create_research_scope_controller_agent,
+    "search-result-ranker": create_search_result_ranker_agent,
+    "primary-source-hunter": create_primary_source_hunter_agent,
+    "citation-auditor": create_citation_auditor_agent,
+    "contradiction-detector": create_contradiction_detector_agent,
+    "bias-detector": create_bias_detector_agent,
+    "evidence-quality-judge": create_evidence_quality_judge_agent,
+    "timeline-researcher": create_timeline_researcher_agent,
+    "entity-researcher": create_entity_researcher_agent,
+    "company-intelligence-agent": create_company_intelligence_agent,
+    "startup-researcher": create_startup_researcher_agent,
+    "public-osint-researcher": create_public_osint_researcher_agent,
+    "documentation-reader": create_documentation_reader_agent,
+    "api-documentation-researcher": create_api_documentation_researcher_agent,
+    "release-notes-agent": create_release_notes_agent,
+    "benchmark-researcher": create_benchmark_researcher_agent,
+    "dataset-researcher": create_dataset_researcher_agent,
+    "standards-researcher": create_standards_researcher_agent,
+    "paper-comparison-agent": create_paper_comparison_agent,
+    "methodology-reviewer": create_methodology_reviewer_agent,
+    "patent-researcher": create_patent_researcher_agent,
+    "regulation-researcher": create_regulation_researcher_agent,
+    "price-monitor-researcher": create_price_monitor_researcher_agent,
+    "availability-checker": create_availability_checker_agent,
+    "internet-evidence-judge": create_internet_evidence_judge_agent,
 }
 
 
@@ -1193,10 +1667,10 @@ BOSS_INSTRUCTION = (
     "ALWAYS render every product, documentation, API, service, and website as an active clickable Markdown link [Name](url). "
     "Never output raw plain text URLs without hyperlinking them.\n\n"
     "HIERARCHICAL MULTI-AGENT ORCHESTRATION:\n"
-    "You lead 10 specialized Department Managers who oversee 150+ specialist agents and a dedicated Internet Intelligence Division:\n"
+    "You lead 10 specialized Department Managers who oversee 170+ specialist agents and a dedicated Internet Intelligence Division:\n"
     "1. **command_planning_manager**: Strategy, task decomposition, knowledge RAG, memory, planning.\n"
     "2. **coding_manager**: Frontend, backend, databases, systems engineering, cybersecurity, architecture.\n"
-    "3. **research_manager**: Directs internet_intelligence_manager (19 Internet Intelligence specialists) + scraping, medical, scientific, and news research.\n"
+    "3. **research_manager**: Directs internet_intelligence_manager (46 Internet Intelligence specialists) + scraping, medical, scientific, and news research.\n"
     "4. **content_manager**: Study notes, quiz generation, technical writing, culinary, music, fitness.\n"
     "5. **visual_manager**: UI/UX design, visual critique, brand identity, art theory.\n"
     "6. **data_manager**: Tabular analytics, statistics, SQL querying, trend forecasting.\n"
@@ -1214,7 +1688,7 @@ BOSS_INSTRUCTION = (
 
 def create_boss_agent() -> LlmAgent:
     """Create the full hierarchical Google ADK multi-agent tree:
-    Root (BossAgent) -> 10 Department Managers -> Internet Intelligence Manager -> 150+ Specialist Leaf Agents.
+    Root (BossAgent) -> 10 Department Managers -> Internet Intelligence Manager -> 170+ Specialist Leaf Agents.
     """
     global _cached_boss_agent, _cached_hierarchy_info
 
@@ -1253,7 +1727,7 @@ def create_boss_agent() -> LlmAgent:
         model=MODEL,
         instruction=BOSS_INSTRUCTION,
         sub_agents=department_managers,
-        description="Central Chief Multi-Agent Orchestrator leading 10 department managers and 150+ specialist agents.",
+        description="Central Chief Multi-Agent Orchestrator leading 10 department managers and 170+ specialist agents.",
     )
 
     # Cache hierarchy summary

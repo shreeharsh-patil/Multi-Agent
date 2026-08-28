@@ -34,6 +34,65 @@ class FreshnessRequirement(str, Enum):
     TIMELESS = "timeless"         # Theoretical concepts, algorithms, historical facts (TTL = 86400s)
 
 
+class ResearchScopeMode(str, Enum):
+    """Research depth and execution modes."""
+    QUICK = "QUICK"               # 1-2 focused searches
+    STANDARD = "STANDARD"         # 3-5 searches
+    DEEP = "DEEP"                 # 5-12 multi-angle searches
+    CRITICAL = "CRITICAL"         # Independent source verification & contradiction checks
+    MASSIVE = "MASSIVE"           # Large distributed research team execution
+
+
+class CitationAuditVerdict(str, Enum):
+    """Citation audit verification states."""
+    SUPPORTED = "SUPPORTED"
+    PARTIAL = "PARTIAL"
+    UNSUPPORTED = "UNSUPPORTED"
+    INACCESSIBLE = "INACCESSIBLE"
+
+
+@dataclass
+class ContradictionItem:
+    """Represents a detected contradiction or conflict across sources."""
+    claim: str
+    source_a: str
+    source_b: str
+    conflict: str
+    likely_resolution: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "claim": self.claim,
+            "source_a": self.source_a,
+            "source_b": self.source_b,
+            "conflict": self.conflict,
+            "likely_resolution": self.likely_resolution,
+        }
+
+
+@dataclass
+class EvidenceQualityScore:
+    """Multi-dimensional evidence quality scoring."""
+    authority: float = 0.9
+    freshness: float = 0.9
+    directness: float = 0.9
+    independence: float = 0.9
+    specificity: float = 0.9
+    consistency: float = 0.9
+    overall_confidence: float = 0.9
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "authority": round(self.authority, 2),
+            "freshness": round(self.freshness, 2),
+            "directness": round(self.directness, 2),
+            "independence": round(self.independence, 2),
+            "specificity": round(self.specificity, 2),
+            "consistency": round(self.consistency, 2),
+            "overall_confidence": round(self.overall_confidence, 2),
+        }
+
+
 @dataclass
 class EvidenceItem:
     """A single atomic piece of grounded evidence with full citation provenance."""

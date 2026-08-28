@@ -89,6 +89,41 @@ EVALUATION_DATASET = [
         "requires_live_search": True,
         "expected_primary_specialist": "search_planner",
     },
+    {
+        "id": "eval_10_query_optimizer",
+        "category": "query_optimization",
+        "query": "best ai thing for coding",
+        "requires_live_search": True,
+        "expected_primary_specialist": "query_optimizer",
+    },
+    {
+        "id": "eval_11_contradiction_detection",
+        "category": "contradiction_detection",
+        "query": "Resolve conflicting reports about GPU benchmark FLOPS between vendor whitepaper and independent lab test.",
+        "requires_live_search": True,
+        "expected_primary_specialist": "contradiction_detector",
+    },
+    {
+        "id": "eval_12_primary_source_hunter",
+        "category": "primary_source",
+        "query": "Find the official CVE security bulletin and original vendor patch announcement for CVE-2024-34351.",
+        "requires_live_search": True,
+        "expected_primary_specialist": "primary_source_hunter",
+    },
+    {
+        "id": "eval_13_pricing_monitor",
+        "category": "pricing_monitor",
+        "query": "What is the current monthly subscription price for Cursor Pro in Indian Rupees?",
+        "requires_live_search": True,
+        "expected_primary_specialist": "price_monitor_researcher",
+    },
+    {
+        "id": "eval_14_standards_research",
+        "category": "standards_research",
+        "query": "What does the official RFC 9110 HTTP Semantics specification state regarding idempotent methods?",
+        "requires_live_search": True,
+        "expected_primary_specialist": "standards_researcher",
+    },
 ]
 
 
@@ -112,6 +147,11 @@ def test_evaluation_dataset_completeness():
     assert "github_repository" in categories
     assert "cybersecurity" in categories
     assert "multi_source_comparison" in categories
+    assert "query_optimization" in categories
+    assert "contradiction_detection" in categories
+    assert "primary_source" in categories
+    assert "pricing_monitor" in categories
+    assert "standards_research" in categories
 
 
 @pytest.mark.parametrize("eval_case", EVALUATION_DATASET, ids=[e["id"] for e in EVALUATION_DATASET])
@@ -138,3 +178,49 @@ def test_evaluation_manager_routing_matrix():
         specialist = eval_case["expected_primary_specialist"]
         if specialist != "coding_manager":
             assert specialist in instruction, f"Specialist {specialist} missing in manager routing rules"
+
+
+def test_query_optimizer_and_multi_query_generator_agents():
+    """Verify Query Optimizer and Multi Query Generator specialist definitions."""
+    specialists = build_all_adk_specialists()
+    q_opt = specialists["query-optimizer"]
+    m_gen = specialists["multi-query-generator"]
+
+    assert q_opt is not None
+    assert "Transform ambiguous" in q_opt.instruction or "Query Optimizer" in q_opt.instruction
+    assert m_gen is not None
+    assert "Broad query" in m_gen.instruction
+    assert "Primary-source query" in m_gen.instruction
+
+
+def test_research_scope_controller_modes():
+    """Verify Research Scope Controller defines QUICK, STANDARD, DEEP, CRITICAL, MASSIVE modes."""
+    specialists = build_all_adk_specialists()
+    scope_ctrl = specialists["research-scope-controller"]
+    assert "QUICK" in scope_ctrl.instruction
+    assert "STANDARD" in scope_ctrl.instruction
+    assert "DEEP" in scope_ctrl.instruction
+    assert "CRITICAL" in scope_ctrl.instruction
+    assert "MASSIVE" in scope_ctrl.instruction
+
+
+def test_citation_auditor_and_contradiction_detector():
+    """Verify Citation Auditor and Contradiction Detector instructions."""
+    specialists = build_all_adk_specialists()
+    auditor = specialists["citation-auditor"]
+    detector = specialists["contradiction-detector"]
+
+    assert "SUPPORTED" in auditor.instruction
+    assert "PARTIAL" in auditor.instruction
+    assert "UNSUPPORTED" in auditor.instruction
+
+    assert "conflict" in detector.instruction
+    assert "likely_resolution" in detector.instruction
+
+
+def test_internet_evidence_judge_gatekeeper():
+    """Verify Internet Evidence Judge gatekeeper instructions."""
+    specialists = build_all_adk_specialists()
+    judge = specialists["internet-evidence-judge"]
+    assert "final quality gatekeeper" in judge.instruction.lower()
+    assert "primary claims supported" in judge.instruction.lower()

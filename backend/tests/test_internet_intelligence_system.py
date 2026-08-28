@@ -46,6 +46,7 @@ def setup_adk_environment():
 
 
 EXPECTED_INTERNET_SPECIALISTS = [
+    # 19 Original
     "search-planner",
     "google-search-general",
     "google-news-researcher",
@@ -65,6 +66,34 @@ EXPECTED_INTERNET_SPECIALISTS = [
     "google-search-travel",
     "community-researcher",
     "evidence-synthesizer",
+    # 27 Advanced Research Layer
+    "query-optimizer",
+    "multi-query-generator",
+    "research-scope-controller",
+    "search-result-ranker",
+    "primary-source-hunter",
+    "citation-auditor",
+    "contradiction-detector",
+    "bias-detector",
+    "evidence-quality-judge",
+    "timeline-researcher",
+    "entity-researcher",
+    "company-intelligence-agent",
+    "startup-researcher",
+    "public-osint-researcher",
+    "documentation-reader",
+    "api-documentation-researcher",
+    "release-notes-agent",
+    "benchmark-researcher",
+    "dataset-researcher",
+    "standards-researcher",
+    "paper-comparison-agent",
+    "methodology-reviewer",
+    "patent-researcher",
+    "regulation-researcher",
+    "price-monitor-researcher",
+    "availability-checker",
+    "internet-evidence-judge",
 ]
 
 
@@ -83,9 +112,10 @@ def test_custom_tools_remain_distinct_and_intact():
     assert scrape_page_tool.name == "scrape_page"
 
 
-def test_all_19_internet_specialists_are_real_llm_agents():
-    """Test 4: All 19 Internet Intelligence specialists are instantiated as real LlmAgents."""
+def test_all_46_internet_specialists_are_real_llm_agents():
+    """Test 4: All 46 Internet Intelligence specialists are instantiated as real LlmAgents."""
     specialists = build_all_adk_specialists()
+    assert len(EXPECTED_INTERNET_SPECIALISTS) == 46
     for agent_id in EXPECTED_INTERNET_SPECIALISTS:
         assert agent_id in specialists, f"Missing specialist {agent_id}"
         agent = specialists[agent_id]
@@ -93,12 +123,13 @@ def test_all_19_internet_specialists_are_real_llm_agents():
         assert agent.name == safe_adk_name(agent_id)
 
 
-def test_url_reader_uses_scrape_page_tool():
-    """Test 5: URL Reader is equipped with scrape_page_tool."""
+def test_url_reader_and_docs_reader_use_scrape_page_tool():
+    """Test 5: URL Reader and Documentation Reader are equipped with scrape_page_tool."""
     specialists = build_all_adk_specialists()
-    url_reader = specialists["url-reader"]
-    assert len(url_reader.tools) == 1
-    assert url_reader.tools[0] == scrape_page_tool
+    for reader_id in ["url-reader", "documentation-reader"]:
+        reader = specialists[reader_id]
+        assert len(reader.tools) == 1
+        assert reader.tools[0] == scrape_page_tool
 
 
 def test_native_search_specialists_isolate_google_search():
@@ -120,6 +151,22 @@ def test_native_search_specialists_isolate_google_search():
         "google-search-local",
         "google-search-travel",
         "community-researcher",
+        "primary-source-hunter",
+        "timeline-researcher",
+        "entity-researcher",
+        "company-intelligence-agent",
+        "startup-researcher",
+        "public-osint-researcher",
+        "api-documentation-researcher",
+        "release-notes-agent",
+        "benchmark-researcher",
+        "dataset-researcher",
+        "standards-researcher",
+        "paper-comparison-agent",
+        "patent-researcher",
+        "regulation-researcher",
+        "price-monitor-researcher",
+        "availability-checker",
     ]
     for agent_id in pure_search_agents:
         agent = specialists[agent_id]
@@ -127,15 +174,15 @@ def test_native_search_specialists_isolate_google_search():
         assert agent.tools[0] is google_search
 
 
-def test_internet_intelligence_manager_orchestrates_division():
-    """Test 7: InternetIntelligenceManager orchestrates all 19 specialists."""
+def test_internet_intelligence_manager_orchestrates_all_46_specialists():
+    """Test 7: InternetIntelligenceManager orchestrates all 46 specialists."""
     boss = get_boss_agent()
     research_mgr = next(m for m in boss.sub_agents if m.name == "research_manager")
     assert research_mgr is not None
 
     intel_mgr = next(s for s in research_mgr.sub_agents if s.name == "internet_intelligence_manager")
     assert intel_mgr is not None
-    assert len(intel_mgr.sub_agents) == 19
+    assert len(intel_mgr.sub_agents) == 46
 
     sub_names = {s.name for s in intel_mgr.sub_agents}
     expected_names = {safe_adk_name(aid) for aid in EXPECTED_INTERNET_SPECIALISTS}
@@ -221,7 +268,7 @@ def test_adk_hierarchy_telemetry_counts():
     summary = get_adk_hierarchy_summary()
     assert summary["registry_agents"] >= 140
     assert summary["adk_specialists"] == summary["registry_agents"]
-    assert summary["internet_intelligence_agents"] == 19
+    assert summary["internet_intelligence_agents"] == 46
     assert summary["department_managers"] == 10
     assert summary["division_managers"] == 1
     assert summary["root_agents"] == 1
