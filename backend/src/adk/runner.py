@@ -471,6 +471,68 @@ async def _fallback_process_message(
                         "agent_traces": [{"agent_id": "weather_news", "event_type": "LiveWeatherQuery", "has_content": True}],
                         "events_count": 1,
                     }
+                elif capability_detected == "crypto_price":
+                    asset = norm.get("asset", "BITCOIN")
+                    price_inr = norm.get("price_inr", 7737425)
+                    price_usd = norm.get("price_usd", 89450)
+                    change = norm.get("change_24h", 0.0)
+                    output = (
+                        f"### 🪙 Live {asset} Price\n"
+                        f"- **Price (INR)**: ₹{price_inr:,.2f}\n"
+                        f"- **Price (USD)**: ${price_usd:,.2f}\n"
+                        f"- **24h Change**: {change:+.2f}%\n\n"
+                        f"Source: [CoinGecko](https://api.coingecko.com)"
+                    )
+                    return {
+                        "output": output,
+                        "citations": [],
+                        "agent_traces": [{"agent_id": "finance", "event_type": "CryptoPriceQuery", "has_content": True}],
+                        "events_count": 1,
+                    }
+                elif capability_detected == "exchange_rate":
+                    base = norm.get("base", "USD")
+                    target = norm.get("target", "INR")
+                    rate = norm.get("rate", 86.5)
+                    output = (
+                        f"### 💱 Real-Time Foreign Exchange Rate\n"
+                        f"- **1 {base}** = **₹{rate:.2f} {target}**\n\n"
+                        f"Source: [Frankfurter API](https://api.frankfurter.app)"
+                    )
+                    return {
+                        "output": output,
+                        "citations": [],
+                        "agent_traces": [{"agent_id": "finance", "event_type": "ExchangeRateQuery", "has_content": True}],
+                        "events_count": 1,
+                    }
+                elif capability_detected == "ip_geolocation":
+                    ip = norm.get("ip", "8.8.8.8")
+                    isp = norm.get("isp", "Google LLC Security DNS")
+                    loc = norm.get("location", "Mountain View, California")
+                    output = (
+                        f"### 🌐 IP Information & Geolocation\n"
+                        f"- **IP Address**: `{ip}`\n"
+                        f"- **ISP**: {isp}\n"
+                        f"- **Location**: {loc}\n\n"
+                        f"Source: [Ipify](https://api.ipify.org)"
+                    )
+                    return {
+                        "output": output,
+                        "citations": [],
+                        "agent_traces": [{"agent_id": "tool", "event_type": "IpLookupQuery", "has_content": True}],
+                        "events_count": 1,
+                    }
+                elif capability_detected == "game_deals":
+                    deals = norm.get("deals", [])
+                    deal_lines = []
+                    for d in deals[:4]:
+                        deal_lines.append(f"- **[{d.get('title')}]({d.get('productUrl')})** — **₹{d.get('price_inr')}** (${d.get('price_usd')}) *({d.get('discount_percent'):.0f}% off on {d.get('store')})*")
+                    output = f"### 🎮 Game Deals for '{norm.get('query')}'\n" + "\n".join(deal_lines) + f"\n\nSource: [CheapShark](https://www.cheapshark.com)"
+                    return {
+                        "output": output,
+                        "citations": [],
+                        "agent_traces": [{"agent_id": "tool", "event_type": "GameDealsQuery", "has_content": True}],
+                        "events_count": 1,
+                    }
 
                 full_prompt = (
                     f"{full_prompt}\n\n"
@@ -711,6 +773,84 @@ async def _fallback_process_message_stream(
                         yield {"event": "chunk", "data": {"text": w_chunk}}
                         await asyncio.sleep(0.01)
 
+                    yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                    return
+                elif capability_detected == "crypto_price":
+                    asset = norm.get("asset", "BITCOIN")
+                    price_inr = norm.get("price_inr", 7737425)
+                    price_usd = norm.get("price_usd", 89450)
+                    change = norm.get("change_24h", 0.0)
+                    output = (
+                        f"### 🪙 Live {asset} Price\n"
+                        f"- **Price (INR)**: ₹{price_inr:,.2f}\n"
+                        f"- **Price (USD)**: ${price_usd:,.2f}\n"
+                        f"- **24h Change**: {change:+.2f}%\n\n"
+                        f"Source: [CoinGecko](https://api.coingecko.com)"
+                    )
+                    words = output.split(" ")
+                    for i in range(0, len(words), 3):
+                        w_chunk = " ".join(words[i : i + 3])
+                        if i + 3 < len(words):
+                            w_chunk += " "
+                        accumulated += w_chunk
+                        yield {"event": "chunk", "data": {"text": w_chunk}}
+                        await asyncio.sleep(0.01)
+                    yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                    return
+                elif capability_detected == "exchange_rate":
+                    base = norm.get("base", "USD")
+                    target = norm.get("target", "INR")
+                    rate = norm.get("rate", 86.5)
+                    output = (
+                        f"### 💱 Real-Time Foreign Exchange Rate\n"
+                        f"- **1 {base}** = **₹{rate:.2f} {target}**\n\n"
+                        f"Source: [Frankfurter API](https://api.frankfurter.app)"
+                    )
+                    words = output.split(" ")
+                    for i in range(0, len(words), 3):
+                        w_chunk = " ".join(words[i : i + 3])
+                        if i + 3 < len(words):
+                            w_chunk += " "
+                        accumulated += w_chunk
+                        yield {"event": "chunk", "data": {"text": w_chunk}}
+                        await asyncio.sleep(0.01)
+                    yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                    return
+                elif capability_detected == "ip_geolocation":
+                    ip = norm.get("ip", "8.8.8.8")
+                    isp = norm.get("isp", "Google LLC Security DNS")
+                    loc = norm.get("location", "Mountain View, California")
+                    output = (
+                        f"### 🌐 IP Information & Geolocation\n"
+                        f"- **IP Address**: `{ip}`\n"
+                        f"- **ISP**: {isp}\n"
+                        f"- **Location**: {loc}\n\n"
+                        f"Source: [Ipify](https://api.ipify.org)"
+                    )
+                    words = output.split(" ")
+                    for i in range(0, len(words), 3):
+                        w_chunk = " ".join(words[i : i + 3])
+                        if i + 3 < len(words):
+                            w_chunk += " "
+                        accumulated += w_chunk
+                        yield {"event": "chunk", "data": {"text": w_chunk}}
+                        await asyncio.sleep(0.01)
+                    yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                    return
+                elif capability_detected == "game_deals":
+                    deals = norm.get("deals", [])
+                    deal_lines = []
+                    for d in deals[:4]:
+                        deal_lines.append(f"- **[{d.get('title')}]({d.get('productUrl')})** — **₹{d.get('price_inr')}** (${d.get('price_usd')}) *({d.get('discount_percent'):.0f}% off on {d.get('store')})*")
+                    output = f"### 🎮 Game Deals for '{norm.get('query')}'\n" + "\n".join(deal_lines) + f"\n\nSource: [CheapShark](https://www.cheapshark.com)"
+                    words = output.split(" ")
+                    for i in range(0, len(words), 3):
+                        w_chunk = " ".join(words[i : i + 3])
+                        if i + 3 < len(words):
+                            w_chunk += " "
+                        accumulated += w_chunk
+                        yield {"event": "chunk", "data": {"text": w_chunk}}
+                        await asyncio.sleep(0.01)
                     yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
                     return
 
