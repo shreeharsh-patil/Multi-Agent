@@ -171,6 +171,13 @@ class Settings(BaseSettings):
     adk_massive_max_specialists: int = 120
     adk_max_concurrent_specialists: int = 8
 
+    # ---- Internet SDK Configuration ----
+    internet_default_max_sources: int = 5
+    internet_max_sources: int = 20
+    internet_request_timeout: float = 15.0
+    internet_research_max_iterations: int = 5
+    internet_max_concurrency: int = 8
+
     model_config = {
         # Resolve both env files so startup works from either the repository
         # root or backend directory. The backend file contains service keys;
