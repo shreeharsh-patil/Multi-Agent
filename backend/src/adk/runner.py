@@ -422,6 +422,8 @@ async def _fallback_process_message(
             capability_detected = "ip_geolocation"
         elif "usd to inr" in msg_lower or "exchange rate" in msg_lower or "forex" in msg_lower or "currency rate" in msg_lower:
             capability_detected = "exchange_rate"
+        elif any(s in msg_lower for s in ["search", "google", "latest", "recent", "who won", "news about", "lookup", "find online", "current info", "what happened"]):
+            capability_detected = "web_search"
 
         if capability_detected:
             location = "Goa" if "goa" in msg_lower else "Mumbai"
@@ -534,13 +536,20 @@ async def _fallback_process_message(
                         "events_count": 1,
                     }
 
-                full_prompt = (
-                    f"{full_prompt}\n\n"
-                    f"LIVE VERIFIED API DATA (from internal API registry tool '{api_res.get('api_name')}'):\n"
-                    f"{json.dumps(norm, indent=2)}\n\n"
-                    f"INSTRUCTIONS: Use the live verified API data above to answer the user's question directly. "
-                    f"Always preserve and render the source link or product URL as a clickable markdown link [Source Name](url)."
-                )
+        if capability_detected == "web_search":
+            from src.adk.tools import web_search
+            try:
+                search_results = await web_search(message, max_items=5)
+                if search_results and len(search_results.strip()) > 30:
+                    full_prompt = (
+                        f"{full_prompt}\n\n"
+                        f"LIVE REAL-TIME WEB SEARCH RESULTS:\n"
+                        f"{search_results}\n\n"
+                        f"INSTRUCTIONS: Use the live search results above to answer the user's question accurately. "
+                        f"Always preserve and render clickable Markdown links [Source Name](url) for all cited sources."
+                    )
+            except Exception as e:
+                logger.warning(f"Fallback live web search execution failed: {e}")
 
         output = await llm_service.generate(
             prompt=full_prompt,
@@ -719,6 +728,8 @@ async def _fallback_process_message_stream(
         capability_detected = "ip_geolocation"
     elif "usd to inr" in msg_lower or "exchange rate" in msg_lower or "forex" in msg_lower or "currency rate" in msg_lower:
         capability_detected = "exchange_rate"
+    elif any(s in msg_lower for s in ["search", "google", "latest", "recent", "who won", "news about", "lookup", "find online", "current info", "what happened"]):
+        capability_detected = "web_search"
 
     if capability_detected:
         location = "Goa" if "goa" in msg_lower else "Mumbai"
@@ -852,16 +863,23 @@ async def _fallback_process_message_stream(
                         await asyncio.sleep(0.01)
                     yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
                     return
-
-                prompt_with_context = (
-                    f"{prompt_with_context}\n\n"
-                    f"LIVE VERIFIED API DATA (from internal API registry tool '{api_res.get('api_name')}'):\n"
-                    f"{json.dumps(norm, indent=2)}\n\n"
-                    f"INSTRUCTIONS: Use the live verified API data above to answer the user's question directly. "
-                    f"Always preserve and render the source link or product URL as a clickable markdown link [Source Name](url)."
-                )
         except Exception as e:
             logger.warning(f"Fallback live API execution error in stream: {e}")
+
+    if capability_detected == "web_search":
+        from src.adk.tools import web_search
+        try:
+            search_results = await web_search(message, max_items=5)
+            if search_results and len(search_results.strip()) > 30:
+                prompt_with_context = (
+                    f"{prompt_with_context}\n\n"
+                    f"LIVE REAL-TIME WEB SEARCH RESULTS:\n"
+                    f"{search_results}\n\n"
+                    f"INSTRUCTIONS: Use the live search results above to answer the user's question accurately. "
+                    f"Always preserve and render clickable Markdown links [Source Name](url) for all cited sources."
+                )
+        except Exception as e:
+            logger.warning(f"Fallback live web search execution failed in stream: {e}")
 
     accumulated = ""
     system_instruction = (
