@@ -424,14 +424,20 @@ async def _fallback_process_message(
             capability_detected = "exchange_rate"
 
         if capability_detected:
-            location = "Mumbai"
+            location = "Goa" if "goa" in msg_lower else "Mumbai"
             if capability_detected == "current_weather":
-                import re
-                loc_match = re.search(r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,30})", msg_lower)
-                if loc_match:
-                    location = loc_match.group(1).strip().strip("?.,!").title()
-            elif "goa" in msg_lower:
-                location = "Goa"
+                for k, v in KNOWN_LOCATIONS.items():
+                    if k in msg_lower:
+                        location = v[2].split(",")[0].strip()
+                        break
+                else:
+                    import re
+                    loc_match = re.search(r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,20})", msg_lower)
+                    if loc_match:
+                        raw_loc = loc_match.group(1).strip().strip("?.,!\"'").title()
+                        raw_loc = re.sub(r"\b(Today|Tomorrow|Now|Right Now|Currently|Outside)\b", "", raw_loc, flags=re.IGNORECASE).strip()
+                        if raw_loc:
+                            location = raw_loc
 
             query_asset = "bitcoin" if ("bitcoin" in msg_lower or "btc" in msg_lower) else ("ethereum" if "ethereum" in msg_lower or "eth" in msg_lower else "solana")
             ip_val = "8.8.8.8" if "8.8.8.8" in msg_lower else "8.8.8.8"
@@ -439,6 +445,33 @@ async def _fallback_process_message(
             api_res = await api_tool.execute_with_fallback(capability_detected, {"query": message, "location": location, "asset": query_asset, "ip": ip_val})
             if api_res.get("success"):
                 norm = api_res.get("normalized", {})
+                if capability_detected == "current_weather":
+                    loc = norm.get("location", location)
+                    temp = norm.get("temperature", "N/A")
+                    unit = norm.get("temperature_unit", "°C")
+                    wind = norm.get("windspeed", "N/A")
+                    cond = norm.get("condition", "Clear Sky ☀️")
+                    forecast = norm.get("forecast", [])
+                    forecast_str = ""
+                    if forecast:
+                        forecast_lines = [f"- **{f.get('date')}**: {f.get('condition')}, {f.get('temp_min')}°C to {f.get('temp_max')}°C" for f in forecast[:3]]
+                        forecast_str = f"### 📅 3-Day Forecast\n" + "\n".join(forecast_lines) + "\n\n"
+
+                    output = (
+                        f"### 🌤 Current Weather in {loc}\n"
+                        f"- **Condition**: {cond}\n"
+                        f"- **Temperature**: {temp}{unit}\n"
+                        f"- **Wind Speed**: {wind} km/h\n\n"
+                        f"{forecast_str}"
+                        f"Source: [Open-Meteo](https://open-meteo.com/)"
+                    )
+                    return {
+                        "output": output,
+                        "citations": [],
+                        "agent_traces": [{"agent_id": "weather_news", "event_type": "LiveWeatherQuery", "has_content": True}],
+                        "events_count": 1,
+                    }
+
                 full_prompt = (
                     f"{full_prompt}\n\n"
                     f"LIVE VERIFIED API DATA (from internal API registry tool '{api_res.get('api_name')}'):\n"
@@ -627,14 +660,20 @@ async def _fallback_process_message_stream(
         capability_detected = "exchange_rate"
 
     if capability_detected:
-        location = "Mumbai"
+        location = "Goa" if "goa" in msg_lower else "Mumbai"
         if capability_detected == "current_weather":
-            import re
-            loc_match = re.search(r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,30})", msg_lower)
-            if loc_match:
-                location = loc_match.group(1).strip().strip("?.,!").title()
-        elif "goa" in msg_lower:
-            location = "Goa"
+            for k, v in KNOWN_LOCATIONS.items():
+                if k in msg_lower:
+                    location = v[2].split(",")[0].strip()
+                    break
+            else:
+                import re
+                loc_match = re.search(r"(?:weather|forecast|temperature|climate|rain)\s+(?:in|for|at|of)?\s*([a-zA-Z\s]{2,20})", msg_lower)
+                if loc_match:
+                    raw_loc = loc_match.group(1).strip().strip("?.,!\"'").title()
+                    raw_loc = re.sub(r"\b(Today|Tomorrow|Now|Right Now|Currently|Outside)\b", "", raw_loc, flags=re.IGNORECASE).strip()
+                    if raw_loc:
+                        location = raw_loc
 
         query_asset = "bitcoin" if ("bitcoin" in msg_lower or "btc" in msg_lower) else ("ethereum" if "ethereum" in msg_lower or "eth" in msg_lower else "solana")
         ip_val = "8.8.8.8" if "8.8.8.8" in msg_lower else "8.8.8.8"
@@ -643,6 +682,38 @@ async def _fallback_process_message_stream(
             api_res = await api_tool.execute_with_fallback(capability_detected, {"query": message, "location": location, "asset": query_asset, "ip": ip_val})
             if api_res.get("success"):
                 norm = api_res.get("normalized", {})
+                if capability_detected == "current_weather":
+                    loc = norm.get("location", location)
+                    temp = norm.get("temperature", "N/A")
+                    unit = norm.get("temperature_unit", "°C")
+                    wind = norm.get("windspeed", "N/A")
+                    cond = norm.get("condition", "Clear Sky ☀️")
+                    forecast = norm.get("forecast", [])
+                    forecast_str = ""
+                    if forecast:
+                        forecast_lines = [f"- **{f.get('date')}**: {f.get('condition')}, {f.get('temp_min')}°C to {f.get('temp_max')}°C" for f in forecast[:3]]
+                        forecast_str = f"### 📅 3-Day Forecast\n" + "\n".join(forecast_lines) + "\n\n"
+
+                    formatted_weather = (
+                        f"### 🌤 Current Weather in {loc}\n"
+                        f"- **Condition**: {cond}\n"
+                        f"- **Temperature**: {temp}{unit}\n"
+                        f"- **Wind Speed**: {wind} km/h\n\n"
+                        f"{forecast_str}"
+                        f"Source: [Open-Meteo](https://open-meteo.com/)"
+                    )
+                    words = formatted_weather.split(" ")
+                    for i in range(0, len(words), 3):
+                        w_chunk = " ".join(words[i : i + 3])
+                        if i + 3 < len(words):
+                            w_chunk += " "
+                        accumulated += w_chunk
+                        yield {"event": "chunk", "data": {"text": w_chunk}}
+                        await asyncio.sleep(0.01)
+
+                    yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                    return
+
                 prompt_with_context = (
                     f"{prompt_with_context}\n\n"
                     f"LIVE VERIFIED API DATA (from internal API registry tool '{api_res.get('api_name')}'):\n"

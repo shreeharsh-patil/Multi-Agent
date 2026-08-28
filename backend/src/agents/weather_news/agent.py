@@ -75,25 +75,62 @@ WMO_WEATHER_CODES = {
 }
 
 
+KNOWN_LOCATIONS = {
+    "goa": (15.2993, 74.1240, "Goa, India"),
+    "mumbai": (19.0760, 72.8777, "Mumbai, India"),
+    "delhi": (28.6139, 77.2090, "New Delhi, India"),
+    "new delhi": (28.6139, 77.2090, "New Delhi, India"),
+    "bengaluru": (12.9716, 77.5946, "Bengaluru, India"),
+    "bangalore": (12.9716, 77.5946, "Bengaluru, India"),
+    "hyderabad": (17.3850, 78.4867, "Hyderabad, India"),
+    "chennai": (13.0827, 80.2707, "Chennai, India"),
+    "kolkata": (22.5726, 88.3639, "Kolkata, India"),
+    "pune": (18.5204, 73.8567, "Pune, India"),
+    "ahmedabad": (23.0225, 72.5714, "Ahmedabad, India"),
+    "jaipur": (26.9124, 75.7873, "Jaipur, India"),
+    "london": (51.5074, -0.1278, "London, United Kingdom"),
+    "new york": (40.7128, -74.0060, "New York, USA"),
+    "tokyo": (35.6762, 139.6503, "Tokyo, Japan"),
+    "paris": (48.8566, 2.3522, "Paris, France"),
+    "dubai": (25.2048, 55.2708, "Dubai, UAE"),
+    "singapore": (1.3521, 103.8198, "Singapore"),
+}
+
+
 async def _fetch_open_meteo_weather(city: str) -> Optional[str]:
     """Fetch live weather from Open-Meteo (100% Free, zero key, ultra-fast sub-second response)."""
+    clean_city = (city or "Goa").strip().strip("?,.!\"'")
+    if not clean_city:
+        clean_city = "Goa"
+
+    city_key = clean_city.lower()
+    lat = None
+    lon = None
+    location_name = clean_city.title()
+
+    for k, v in KNOWN_LOCATIONS.items():
+        if k in city_key:
+            lat, lon, location_name = v
+            break
+
     try:
         async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
-            geo_resp = await client.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": city, "count": 1, "language": "en", "format": "json"},
-            )
-            if geo_resp.status_code != 200:
-                return None
-            geo_data = geo_resp.json()
-            results = geo_data.get("results", [])
-            if not results:
-                return None
+            if lat is None or lon is None:
+                geo_resp = await client.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params={"name": clean_city, "count": 1, "language": "en", "format": "json"},
+                )
+                if geo_resp.status_code == 200:
+                    geo_data = geo_resp.json()
+                    results = geo_data.get("results", [])
+                    if results:
+                        loc = results[0]
+                        lat = loc.get("latitude")
+                        lon = loc.get("longitude")
+                        location_name = f"{loc.get('name', clean_city)}, {loc.get('country', '')}".strip(", ")
 
-            loc = results[0]
-            lat = loc.get("latitude")
-            lon = loc.get("longitude")
-            location_name = f"{loc.get('name', city)}, {loc.get('country', '')}".strip(", ")
+            lat = lat or 15.2993
+            lon = lon or 74.1240
 
             w_resp = await client.get(
                 "https://api.open-meteo.com/v1/forecast",
