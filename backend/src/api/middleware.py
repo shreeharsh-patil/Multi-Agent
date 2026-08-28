@@ -16,6 +16,9 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/api/auth/login",
+    # Read-only static metadata used to render the public swarm roster.
+    # Keep execution endpoints such as /api/swarm/stream protected.
+    "/api/swarm/agents",
 }
 
 # Prefixes that are public only for specific HTTP methods. The shared-chat
