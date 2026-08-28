@@ -145,7 +145,7 @@ export default function DrivePage() {
 
   if (!accessToken) {
     return (
-    <div className="space-y-6 animate-fade-in bg-background">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 bg-background animate-fade-in">
       <div>
         <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Google Drive</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -176,21 +176,21 @@ export default function DrivePage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in bg-background">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 bg-background animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Google Drive</h1>
+          <h1 className="font-sans text-2xl font-normal tracking-[-0.03em] text-[#26251e] sm:text-3xl">Google Drive</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {files.length} file{files.length !== 1 ? 's' : ''} · Connected as {session?.user?.email}
           </p>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {storage && (
             <div className="text-xs text-muted-foreground self-center">
               {formatBytes(storage.usageInDrive)} / {formatBytes(storage.limit)}
             </div>
           )}
-          <Button variant="outline" size="icon" onClick={fetchFiles} disabled={loading} className="h-10 w-10 rounded-[8px]">
+          <Button variant="outline" size="icon" onClick={fetchFiles} disabled={loading} className="h-11 w-11 rounded-[8px] sm:h-10 sm:w-10" aria-label="Refresh Drive files">
             <RefreshCw className={`h-4 w-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <label>
@@ -258,14 +258,14 @@ export default function DrivePage() {
         </Card>
       ) : (
         <Card className="shadow-xs overflow-hidden">
-          <ScrollArea className="h-[600px]">
+          <ScrollArea className="h-[min(600px,65dvh)] min-h-[320px]">
             <div className="divide-y divide-border">
               {files.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center gap-4 p-4 bg-secondary hover:bg-secondary/70 transition-colors group"
+                  className="group flex flex-col items-stretch gap-3 bg-secondary p-3 transition-colors hover:bg-secondary/70 sm:flex-row sm:items-center sm:gap-4 sm:p-4"
                 >
-                  <div className="p-2 rounded-[8px] bg-card text-primary border border-border shrink-0">
+                  <div className="hidden shrink-0 rounded-[8px] border border-border bg-card p-2 text-primary sm:block">
                     {file.isFolder ? (
                       <Folder className="h-5 w-5" />
                     ) : file.mimeType.startsWith('image/') ? (
@@ -280,18 +280,19 @@ export default function DrivePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-foreground truncate">{file.name}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>{file.isFolder ? 'Folder' : formatBytes(file.size)}</span>
                       <span>{formatDate(file.modifiedTime)}</span>
                     </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex justify-end gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDownload(file)}
                       title="Download"
-                      className="rounded-[8px] hover:bg-card text-muted-foreground hover:text-foreground h-8 w-8 cursor-pointer"
+                      className="h-10 w-10 rounded-[8px] text-muted-foreground hover:bg-card hover:text-foreground cursor-pointer"
+                      aria-label={`Download ${file.name}`}
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -301,7 +302,8 @@ export default function DrivePage() {
                         size="icon"
                         onClick={() => window.open(file.webViewLink, '_blank')}
                         title="Open in Drive"
-                        className="rounded-[8px] hover:bg-card text-muted-foreground hover:text-foreground h-8 w-8 cursor-pointer"
+                        className="h-10 w-10 rounded-[8px] text-muted-foreground hover:bg-card hover:text-foreground cursor-pointer"
+                        aria-label={`Open ${file.name} in Drive`}
                       >
                         <ExternalLink className="h-4 w-4" />
                       </Button>
@@ -311,7 +313,8 @@ export default function DrivePage() {
                       size="icon"
                       onClick={() => handleDelete(file.id)}
                       title="Delete"
-                      className="rounded-[8px] hover:bg-card/45 text-[#c64545] hover:bg-[#c64545]/10 h-8 w-8 cursor-pointer"
+                      className="h-10 w-10 cursor-pointer rounded-[8px] text-[#c64545] hover:bg-[#c64545]/10"
+                      aria-label={`Delete ${file.name}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

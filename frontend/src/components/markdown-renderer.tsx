@@ -24,7 +24,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
   const components = useMemo(() => ({
     // Premium Responsive Markdown Table Rendering
     table: ({ children }: any) => (
-      <div className="my-4 w-full overflow-x-auto rounded-xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm scrollbar-thin">
+      <div className="my-4 w-full max-w-full overflow-x-auto rounded-xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm scrollbar-thin">
         <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[480px]">
           {children}
         </table>
@@ -132,7 +132,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
   }), []);
 
   return (
-    <div className={`prose dark:prose-invert max-w-full overflow-x-hidden text-sm leading-relaxed ${className}`}>
+    <div className={`prose min-w-0 max-w-full break-words text-sm leading-relaxed [overflow-wrap:anywhere] dark:prose-invert ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
         rehypePlugins={[rehypeKatex]}

@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
-import { Send, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, CheckCircle2, ChevronDown, Copy, RefreshCw, Pencil, AlertCircle, Terminal } from 'lucide-react'
+import { Send, User, Paperclip, FileText, ImageIcon, X, Loader2, Upload, Mic, Volume2, Square, CheckCircle2, ChevronDown, Copy, RefreshCw, Pencil, AlertCircle, Terminal, MoreHorizontal, ArrowLeft } from 'lucide-react'
 import type { AgentId, DocumentInfo } from '@shared/types'
 import { CodePreviewButton, CodeSandbox, type CodeSandboxProps } from '@/components/code-sandbox'
 import { CodePreviewPanel } from '@/components/code-preview-panel'
@@ -184,6 +184,7 @@ function ChatContent() {
   const [tabs, setTabs] = useState<PanelTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [showCodeSource, setShowCodeSource] = useState(false)
+  const [compactPreviewOpen, setCompactPreviewOpen] = useState(false)
 
   // Split pane resizing states
   const containerRef = useRef<HTMLDivElement>(null)
@@ -191,15 +192,16 @@ function ChatContent() {
   const [isResizing, setIsResizing] = useState(false)
 
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
     setIsResizing(true)
   }, [])
 
   useEffect(() => {
     if (!isResizing) return
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (!containerRef.current) return
       const containerRect = containerRef.current.getBoundingClientRect()
       const newLeftWidth = e.clientX - containerRect.left
@@ -208,16 +210,16 @@ function ChatContent() {
       setLeftWidthPercent(clampedPercent)
     }
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsResizing(false)
     }
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('pointerup', handlePointerUp)
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('pointerup', handlePointerUp)
     }
   }, [isResizing])
 
@@ -240,6 +242,7 @@ function ChatContent() {
   const [orchestration, setOrchestration] = useState<{ complexity?: string; domain?: string; agents: Array<{ agent_id: string; label: string; reason?: string; status?: 'queued' | 'working' | 'complete' | 'failed' }> } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   // Use a ref to track sending state synchronously — React setState is async
@@ -599,6 +602,7 @@ function ChatContent() {
 
   // Document Click handler to load text/media in right panel tab
   const handleDocumentClick = useCallback(async (doc: DocumentInfo) => {
+    setCompactPreviewOpen(true)
     const existingTab = tabs.find(t => t.id === doc.id)
     if (existingTab) {
       setActiveTabId(doc.id)
@@ -1390,6 +1394,15 @@ function ChatContent() {
     })
   }
 
+  useEffect(() => {
+    if (!compactPreviewOpen) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCompactPreviewOpen(false)
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [compactPreviewOpen])
+
   const renderCodeContent = (content: string) => {
     const lines = content.split('\n')
     return (
@@ -1417,14 +1430,14 @@ function ChatContent() {
     <style>{typingKeyframes}</style>
     <div
       ref={containerRef}
-      className={`flex h-full w-full gap-0 overflow-hidden bg-background animate-fade-in relative ${isResizing ? 'select-none cursor-col-resize' : ''}`}
+      className={`relative flex h-full min-h-0 w-full min-w-0 gap-0 overflow-hidden bg-background animate-fade-in ${isResizing ? 'select-none cursor-col-resize' : ''}`}
     >
       {/* Explorer panel is merged into the main application sidebar */}
 
       {/* 2. CENTRAL PANEL: Agents Conversation Feed */}
       <div
-        className="flex flex-col h-full bg-background relative min-w-0"
-        style={tabs.length > 0 ? { width: `${leftWidthPercent}%`, flex: 'none' } : { flex: 1 }}
+        className={`relative flex h-full min-h-0 min-w-0 flex-col bg-background ${tabs.length > 0 ? 'w-full flex-1 xl:w-[var(--chat-left-width)] xl:flex-none' : 'w-full flex-1'}`}
+        style={{ '--chat-left-width': `${leftWidthPercent}%` } as React.CSSProperties}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -1613,7 +1626,7 @@ function ChatContent() {
                   handleFileSelect({ target: { files: e.dataTransfer.files } } as any);
                 }
               }}
-              className="h-full w-full flex flex-col items-center justify-center p-4 sm:p-8 text-center select-none bg-background overflow-y-auto scrollbar-thin"
+                className="flex h-full w-full min-w-0 flex-col items-center justify-center overflow-y-auto bg-background p-4 text-center scrollbar-thin select-none sm:p-8"
             >
               <div className="max-w-xl w-full flex flex-col items-center justify-center space-y-6 py-8">
                 {/* Logo & Welcoming Header */}
@@ -1652,16 +1665,16 @@ function ChatContent() {
               </div>
             </div>
           ) : (
-            <ScrollArea ref={scrollRef} className="h-full px-3 sm:px-6 py-3 sm:py-6">
-              <div className="space-y-6 w-full max-w-none mx-auto">
+            <ScrollArea ref={scrollRef} className="h-full w-full min-w-0 px-2 py-3 sm:px-6 sm:py-6">
+              <div className="mx-auto w-full min-w-0 max-w-none space-y-6">
                 {messages.map((msg, idx) => (
-                  <div key={msg.id} className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                  <div key={msg.id} className={`flex min-w-0 gap-2 sm:gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
                       <div className="h-7 w-7 rounded-full border border-border shrink-0 mt-0.5 shadow-xs overflow-hidden bg-secondary flex items-center justify-center">
                         <Image src="/developer-avatar.png" alt="AI" width={28} height={28} className="h-full w-full object-contain" />
                       </div>
                     )}
-                    <div className={`w-full max-w-[92%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`flex w-full min-w-0 max-w-[calc(100%_-_2.25rem)] flex-col sm:max-w-[92%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
                         <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-secondary border-border text-muted-foreground">
                           {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name || msg.agentId}
@@ -1699,9 +1712,9 @@ function ChatContent() {
                         </div>
                       )}
 
-                      <div className="group relative">
+                      <div className="group relative max-w-full min-w-0">
                         {msg.role === 'user' && editingId === msg.id ? (
-                          <div className="w-full min-w-[280px] rounded-[12px] border border-border bg-card p-2 shadow-xs">
+                          <div className="w-full min-w-0 rounded-[12px] border border-border bg-card p-2 shadow-xs">
                             <textarea
                               value={editText}
                               onChange={(e) => setEditText(e.target.value)}
@@ -1716,7 +1729,7 @@ function ChatContent() {
                               }}
                               autoFocus
                               rows={3}
-                              className="w-full resize-none bg-transparent text-sm text-[#26251e] focus:outline-none px-1 py-0.5"
+                              className="w-full min-w-0 resize-none bg-transparent px-1 py-0.5 text-base text-[#26251e] focus:outline-none sm:text-sm"
                             />
                             <div className="flex items-center justify-end gap-2 mt-1.5">
                               <button
@@ -1738,7 +1751,7 @@ function ChatContent() {
                           </div>
                         ) : (
                         <div
-                          className={`rounded-[12px] px-4 py-2.5 text-sm leading-relaxed ${
+                          className={`max-w-full min-w-0 rounded-[12px] px-3 py-2.5 text-sm leading-relaxed sm:px-4 ${
                             msg.role === 'user'
                               ? 'bg-card text-[#26251e] border border-border shadow-xs font-sans'
                               : 'text-[#26251e] bg-transparent font-sans'
@@ -1746,7 +1759,7 @@ function ChatContent() {
                         >
                           {msg.role === 'assistant' && !msg.content && sending ? (
                             orchestration && orchestration.agents.length > 0 ? (
-                              <div className="min-w-[260px] space-y-2 rounded-xl border border-border/80 bg-card/90 px-3.5 py-3 shadow-xs" role="status" aria-label="AI team working">
+                              <div className="w-full min-w-0 space-y-2 rounded-xl border border-border/80 bg-card/90 px-3.5 py-3 shadow-xs" role="status" aria-label="AI team working">
                                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                                   <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
                                   <span>{orchestration.complexity === 'complex' ? 'Assembling specialist team…' : 'Understanding your request…'}</span>
@@ -1782,7 +1795,7 @@ function ChatContent() {
                               </span>
                             )
                           ) : (
-                            <div className="text-xs sm:text-sm leading-relaxed [&_*]:break-words">
+                            <div className="w-full min-w-0 max-w-full break-words text-xs leading-relaxed [overflow-wrap:anywhere] sm:text-sm">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
                                 rehypePlugins={[rehypeKatex]}
@@ -1800,14 +1813,14 @@ function ChatContent() {
                                             e.stopPropagation()
                                             downloadSecureFile(resolved, 'generated-image.png')
                                           }}
-                                          className="text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer inline-flex items-center gap-1 font-medium"
+                                          className="inline-flex max-w-full items-center gap-1 break-all font-medium text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
                                         >
                                           {children}
                                         </button>
                                       )
                                     }
                                     return (
-                                      <a href={resolved} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
+                                      <a href={resolved} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
                                     )
                                   },
                                   img: ({ src, alt }) => typeof src === 'string' ? (
@@ -1820,9 +1833,9 @@ function ChatContent() {
                                       return <MermaidWorkspace content={`\`\`\`mermaid\n${source}\n\`\`\``} title="Diagram" />
                                     }
                                     return isInline ? (
-                                      <code className="bg-muted/60 px-1.5 py-0.5 rounded-md text-xs font-mono text-foreground/80" {...props}>{children}</code>
+                                      <code className="max-w-full break-all rounded-md bg-muted/60 px-1.5 py-0.5 font-mono text-xs text-foreground/80" {...props}>{children}</code>
                                     ) : (
-                                      <pre className="overflow-x-auto rounded-xl bg-muted/40 p-4 mb-3 mt-1 border border-border/40">
+                                      <pre className="my-1 mb-3 max-w-full overflow-x-auto rounded-xl border border-border/40 bg-muted/40 p-3 scrollbar-thin sm:p-4">
                                         <code className={`${className || ''} text-xs font-mono leading-relaxed`} {...props}>{children}</code>
                                       </pre>
                                     )
@@ -1917,11 +1930,11 @@ function ChatContent() {
                         </div>
                         )}
                         {msg.role === 'user' && msg.content && editingId !== msg.id && !sending && (
-                          <div className="flex items-center justify-end gap-3 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                          <div className="mt-1.5 flex items-center justify-end gap-3 px-1 opacity-100 transition-opacity select-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                             <button
                               type="button"
                               onClick={() => startEdit(msg.id, msg.content)}
-                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex min-h-9 items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                             >
                               <Pencil className="h-3 w-3" />
                               <span>Edit</span>
@@ -1929,11 +1942,21 @@ function ChatContent() {
                           </div>
                         )}
                         {msg.role === 'assistant' && msg.content && (
-                          <div className="flex items-center gap-3 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                          <>
+                          <button
+                            type="button"
+                            onClick={() => setOpenActionsId((current) => current === msg.id ? null : msg.id)}
+                            className="mt-1 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden"
+                            aria-label="Show message actions"
+                            aria-expanded={openActionsId === msg.id}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          <div className={`${openActionsId === msg.id ? 'flex' : 'hidden'} mt-1.5 max-w-full flex-wrap items-center gap-x-3 gap-y-1 px-1 opacity-100 transition-opacity select-none md:flex md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100`}>
                             <button
                               type="button"
                               onClick={() => speakMessage(msg.id, msg.content)}
-                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex min-h-9 items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                             >
                               {speakingId === msg.id ? <Square className="h-2.5 w-2.5 fill-current text-red-600" /> : <Volume2 className="h-3 w-3" />}
                               <span>{speakingId === msg.id ? 'Stop' : 'Listen'}</span>
@@ -1945,7 +1968,7 @@ function ChatContent() {
                                 setCopiedId(msg.id)
                                 setTimeout(() => setCopiedId((c) => (c === msg.id ? null : c)), 1500)
                               }}
-                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex min-h-9 items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                             >
                               {copiedId === msg.id ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                               <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
@@ -1954,7 +1977,7 @@ function ChatContent() {
                               <button
                                 type="button"
                                 onClick={handleRegenerate}
-                                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                                className="flex min-h-9 items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                               >
                                 <RefreshCw className="h-3 w-3" />
                                 <span>Regenerate</span>
@@ -1967,6 +1990,7 @@ function ChatContent() {
                                 const existingTab = tabs.find(t => t.id === tabId)
                                 if (existingTab) {
                                   setActiveTabId(tabId)
+                                  setCompactPreviewOpen(true)
                                   return
                                 }
                                 const newTab: PanelTab = {
@@ -1979,6 +2003,7 @@ function ChatContent() {
                                 }
                                 setTabs(prev => [...prev, newTab])
                                 setActiveTabId(tabId)
+                                setCompactPreviewOpen(true)
                               }}
                             />
                             <button
@@ -2021,7 +2046,7 @@ function ChatContent() {
                                   window.alert('PDF export failed. Please try again.')
                                 }
                               }}
-                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex min-h-9 items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                             >
                               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 15V3m0 12-4-4m4 4 4-4"/><rect x="2" y="17" width="20" height="4" rx="1"/>
@@ -2029,6 +2054,7 @@ function ChatContent() {
                               <span>PDF</span>
                             </button>
                           </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -2049,7 +2075,8 @@ function ChatContent() {
               type="button"
               onClick={() => scrollToBottom('smooth')}
               title="Scroll to bottom"
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 h-9 w-9 rounded-full bg-card border border-border shadow-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              className="absolute bottom-3 left-1/2 z-10 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:bg-secondary/60 hover:text-foreground"
+              aria-label="Scroll to bottom"
             >
               <ChevronDown className="h-4 w-4" />
             </button>
@@ -2057,21 +2084,21 @@ function ChatContent() {
         </div>
 
         {/* Anchored bottom input block */}
-        <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-border bg-background shrink-0">
-          <div className="w-full max-w-none mx-auto space-y-2">
+        <div className="shrink-0 border-t border-border bg-background px-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-6 sm:py-4">
+          <div className="mx-auto w-full min-w-0 max-w-none space-y-1.5 sm:space-y-2">
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pb-2">
+              <div className="flex max-w-full flex-wrap gap-1.5 pb-1 sm:pb-2">
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="flex items-center gap-1.5 rounded-[8px] border border-border bg-card px-2.5 py-1 text-[11px] text-[#26251e] shadow-xs"
+                    className="flex max-w-full min-w-0 items-center gap-1.5 rounded-[8px] border border-border bg-card px-2.5 py-1 text-[11px] text-[#26251e] shadow-xs"
                   >
                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="max-w-[120px] truncate">{att.file.name}</span>
+                    <span className="min-w-0 max-w-[min(9rem,50vw)] truncate">{att.file.name}</span>
                     {att.status === 'uploading' ? (
                       <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                     ) : (
-                      <button onClick={() => removeAttachment(att.id)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                      <button onClick={() => removeAttachment(att.id)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label={`Remove ${att.file.name}`}>
                         <X className="h-3 w-3" />
                       </button>
                     )}
@@ -2080,7 +2107,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-card border border-border rounded-[16px] min-h-[56px] p-2 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 shadow-xs w-full transition-all duration-200">
+            <div className="relative flex min-h-[56px] w-full min-w-0 items-end rounded-[16px] border border-border bg-card p-1.5 shadow-xs transition-all duration-200 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 sm:items-center sm:p-2">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2094,7 +2121,9 @@ function ChatContent() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="rounded-[10px] h-9 w-9 hover:bg-secondary text-muted-foreground hover:text-foreground shrink-0 flex items-center justify-center"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+                aria-label="Attach files"
+                title="Attach files"
               >
                 <Paperclip className="h-4.5 w-4.5 stroke-[1.5]" />
               </Button>
@@ -2109,35 +2138,38 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="flex-1 bg-transparent border-0 px-3 py-1.5 text-base sm:text-sm text-[#26251e] placeholder-muted-foreground focus:outline-none focus:ring-0 resize-none font-sans min-h-[28px] max-h-[140px] leading-relaxed"
+                className="min-h-[40px] min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 py-2.5 font-sans text-base leading-relaxed text-[#26251e] placeholder-muted-foreground focus:outline-none focus:ring-0 sm:max-h-[140px] sm:px-3 sm:text-sm"
               />
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={toggleVoiceInput}
                   disabled={sending}
-                  className={`rounded-[10px] h-9 w-9 text-muted-foreground shrink-0 flex items-center justify-center transition-colors ${
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors ${
                     isListening 
                       ? 'bg-red-50 text-red-500 animate-pulse hover:bg-red-100' 
                       : 'hover:bg-secondary hover:text-foreground'
                   }`}
+                  aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+                  title={isListening ? 'Stop voice input' : 'Start voice input'}
                 >
                   {isListening ? <Square className="h-3 w-3 fill-current text-red-500" /> : <Mic className="h-4.5 w-4.5 stroke-[1.5]" />}
                 </Button>
                 <Button
                   onClick={sending ? handleStop : () => handleSend()}
                   disabled={!sending && ((!input.trim() && attachments.length === 0) || (teamMode && teamAgents.length === 0))}
-                  className="rounded-[10px] h-9 w-9 transition-colors bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs shrink-0 flex items-center justify-center cursor-pointer"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 cursor-pointer"
                   size="icon"
-                  title={sending ? 'Stop' : 'Send'}
+                  title={sending ? 'Stop generation' : 'Send message'}
+                  aria-label={sending ? 'Stop generation' : 'Send message'}
                 >
                   {sending ? <Square className="h-3.5 w-3.5 fill-current" /> : <Send className="h-4 w-4 stroke-[1.8]" />}
                 </Button>
               </div>
             </div>
-            <div className="flex items-center justify-between px-1 text-[10px] text-muted-foreground select-none">
-              <span>
+            <div className="flex min-w-0 items-center justify-end px-1 text-[10px] text-muted-foreground select-none sm:justify-between">
+              <span className="hidden sm:inline">
                 <kbd className="font-sans">Enter</kbd> to send · <kbd className="font-sans">Shift+Enter</kbd> for newline · <kbd className="font-sans">/</kbd> to focus
               </span>
               {input.trim() && (
@@ -2153,16 +2185,18 @@ function ChatContent() {
         <>
           {/* Desktop: resizer */}
           <div
-            onMouseDown={handleMouseDown}
-            className="hidden sm:block w-1 hover:w-1.5 active:w-1.5 h-full cursor-col-resize select-none shrink-0 transition-all duration-150 z-30 relative"
-            style={{ display: isResizing ? undefined : undefined }}
+            onPointerDown={handlePointerDown}
+            className="relative z-30 hidden h-full w-2 shrink-0 touch-none cursor-col-resize select-none transition-colors hover:bg-primary/5 xl:block"
+            role="separator"
+            aria-label="Resize chat and preview panels"
+            aria-orientation="vertical"
           >
             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-border" />
           </div>
 
           {/* Desktop right panel (flex child, percentage width) */}
           <aside
-            className="hidden sm:flex flex-col h-full bg-secondary border-l border-border overflow-hidden min-w-0"
+            className="hidden h-full min-w-0 flex-col overflow-hidden border-l border-border bg-secondary xl:flex"
             style={{ width: `${100 - leftWidthPercent}%`, flex: 'none' }}
           >
           {/* Tab Header bar */}
@@ -2189,7 +2223,8 @@ function ChatContent() {
                       e.stopPropagation()
                       handleCloseTab(tab.id)
                     }}
-                    className="text-muted-foreground hover:text-foreground shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 transition-opacity hover:bg-secondary hover:text-foreground 2xl:opacity-0 2xl:group-hover:opacity-100 2xl:group-focus-within:opacity-100"
+                    aria-label={`Close ${tab.title}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -2202,12 +2237,12 @@ function ChatContent() {
           {activeTab ? (
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               {/* Unified Control Header */}
-              <div className="flex items-center justify-between px-4 py-2 bg-secondary border-b border-border text-xs shrink-0 select-none">
-                <span className="text-muted-foreground font-mono text-[10px]">
+              <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary px-3 py-2 text-xs select-none 2xl:px-4">
+                <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
                   {activeTab.title} {activeTab.fileType ? `(${activeTab.fileType.toUpperCase()})` : ''}
                 </span>
                 
-                <div className="flex items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-1.5">
                   {activeTab.type === 'code' && activeTab.sandboxProps && (
                     <button
                       type="button"
@@ -2321,19 +2356,40 @@ function ChatContent() {
           )}
         </aside>
 
-          {/* Mobile right panel (fixed overlay) */}
-          <div className="sm:hidden fixed inset-0 z-40 flex flex-col bg-secondary">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card shrink-0">
-              <span className="text-xs font-semibold truncate">{activeTab?.title || 'Document'}</span>
+          {/* Compact preview for mobile and tablet; split panes remain desktop-only. */}
+          <div className={`${compactPreviewOpen ? 'flex' : 'hidden'} fixed inset-0 z-40 h-screen h-[100svh] supports-[height:100dvh]:h-dvh w-full min-w-0 flex-col bg-secondary xl:hidden`} role="dialog" aria-modal="true" aria-label="Document and code preview">
+            <div className="flex min-h-14 min-w-0 shrink-0 items-center gap-2 border-b border-border bg-card px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3">
               <button
                 type="button"
-                onClick={() => handleCloseTab(activeTabId!)}
-                className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
+                onClick={() => setCompactPreviewOpen(false)}
+                className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer"
+                aria-label="Back to chat"
+                autoFocus
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span>Chat</span>
+              </button>
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold">{activeTab?.title || 'Document'}</span>
+              {activeTab?.type === 'code' && activeTab.sandboxProps && (
+                <button
+                  type="button"
+                  onClick={() => setShowCodeSource((current) => !current)}
+                  className="flex h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  {showCodeSource ? <Play className="h-4 w-4" /> : <CodeIcon className="h-4 w-4" />}
+                  <span className="hidden min-[360px]:inline">{showCodeSource ? 'Preview' : 'Code'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => activeTabId && handleCloseTab(activeTabId)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
+                aria-label={`Close ${activeTab?.title || 'preview'} tab`}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-card">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)]">
               {activeTab?.type === 'code' && activeTab.sandboxProps ? (
                 showCodeSource ? (
                   renderCodeContent(activeTab.content || '')

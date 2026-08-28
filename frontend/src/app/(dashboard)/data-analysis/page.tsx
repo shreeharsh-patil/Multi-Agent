@@ -432,7 +432,7 @@ export default function DataAnalysisPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6">
       {/* ── Page Header ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div>
@@ -622,7 +622,7 @@ export default function DataAnalysisPage() {
           </div>
 
           {/* Right Panel — Chat */}
-          <Card className="xl:col-span-3 border-border flex flex-col min-h-[620px]">
+          <Card className="flex min-h-[420px] flex-col border-border sm:min-h-[520px] xl:col-span-3 xl:min-h-[620px]">
             <CardHeader className="p-4 flex flex-row items-center gap-2 border-b border-border shrink-0 space-y-0">
               <Sparkles className="h-4 w-4 text-primary" />
               <CardTitle className="text-xs sm:text-sm font-semibold">AI Analysis Chat</CardTitle>

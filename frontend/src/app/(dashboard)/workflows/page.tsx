@@ -15,7 +15,7 @@ import React, {
 import { useSession } from 'next-auth/react'
 import {
   AlertCircle, BarChart2, Bot, BookOpen, Brain, BrainCircuit,
-  Calendar, CalendarDays, Check, ChevronRight, CircleStop,
+  Calendar, CalendarDays, Check, ChevronDown, ChevronRight, CircleStop,
   Clock, FileCode, FilePlus2, GraduationCap, HardDrive, Image as ImageIcon,
   Loader2, Play, Plus, Puzzle, RotateCcw, Save, Search,
   StickyNote, Trash2, Workflow, X, ZoomIn, ZoomOut,
@@ -295,6 +295,18 @@ export default function WorkflowsPage() {
 
   // schedule panel
   const [scheduleOpen, setScheduleOpen] = useState(false)
+
+  useEffect(() => {
+    if (!scheduleOpen && !showList) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setScheduleOpen(false)
+        setShowList(false)
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [scheduleOpen, showList])
   const [scheduleEnabled, setScheduleEnabled] = useState(false)
   const [scheduleCron, setScheduleCron] = useState('')
   const [nextRunAt, setNextRunAt] = useState<string | null>(null)
@@ -329,7 +341,7 @@ export default function WorkflowsPage() {
 
   // ── SVG mouse tracking ─────────────────────────────────────────────────
 
-  const onSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+  const onSvgPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (pendingSourceIdRef.current) {
       const pt = svgPoint(e.clientX, e.clientY)
       setMousePos(pt)
@@ -364,7 +376,7 @@ export default function WorkflowsPage() {
     }
   }, [svgPoint, zoom])
 
-  const onSvgMouseUp = useCallback(() => {
+  const onSvgPointerUp = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     dragRef.current = null
     panRef.current = null
@@ -377,7 +389,7 @@ export default function WorkflowsPage() {
     }
   }, [])
 
-  const onSvgMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+  const onSvgPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if ((e.target as SVGElement).tagName === 'svg' || (e.target as SVGElement).classList.contains('canvas-bg')) {
       panRef.current = { startX: e.clientX, startY: e.clientY, origPanX: pan.x, origPanY: pan.y }
     }
@@ -631,7 +643,7 @@ export default function WorkflowsPage() {
   const selectedAgent = selectedNode ? agentById.get(selectedNode.agentId) : undefined
 
   return (
-    <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-[#f7f7f4] text-[#26251e] font-sans">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-[#f7f7f4] text-[#26251e] font-sans">
       {/* ── Top Toolbar ──────────────────────────────────────────────── */}
       <header className="z-20 flex shrink-0 items-center gap-3 overflow-x-auto border-b border-[#dcdcd6] bg-white px-3 py-2.5 sm:px-5 scrollbar-thin">
         <div className="flex items-center gap-2 mr-2">
@@ -642,7 +654,7 @@ export default function WorkflowsPage() {
         <input
           value={workflow.name}
           onChange={e => setWorkflow(prev => ({ ...prev, name: e.target.value }))}
-          className="h-8 bg-transparent text-sm font-semibold border-0 outline-none focus:bg-[#f7f7f4] px-2 rounded w-52"
+          className="h-10 w-40 shrink-0 rounded border-0 bg-transparent px-2 text-base font-semibold outline-none focus:bg-[#f7f7f4] sm:w-52 sm:text-sm"
           placeholder="Workflow name"
         />
 
@@ -650,21 +662,21 @@ export default function WorkflowsPage() {
 
         <button
           onClick={() => { setShowList(v => !v); loadList() }}
-          className="flex items-center gap-1.5 h-8 px-3 text-xs text-[#6c6a64] border border-[#d8d8d2] rounded hover:border-[#aaa9a1] hover:bg-[#f7f7f4] transition-colors"
+          className="flex h-11 shrink-0 items-center gap-1.5 rounded border border-[#d8d8d2] px-3 text-xs text-[#6c6a64] transition-colors hover:border-[#aaa9a1] hover:bg-[#f7f7f4] sm:h-8"
         >
           <FilePlus2 className="w-3.5 h-3.5" /> Saved
         </button>
 
         <button
           onClick={newWorkflow}
-          className="flex items-center gap-1.5 h-8 px-3 text-xs text-[#6c6a64] border border-[#d8d8d2] rounded hover:border-[#aaa9a1] hover:bg-[#f7f7f4] transition-colors"
+          className="flex h-11 shrink-0 items-center gap-1.5 rounded border border-[#d8d8d2] px-3 text-xs text-[#6c6a64] transition-colors hover:border-[#aaa9a1] hover:bg-[#f7f7f4] sm:h-8"
         >
           <RotateCcw className="w-3.5 h-3.5" /> New
         </button>
 
         <button
           onClick={() => setScheduleOpen(true)}
-          className={`flex items-center gap-1.5 h-8 px-3 text-xs border border-[#d8d8d2] rounded hover:border-[#aaa9a1] hover:bg-[#f7f7f4] transition-colors ${scheduleEnabled ? 'text-[#1f8a65] font-semibold' : 'text-[#6c6a64]'}`}
+          className={`flex h-11 shrink-0 items-center gap-1.5 rounded border border-[#d8d8d2] px-3 text-xs transition-colors hover:border-[#aaa9a1] hover:bg-[#f7f7f4] sm:h-8 ${scheduleEnabled ? 'text-[#1f8a65] font-semibold' : 'text-[#6c6a64]'}`}
         >
           <Clock className="w-3.5 h-3.5" /> Schedule
         </button>
@@ -672,7 +684,7 @@ export default function WorkflowsPage() {
         <button
           onClick={saveWorkflow}
           disabled={saving}
-          className="flex items-center gap-1.5 h-8 px-3 text-xs border border-[#d8d8d2] rounded hover:border-[#aaa9a1] hover:bg-[#f7f7f4] transition-colors disabled:opacity-50"
+          className="flex h-11 shrink-0 items-center gap-1.5 rounded border border-[#d8d8d2] px-3 text-xs transition-colors hover:border-[#aaa9a1] hover:bg-[#f7f7f4] disabled:opacity-50 sm:h-8"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           {saveMsg || 'Save'}
@@ -680,25 +692,25 @@ export default function WorkflowsPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {/* Zoom */}
-          <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="w-7 h-7 flex items-center justify-center border border-[#d8d8d2] rounded hover:bg-[#f7f7f4] transition-colors">
+          <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="flex h-11 w-11 items-center justify-center rounded border border-[#d8d8d2] transition-colors hover:bg-[#f7f7f4] sm:h-7 sm:w-7" aria-label="Zoom in">
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
           <span className="font-mono text-[10px] text-[#77756e] w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.max(0.35, z - 0.1))} className="w-7 h-7 flex items-center justify-center border border-[#d8d8d2] rounded hover:bg-[#f7f7f4] transition-colors">
+          <button onClick={() => setZoom(z => Math.max(0.35, z - 0.1))} className="flex h-11 w-11 items-center justify-center rounded border border-[#d8d8d2] transition-colors hover:bg-[#f7f7f4] sm:h-7 sm:w-7" aria-label="Zoom out">
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
 
           <div className="h-5 w-px bg-[#e5e5df]" />
 
           {runStatus === 'running' ? (
-            <button onClick={stopRun} className="flex items-center gap-1.5 h-8 px-4 text-xs bg-red-100 text-red-700 border border-red-200 rounded font-medium hover:bg-red-200 transition-colors">
+            <button onClick={stopRun} className="flex h-11 shrink-0 items-center gap-1.5 rounded border border-red-200 bg-red-100 px-4 text-xs font-medium text-red-700 transition-colors hover:bg-red-200 sm:h-8">
               <CircleStop className="w-3.5 h-3.5" /> Stop
             </button>
           ) : (
             <button
               onClick={runWorkflow}
               disabled={workflow.nodes.length === 0}
-              className="flex items-center gap-1.5 h-8 px-4 text-xs bg-[#f54e00] text-white rounded font-medium hover:bg-[#d94300] transition-colors disabled:opacity-40"
+              className="flex h-11 shrink-0 items-center gap-1.5 rounded bg-[#f54e00] px-4 text-xs font-medium text-white transition-colors hover:bg-[#d94300] disabled:opacity-40 sm:h-8"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               {savedId ? 'Run' : 'Save & Run'}
@@ -708,9 +720,27 @@ export default function WorkflowsPage() {
       </header>
 
       {/* ── Main layout ───────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <details className="shrink-0 border-b border-[#d8d8d2] bg-white xl:hidden">
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between px-3 text-xs font-semibold text-[#6c6a64] marker:content-none">
+          Workflow settings
+          <ChevronDown className="h-4 w-4" />
+        </summary>
+        <div className="grid gap-3 border-t border-[#ecece7] p-3 sm:grid-cols-2">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-[#77756e]">
+            Run prompt
+            <textarea value={workflow.prompt} onChange={e => setWorkflow(prev => ({ ...prev, prompt: e.target.value }))} className="mt-1 min-h-20 w-full min-w-0 resize-y rounded border border-[#d8d8d2] bg-[#fbfbf8] p-2 text-base font-normal normal-case tracking-normal outline-none focus:border-[#1877a8] sm:text-sm" placeholder="The initial prompt fed into the first agent…" />
+          </label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-[#77756e]">
+            Description
+            <input value={workflow.description} onChange={e => setWorkflow(prev => ({ ...prev, description: e.target.value }))} className="mt-1 h-11 w-full min-w-0 rounded border border-[#d8d8d2] bg-[#fbfbf8] px-2 text-base font-normal normal-case tracking-normal outline-none focus:border-[#1877a8] sm:text-sm" placeholder="Optional notes…" />
+          </label>
+          {selectedAgent && selectedNode ? <button type="button" onClick={() => deleteNode(selectedNode.id)} className="flex min-h-11 items-center gap-2 text-xs text-[#b53d3d]"><Trash2 className="h-4 w-4" />Remove selected {selectedAgent.name}</button> : null}
+        </div>
+      </details>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
         {/* ── Agent Palette ──────────────────────────────────────────── */}
-        <aside className="z-10 flex w-40 shrink-0 flex-col overflow-hidden border-r border-[#d8d8d2] bg-[#fbfbf8] sm:w-52">
+        <aside className="z-10 flex max-h-36 w-full shrink-0 flex-col overflow-hidden border-b border-[#d8d8d2] bg-[#fbfbf8] md:max-h-none md:w-52 md:border-b-0 md:border-r">
           <div className="p-3 border-b border-[#e5e5df]">
             <p className="font-mono text-[9px] font-bold uppercase tracking-widest text-[#77756e] mb-2">Agent Library</p>
             <div className="relative">
@@ -723,12 +753,12 @@ export default function WorkflowsPage() {
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden md:block md:overflow-x-hidden md:overflow-y-auto">
             {filteredAgents.map((agent, i) => (
               <button
                 key={agent.id}
                 onClick={() => addNode(agent)}
-                className="group w-full flex items-center gap-2 px-3 py-2 border-b border-[#ecece7] text-left hover:bg-white transition-colors"
+                className="group flex min-h-11 w-40 shrink-0 items-center gap-2 border-r border-[#ecece7] px-3 py-2 text-left transition-colors hover:bg-white md:w-full md:border-b md:border-r-0"
               >
                 <span className="w-7 h-7 shrink-0 flex items-center justify-center border border-[#deded8] bg-white" style={{ color: ACCENT_COLORS[i % ACCENT_COLORS.length] }}>
                   <AgentIcon iconName={agent.icon} className="w-3.5 h-3.5" />
@@ -741,22 +771,22 @@ export default function WorkflowsPage() {
               </button>
             ))}
           </div>
-          <div className="p-3 border-t border-[#e5e5df]">
+          <div className="hidden border-t border-[#e5e5df] p-3 md:block">
             <p className="text-[9px] text-[#aaa9a1] leading-4">Click to add a node. Drag output → input port to connect. Click an edge to delete it.</p>
           </div>
         </aside>
 
         {/* ── SVG Canvas ─────────────────────────────────────────────── */}
-        <main className="flex-1 relative overflow-hidden bg-[#f8faf9]">
+        <main className="relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-[#f8faf9]">
           <svg
             ref={svgRef}
             className="absolute inset-0 w-full h-full"
             style={{ cursor: panRef.current ? 'grabbing' : pendingSourceId ? 'crosshair' : 'default' }}
-            onMouseMove={onSvgMouseMove}
-            onMouseUp={onSvgMouseUp}
-            onMouseLeave={onSvgMouseUp}
+            onPointerMove={onSvgPointerMove}
+            onPointerUp={onSvgPointerUp}
+            onPointerLeave={onSvgPointerUp}
             onClick={onSvgClick}
-            onMouseDown={onSvgMouseDown}
+            onPointerDown={onSvgPointerDown}
             onWheel={onWheel}
           >
             {/* Grid background */}
@@ -928,7 +958,7 @@ export default function WorkflowsPage() {
               {runStatus === 'error' && <AlertCircle className="w-4 h-4 text-[#cf2d56]" />}
               <h2 className="text-sm font-semibold">{runStatus === 'error' ? 'Run Error' : 'Run Output'}</h2>
             </div>
-            <button onClick={() => { setRunOutput(''); setRunError(null) }} className="text-[#aaa9a1] hover:text-[#26251e] transition-colors">
+            <button onClick={() => { setRunOutput(''); setRunError(null) }} className="flex h-10 w-10 items-center justify-center text-[#aaa9a1] transition-colors hover:text-[#26251e]" aria-label="Close run output">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -940,13 +970,13 @@ export default function WorkflowsPage() {
 
       {/* ── Schedule panel ───────────────────────────────────────────────── */}
       {scheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setScheduleOpen(false)}>
-          <div className="bg-white border border-[#d8d8d2] rounded-lg shadow-2xl w-[520px] max-w-[90vw] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-3 backdrop-blur-sm" onClick={() => setScheduleOpen(false)}>
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[520px] flex-col overflow-hidden rounded-lg border border-[#d8d8d2] bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Workflow schedule" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#e5e5df]">
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#1f8a65]" /> Schedule — {workflow.name || 'Untitled Workflow'}
               </h3>
-              <button onClick={() => setScheduleOpen(false)} className="text-[#aaa9a1] hover:text-[#26251e] transition-colors">
+              <button onClick={() => setScheduleOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-md text-[#aaa9a1] transition-colors hover:bg-[#f7f7f4] hover:text-[#26251e]" aria-label="Close schedule">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1026,11 +1056,11 @@ export default function WorkflowsPage() {
       )}
 
       {/* ── Saved workflows list modal ──────────────────────────────────── */}      {showList && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowList(false)}>
-          <div className="bg-white border border-[#d8d8d2] rounded-lg shadow-2xl w-[480px] max-h-[60vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-3 backdrop-blur-sm" onClick={() => setShowList(false)}>
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[480px] flex-col overflow-hidden rounded-lg border border-[#d8d8d2] bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Saved workflows" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#e5e5df]">
               <h3 className="font-semibold text-sm">Saved Workflows</h3>
-              <button onClick={() => setShowList(false)} className="text-[#aaa9a1] hover:text-[#26251e]"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowList(false)} className="flex h-11 w-11 items-center justify-center rounded-md text-[#aaa9a1] hover:bg-[#f7f7f4] hover:text-[#26251e]" aria-label="Close saved workflows"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-[#f0f0ea]">
               {savedWorkflows.length === 0 && <p className="p-5 text-sm text-[#77756e]">No saved workflows yet.</p>}
@@ -1052,7 +1082,8 @@ export default function WorkflowsPage() {
                       const id = (wf as Workflow & { id?: string }).id
                       if (id) { await wfFetch(`/api/workflows/${id}`, { method: 'DELETE' }); loadList() }
                     }}
-                    className="text-[#aaa9a1] hover:text-[#cf2d56] transition-colors"
+                    className="flex h-10 w-10 items-center justify-center text-[#aaa9a1] transition-colors hover:text-[#cf2d56]"
+                    aria-label={`Delete ${wf.name}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

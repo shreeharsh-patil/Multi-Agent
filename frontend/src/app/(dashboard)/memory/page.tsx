@@ -162,18 +162,18 @@ export default function MemoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl pb-14 animate-fade-in">
+    <div className="mx-auto w-full min-w-0 max-w-6xl pb-14 animate-fade-in">
       <header className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-primary">
             <BrainCircuit className="h-4 w-4" /> Semantic memory
           </div>
-          <h1 className="text-3xl text-foreground">What your agents know about you</h1>
+          <h1 className="text-2xl text-foreground sm:text-3xl">What your agents know about you</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Review the durable preferences and context used to personalize future conversations.
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex w-full flex-wrap items-center gap-2 self-start sm:w-auto sm:self-auto">
           <Button variant="outline" onClick={consolidate} disabled={saving} className="gap-2">
             <Shrink className="h-4 w-4" /> Consolidate
           </Button>
@@ -332,8 +332,8 @@ export default function MemoryPage() {
       </div>
 
       {addOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-labelledby="add-memory-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setAddOpen(false) }}>
-          <div className="w-full max-w-lg rounded-[8px] border border-border bg-card p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="add-memory-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setAddOpen(false) }}>
+          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-[8px] border border-border bg-card p-4 shadow-xl sm:p-6">
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h2 id="add-memory-title" className="text-lg">Add a memory</h2>

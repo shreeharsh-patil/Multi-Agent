@@ -135,7 +135,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
   return (
     <>
       {/* ChatGPT Style Inline Image Card */}
-      <div className="relative group my-4 max-w-md overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm transition-all hover:shadow-md min-h-[220px]">
+      <div className="group relative my-4 min-h-[180px] w-full min-w-0 max-w-md overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm transition-all hover:shadow-md sm:min-h-[220px]">
         {/* Loading Skeleton Spinner */}
         {isLoading && !hasError && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/30 backdrop-blur-[2px] animate-pulse min-h-[220px]">
@@ -190,7 +190,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
 
         {/* Hover Overlay Actions */}
         {!hasError && !isLoading && (
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-3 pointer-events-none group-hover:pointer-events-auto">
+          <div className="absolute inset-0 hidden items-center justify-center gap-3 bg-black/40 opacity-0 transition-opacity duration-200 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto md:flex">
             <button
               type="button"
               onClick={() => setIsOpen(true)}
@@ -211,33 +211,53 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
             </button>
           </div>
         )}
+        {!hasError && !isLoading && (
+          <div className="flex items-center justify-end gap-2 border-t border-border bg-card p-2 md:hidden">
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-foreground hover:bg-secondary"
+            >
+              <Maximize2 className="h-4 w-4" /> Expand
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground"
+            >
+              <Download className="h-4 w-4" /> Download
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ChatGPT Style Fullscreen Lightbox Modal */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh items-center justify-center bg-black/85 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))] backdrop-blur-md animate-fade-in sm:p-4"
           onClick={() => setIsOpen(false)}
         >
           <div
-            className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center"
+            className="relative flex h-full max-h-full w-full max-w-4xl min-w-0 flex-col items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top Modal Toolbar */}
-            <div className="absolute top-[-44px] right-0 flex items-center gap-2">
+            <div className="absolute right-0 top-0 z-10 flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleDownload}
-                className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 cursor-pointer"
                 title="Download"
+                aria-label="Download image"
               >
                 <Download className="h-5 w-5" />
               </button>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 cursor-pointer"
                 title="Close"
+                aria-label="Close image preview"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -247,7 +267,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
             <img
               src={activeImageSrc}
               alt={alt}
-              className="max-h-[82vh] w-auto max-w-full rounded-xl object-contain shadow-2xl border border-white/10"
+              className="max-h-full w-auto max-w-full rounded-xl border border-white/10 object-contain shadow-2xl"
             />
           </div>
         </div>

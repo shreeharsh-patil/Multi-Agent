@@ -27,14 +27,16 @@ export function TopBar() {
   const { setMobileMenuOpen } = useSidebar()
 
   return (
-    <header className="lg:hidden flex items-center justify-between gap-4 px-4 sm:px-8 py-4 border-b bg-secondary/80 backdrop-blur-md border-border w-full relative">
+    <header className="relative flex min-h-14 w-full min-w-0 shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary/80 px-2.5 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-md sm:px-4 lg:hidden">
       {/* Mobile Menu Button */}
       <div className="lg:hidden flex items-center">
         <Button 
           variant="ghost" 
           size="icon" 
           onClick={() => setMobileMenuOpen(true)}
-          className="text-muted-foreground hover:text-foreground hover:bg-accent h-9 w-9"
+          className="h-11 w-11 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Open navigation menu"
+          title="Open navigation menu"
         >
           <Menu className="h-5 w-5 stroke-[1.5]" />
         </Button>
@@ -43,16 +45,16 @@ export function TopBar() {
 
 
       {/* Right Side Header Items */}
-      <div className="flex items-center gap-3 ml-auto">
+      <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
 
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-accent text-muted-foreground">
+        <Button variant="ghost" size="icon" className="relative hidden h-11 w-11 rounded-lg text-muted-foreground hover:bg-accent min-[360px]:inline-flex" aria-label="Notifications" title="Notifications">
           <Bell className="h-4.5 w-4.5 stroke-[1.5] text-muted-foreground" />
           <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-[#5db872]" />
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:opacity-90">
+            <Button variant="ghost" className="relative h-11 w-11 rounded-full p-1.5 hover:opacity-90" aria-label="Open account menu" title="Account menu">
               <Avatar className="h-8 w-8 border border-border">
                 <AvatarImage src={session?.user?.image ?? ''} alt={session?.user?.name ?? ''} />
                 <AvatarFallback className="bg-accent text-xs text-muted-foreground font-medium">
@@ -61,7 +63,7 @@ export function TopBar() {
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 mt-1 border-border bg-card" align="end">
+          <DropdownMenuContent className="mt-1 w-[min(14rem,calc(100vw-1rem))] border-border bg-card" align="end" sideOffset={4} collisionPadding={8}>
             <DropdownMenuLabel className="font-normal py-2 px-3">
               <div className="flex flex-col space-y-0.5">
                 <span className="text-sm font-medium text-foreground">{session?.user?.name}</span>

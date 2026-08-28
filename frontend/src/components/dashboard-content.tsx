@@ -11,10 +11,10 @@ export function DashboardContent({ children }: { children: React.ReactNode }) {
   return (
     <main
       className={cn(
-        'flex-1 bg-background',
+        'min-h-0 min-w-0 flex-1 bg-background',
         isFullCanvasPage
           ? 'flex flex-col overflow-hidden p-0'
-          : 'overflow-y-auto overflow-x-hidden p-3 sm:p-6 scrollbar-thin'
+          : 'overflow-y-auto p-3 sm:p-4 md:p-6 scrollbar-thin'
       )}
     >
       {children}

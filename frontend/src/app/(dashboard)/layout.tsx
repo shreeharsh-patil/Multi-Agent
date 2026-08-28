@@ -17,9 +17,9 @@ export default async function DashboardLayout({
     <SidebarProvider>
       <HealthPing />
       <CommandPalette />
-      <div className="flex h-screen overflow-hidden bg-background text-foreground font-sans">
+      <div className="flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh min-h-0 min-w-0 overflow-hidden bg-background text-foreground font-sans">
         <Sidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <TopBar />
           <DashboardContent>
             {children}

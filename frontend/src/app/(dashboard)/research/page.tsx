@@ -220,9 +220,9 @@ export default function ResearchPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in bg-[#faf9f5]">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 bg-[#faf9f5] animate-fade-in">
       <div className="space-y-1">
-        <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Research</h1>
+        <h1 className="font-sans text-2xl font-normal tracking-[-0.03em] text-[#26251e] sm:text-3xl">Research</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Internet research, source comparison, and report generation
         </p>
@@ -404,7 +404,8 @@ export default function ResearchPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity rounded-[8px] text-[#c64545] hover:bg-[#c64545]/10"
+                          className="h-10 w-10 rounded-[8px] text-[#c64545] opacity-100 transition-opacity hover:bg-[#c64545]/10 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                          aria-label={`Delete ${report.query}`}
                           onClick={(e) => handleDelete(report.id, e)}
                         >
                           <Trash2 className="h-4 w-4" />

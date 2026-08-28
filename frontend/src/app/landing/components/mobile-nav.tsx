@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 const NAV_LINKS = [
   { label: "Platform",     href: "#platform" },
@@ -22,13 +22,27 @@ export function MobileNav() {
 
   const close = () => setOpen(false)
 
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    window.addEventListener("keydown", onEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener("keydown", onEscape)
+    }
+  }, [open])
+
   return (
-    <div className="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+    <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex justify-center px-3 sm:px-4">
       <div className="pointer-events-auto w-full max-w-3xl">
 
         {/* Main bar */}
         <nav
-          className="flex items-center justify-between px-5 py-3 rounded-2xl border border-black/[0.06]"
+          className="flex min-h-14 min-w-0 items-center justify-between rounded-2xl border border-black/[0.06] px-4 py-2 sm:px-5 sm:py-3"
           style={NAV_STYLE}
         >
           <span className="font-pixel text-xs tracking-[0.25em] text-black/70">AGENTIC</span>
@@ -54,8 +68,10 @@ export function MobileNav() {
             {/* Burger — mobile only */}
             <button
               onClick={() => setOpen(v => !v)}
-              className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] rounded-lg hover:bg-black/[0.04] transition-colors"
+              className="flex h-11 w-11 flex-col items-center justify-center gap-[5px] rounded-lg transition-colors hover:bg-black/[0.04] md:hidden"
               aria-label={open ? "Close menu" : "Open menu"}
+              aria-expanded={open}
+              aria-controls="landing-mobile-menu"
             >
               <span
                 className="block h-px bg-black/60 transition-all duration-300 origin-center"
@@ -85,7 +101,8 @@ export function MobileNav() {
 
         {/* Mobile dropdown */}
         <div
-          className="md:hidden mt-2 overflow-hidden transition-all duration-300 ease-in-out"
+          id="landing-mobile-menu"
+          className="mt-2 max-h-[calc(100dvh-5rem)] overflow-y-auto transition-all duration-300 ease-in-out md:hidden"
           style={{ maxHeight: open ? "320px" : "0px", opacity: open ? 1 : 0 }}
         >
           <div
@@ -97,7 +114,7 @@ export function MobileNav() {
                 key={l.label}
                 href={l.href}
                 onClick={close}
-                className="px-4 py-3 text-sm text-black/60 hover:text-black hover:bg-black/[0.03] rounded-xl transition-colors tracking-wide"
+                className="flex min-h-11 items-center rounded-xl px-4 py-3 text-sm tracking-wide text-black/60 transition-colors hover:bg-black/[0.03] hover:text-black"
                 style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
               >
                 {l.label}

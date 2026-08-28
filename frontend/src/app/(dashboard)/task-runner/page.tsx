@@ -124,7 +124,7 @@ export default function TaskRunnerPage() {
   };
 
   return (
-    <div className="flex-1 p-6 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/40 pb-4">
         <div>
@@ -227,7 +227,7 @@ export default function TaskRunnerPage() {
 
       {/* Final Deliverable */}
       {finalOutput && (
-        <div className="bg-card border-2 border-primary/30 rounded-xl p-4 sm:p-6 shadow-lg space-y-4 max-w-full overflow-x-hidden">
+        <div className="min-w-0 max-w-full space-y-4 rounded-xl border-2 border-primary/30 bg-card p-4 shadow-lg sm:p-6">
           <div className="flex items-center gap-2 border-b pb-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
             <h2 className="text-lg font-bold text-foreground">Final Deliverable</h2>

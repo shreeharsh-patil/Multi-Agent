@@ -87,7 +87,12 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open) return
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus())
-    return () => window.cancelAnimationFrame(frame)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.body.style.overflow = previousOverflow
+    }
   }, [open])
 
   useEffect(() => {
@@ -166,7 +171,7 @@ export function CommandPalette() {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[10vh] sm:pt-[14vh]" role="presentation">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-[14vh]" role="presentation">
       <button
         type="button"
         aria-label="Close command palette"
@@ -177,7 +182,7 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Search workspace"
-        className="relative flex max-h-[min(620px,75vh)] w-full max-w-[640px] flex-col overflow-hidden rounded-[8px] border border-border bg-card shadow-2xl"
+        className="relative flex max-h-[min(620px,calc(100dvh-1.5rem))] w-full max-w-[640px] min-w-0 flex-col overflow-hidden rounded-[8px] border border-border bg-card shadow-2xl"
         onKeyDown={(event) => {
           if (event.key === 'Escape') setOpen(false)
           if (event.key === 'ArrowDown') {
@@ -204,7 +209,7 @@ export function CommandPalette() {
             aria-label="Search tools, chats, notes, and documents"
             aria-controls="command-palette-results"
             aria-activedescendant={visibleItems[activeIndex] ? `palette-item-${activeIndex}` : undefined}
-            className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-full min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground sm:text-sm"
           />
           <kbd className="hidden rounded-[4px] border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground sm:block">Esc</kbd>
         </div>

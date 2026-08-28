@@ -200,7 +200,7 @@ function uvLabel(uv: string | number) {
 function MiniMarkdown({ text }: { text: string }) {
   const lines = (text || '').split('\n')
   return (
-    <div className="space-y-1.5 text-xs sm:text-sm leading-relaxed">
+    <div className="min-w-0 max-w-full space-y-1.5 break-words text-xs leading-relaxed [overflow-wrap:anywhere] sm:text-sm">
       {lines.map((line, i) => {
         if (line.startsWith('### ')) return <h3 key={i} className="text-sm font-semibold text-foreground mt-3 mb-1">{line.slice(4)}</h3>
         if (line.startsWith('## ')) return <h2 key={i} className="text-base font-bold text-foreground mt-4 mb-1">{line.slice(3)}</h2>
@@ -220,8 +220,8 @@ function MiniMarkdown({ text }: { text: string }) {
           .replace(/'/g, '&#39;')
         const inline = escaped
           .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
-          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline font-medium">$1</a>')
-          .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-xs font-mono">$1</code>')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="break-all text-primary hover:underline font-medium">$1</a>')
+          .replace(/`([^`]+)`/g, '<code class="break-all bg-muted px-1 py-0.5 rounded text-xs font-mono">$1</code>')
         return (
           <p key={i} className="text-foreground/90"
             dangerouslySetInnerHTML={{ __html: inline || '\u00a0' }} />
@@ -444,7 +444,7 @@ export default function WeatherNewsPage() {
   const forecast = weather?.forecast ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6">
       {/* ── Page Header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div>
@@ -797,13 +797,13 @@ export default function WeatherNewsPage() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto space-y-4 max-h-[420px] pr-1">
               {messages.map(msg => (
-                <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex min-w-0 gap-2 sm:gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'assistant' && (
                     <div className="p-2 rounded-lg bg-primary/10 text-primary border border-primary/20 shrink-0 self-start">
                       <Sparkles className="h-4 w-4" />
                     </div>
                   )}
-                  <div className={`max-w-[85%] rounded-lg p-3 sm:p-4 text-xs sm:text-sm ${
+                  <div className={`min-w-0 max-w-[calc(100%_-_2.25rem)] rounded-lg p-3 text-xs sm:max-w-[85%] sm:p-4 sm:text-sm ${
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground font-medium'
                       : 'bg-secondary/60 border border-border text-foreground'
@@ -834,7 +834,7 @@ export default function WeatherNewsPage() {
             </div>
 
             {/* Chat input */}
-            <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <div className="flex min-w-0 items-center gap-2 border-t border-border pt-2">
               <Input
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}

@@ -2,7 +2,7 @@ import Link from "next/link"
 
 export default function DocsPage() {
   return (
-    <div className="bg-[#F5F4F0] text-[#111] min-h-screen font-sans antialiased">
+    <div className="min-h-screen min-h-[100svh] w-full min-w-0 bg-[#F5F4F0] font-sans text-[#111] antialiased supports-[height:100dvh]:min-h-dvh">
       {/* Simple top nav */}
       <div className="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
         <nav className="pointer-events-auto w-full max-w-6xl flex items-center justify-between px-5 py-3 rounded-2xl border border-black/[0.06] bg-[#F5F4F0]/30"
@@ -15,13 +15,13 @@ export default function DocsPage() {
         </nav>
       </div>
 
-      <div className="pt-24 px-6 md:px-12 lg:px-20 pb-20">
+      <div className="px-4 pb-16 pt-24 sm:px-6 sm:pb-20 md:px-12 lg:px-20">
         <div className="max-w-3xl mx-auto">
           <div className="mb-12">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-widest font-sans text-black/40 bg-black/[0.04]">
               DOCUMENTATION
             </span>
-            <h1 className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+            <h1 className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
               Getting Started
             </h1>
             <p className="mt-4 text-sm text-black/45 leading-relaxed">

@@ -361,12 +361,12 @@ export default function QuizPage() {
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100vh-112px)] gap-6 animate-fade-in">
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6 animate-fade-in lg:min-h-0 lg:flex-row">
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center justify-between mb-4">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Quiz</h1>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Quiz</h1>
             <p className="text-muted-foreground mt-1">
               Generate multiple-choice quizzes on any topic
             </p>
@@ -515,13 +515,13 @@ export default function QuizPage() {
 
             {/* Question card */}
             <Card className="flex-1">
-              <CardContent className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
+              <CardContent className="space-y-5 p-4 sm:space-y-6 sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <Badge variant="outline" className="text-xs gap-1">
                     <FileQuestion className="h-3 w-3" />
                     Question {currentIndex + 1} of {questions.length}
                   </Badge>
-                  <div className="flex gap-1">
+                  <div className="flex max-w-full flex-wrap gap-1">
                     {questions.map((_, i) => (
                       <button
                         key={i}
@@ -639,7 +639,7 @@ export default function QuizPage() {
                 )}
 
                 {/* Navigation */}
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
                   <Button
                     variant="outline"
                     onClick={goPrev}
@@ -680,27 +680,27 @@ export default function QuizPage() {
           <div className="space-y-6">
             {/* Score card */}
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background p-8 text-center">
+              <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background p-4 text-center sm:p-8">
                 <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-4">
                   <Trophy className="h-10 w-10 text-primary" />
                 </div>
-                <h2 className="text-3xl font-bold">{topic}</h2>
+                <h2 className="text-2xl font-bold sm:text-3xl">{topic}</h2>
                 <p className="text-muted-foreground mt-1 capitalize">{difficulty} · {questions.length} questions</p>
-                <div className="flex items-center justify-center gap-6 mt-6">
+                <div className="mt-6 flex items-center justify-center gap-2 sm:gap-6">
                   <div className="text-center">
-                    <p className={`text-4xl font-bold ${getScoreColor(percentage)}`}>{percentage}%</p>
+                    <p className={`text-2xl font-bold sm:text-4xl ${getScoreColor(percentage)}`}>{percentage}%</p>
                     <p className="text-sm text-muted-foreground mt-1">Score</p>
                   </div>
                   <div className="h-12 w-px bg-border" />
                   <div className="text-center">
-                    <p className={`text-4xl font-bold ${score >= questions.length / 2 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    <p className={`text-2xl font-bold sm:text-4xl ${score >= questions.length / 2 ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {score}/{questions.length}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">Correct</p>
                   </div>
                   <div className="h-12 w-px bg-border" />
                   <div className="text-center">
-                    <p className="text-4xl font-bold text-muted-foreground">
+                    <p className="text-2xl font-bold text-muted-foreground sm:text-4xl">
                       {questions.length - score}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">Incorrect</p>
@@ -759,7 +759,7 @@ export default function QuizPage() {
               ))}
             </div>
 
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-wrap justify-center gap-3">
               <Button variant="outline" className="gap-2" onClick={handleReset}>
                 <RefreshCw className="h-4 w-4" />
                 New Quiz
@@ -777,7 +777,7 @@ export default function QuizPage() {
       </div>
 
       {/* ── Sidebar: History & Stats ── */}
-      <div className="hidden lg:block w-80 space-y-4 shrink-0">
+      <div className="w-full shrink-0 space-y-4 lg:w-80">
         {/* Stats */}
         {completedCount > 0 && (
           <Card className="p-4">
@@ -832,7 +832,7 @@ export default function QuizPage() {
               <p className="text-xs mt-1">Create your first quiz above</p>
             </div>
           ) : (
-            <ScrollArea className="h-[calc(100vh-320px)] -mx-1">
+            <ScrollArea className="-mx-1 max-h-[28rem]">
               <div className="space-y-1 px-1">
                 {history.map((item) => {
                   const pct = item.total_questions > 0 && item.score !== null

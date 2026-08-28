@@ -103,9 +103,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 animate-fade-in pb-12">
+    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-8 pb-12 animate-fade-in">
       <div>
-        <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Settings</h1>
+        <h1 className="font-sans text-2xl font-normal tracking-[-0.03em] text-[#26251e] sm:text-3xl">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">Manage your account and platform preferences</p>
       </div>
 

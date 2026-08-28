@@ -138,8 +138,8 @@ export function MermaidWorkspace({ content, title = 'Visual study map' }: { cont
   }
 
   return (
-    <Card className="shadow-xs overflow-hidden">
-      <CardHeader className="p-5 pb-3 space-y-3">
+    <Card className="w-full min-w-0 max-w-full overflow-hidden shadow-xs">
+      <CardHeader className="space-y-3 p-3 pb-3 sm:p-5 sm:pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base font-sans font-normal tracking-[-0.02em]">
             <GitBranch className="h-4 w-4 text-primary" /> {title}
@@ -151,7 +151,7 @@ export function MermaidWorkspace({ content, title = 'Visual study map' }: { cont
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="relative min-w-[220px] flex-1">
+          <div className="relative w-full min-w-0 flex-1 sm:min-w-[220px]">
             <Sparkles className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-primary" />
             <Input value={topic} onChange={(e) => setTopic(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && generate()} placeholder="Generate a concept map for…" className="h-9 pl-9 text-xs" />
           </div>
@@ -160,11 +160,11 @@ export function MermaidWorkspace({ content, title = 'Visual study map' }: { cont
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="p-5 pt-0">
+      <CardContent className="min-w-0 p-3 pt-0 sm:p-5 sm:pt-0">
         {activeTab === 'code' ? (
           <div className="space-y-3">
             <Textarea value={code} onChange={(e) => setCode(e.target.value)} className="min-h-[260px] font-mono text-xs leading-relaxed bg-[#26251e] text-[#f7f7f4] border-0" spellCheck={false} />
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-muted-foreground">Edit Mermaid syntax, then switch to Preview.</p>
               <Button size="sm" variant="outline" onClick={() => setCode(code.trimStart().startsWith('mindmap') ? DEFAULT_FLOWCHART : DEFAULT_MINDMAP)} className="h-8 gap-1.5 text-xs"><Wand2 className="h-3.5 w-3.5" /> Use {isMindmap ? 'flowchart' : 'mind map'} template</Button>
             </div>

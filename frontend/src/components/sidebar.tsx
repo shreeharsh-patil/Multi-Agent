@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -72,6 +72,7 @@ export function Sidebar() {
   const { data: session } = useSession()
   const { isCollapsed, toggle, mobileMenuOpen, setMobileMenuOpen } = useSidebar()
   const collapsed = isCollapsed && !mobileMenuOpen
+  const mobileDrawerRef = useRef<HTMLElement>(null)
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [conversationSearch, setConversationSearch] = useState('')
@@ -156,6 +157,30 @@ export function Sidebar() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggle])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    document.body.style.overflow = 'hidden'
+    mobileDrawerRef.current?.focus()
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+    }
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleEscape)
+      previouslyFocused?.focus()
+    }
+  }, [mobileMenuOpen, setMobileMenuOpen])
+
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [pathname, setMobileMenuOpen])
 
   // Group conversations by date
   const { today, yesterday, previous7Days, older } = useMemo(() => {
@@ -267,7 +292,7 @@ export function Sidebar() {
                 key={conv.id}
                 onClick={() => { if (!isRenaming) { router.push(`/chat?id=${conv.id}`); setMobileMenuOpen(false); } }}
                 className={cn(
-                  "group relative flex items-center justify-between px-3 py-2 rounded-[8px] text-sm cursor-pointer transition-all duration-150",
+                  "group relative flex min-w-0 items-center justify-between px-3 py-2 rounded-[8px] text-sm cursor-pointer transition-all duration-150",
                   isActive
                     ? "bg-background text-foreground border border-border font-semibold shadow-xs"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -294,18 +319,20 @@ export function Sidebar() {
                     </span>
 
                     {/* Hover actions */}
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                    <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-100 transition-opacity lg:right-2 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
                       <button
                         onClick={(e) => startRename(conv.id, conv.title, e)}
-                        className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground cursor-pointer"
                         title="Rename"
+                        aria-label={`Rename ${conv.title}`}
                       >
                         <Pencil className="h-3 w-3 stroke-[1.5]" />
                       </button>
                       <button
                         onClick={(e) => handleDeleteConversation(conv.id, e)}
-                        className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground cursor-pointer"
                         title="Delete"
+                        aria-label={`Delete ${conv.title}`}
                       >
                         <Trash2 className="h-3 w-3 stroke-[1.5]" />
                       </button>
@@ -345,8 +372,9 @@ export function Sidebar() {
               </Link>
               <button
                 onClick={isMobile ? () => setMobileMenuOpen(false) : toggle}
-                className="p-1.5 hover:bg-card rounded-[8px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:bg-card hover:text-foreground cursor-pointer"
                 title={isMobile ? "Close menu" : "Collapse sidebar (Ctrl+B)"}
+                aria-label={isMobile ? "Close navigation menu" : "Collapse sidebar"}
               >
                 {isMobile ? (
                   <X className="h-4.5 w-4.5 stroke-[1.5]" />
@@ -562,8 +590,16 @@ export function Sidebar() {
           <div 
             className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-[280px] h-full bg-secondary border-r border-border flex flex-col animate-in slide-in-from-left duration-200 shadow-2xl lg:hidden overflow-hidden">
+          <aside
+            ref={mobileDrawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            tabIndex={-1}
+            className="fixed inset-y-0 left-0 z-50 flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh w-[min(85vw,280px)] flex-col overflow-hidden border-r border-border bg-secondary pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-2xl outline-none animate-in slide-in-from-left duration-200 lg:hidden"
+          >
             {renderSidebarContent(true)}
           </aside>
         </>
@@ -572,7 +608,7 @@ export function Sidebar() {
       {/* Desktop Sidebar (In-flow flex layout item strictly for lg+ screens) */}
       <aside 
         className={cn(
-          "hidden lg:flex flex-col border-r h-full bg-secondary border-border transition-all duration-350 ease-in-out shrink-0 overflow-hidden overflow-x-hidden relative z-40",
+          "relative z-40 hidden h-full shrink-0 flex-col overflow-hidden border-r border-border bg-secondary transition-all duration-350 ease-in-out lg:flex",
           collapsed ? "w-[68px]" : "w-[280px]"
         )}
       >

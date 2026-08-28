@@ -121,10 +121,7 @@ export function LiveAgentFeed() {
       background: "rgba(255,255,255,0.7)",
     }}>
       {/* Table header */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "80px 1fr 80px 70px",
-        padding: "8px 16px",
+      <div className="grid grid-cols-[52px_minmax(0,1fr)_50px_54px] gap-1 px-2 py-2 sm:grid-cols-[80px_minmax(0,1fr)_80px_70px] sm:gap-2 sm:px-4" style={{
         borderBottom: "1px solid rgba(0,0,0,0.06)",
         background: "rgba(0,0,0,0.03)",
       }}>
@@ -138,12 +135,9 @@ export function LiveAgentFeed() {
         {rows.map((row, i) => (
           <div
             key={row.key}
+            className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)_50px_54px] gap-1 px-2 py-2.5 sm:grid-cols-[80px_minmax(0,1fr)_80px_70px] sm:gap-2 sm:px-4"
             style={{
-              display: "grid",
-              gridTemplateColumns: "80px 1fr 80px 70px",
-              padding: "10px 16px",
               borderBottom: "1px solid rgba(0,0,0,0.04)",
-              gap: 8,
               alignItems: "center",
               animation: i === rows.length - 1 ? "rowSlideIn 0.4s cubic-bezier(0.16,1,0.3,1) both" : "none",
             }}

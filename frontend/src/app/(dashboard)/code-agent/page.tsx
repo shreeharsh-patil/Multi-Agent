@@ -155,7 +155,7 @@ export default function CodeAgentPage() {
   };
 
   return (
-    <div className="flex-1 p-6 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/40 pb-4">
         <div>
@@ -182,14 +182,14 @@ export default function CodeAgentPage() {
           disabled={isRunning}
         />
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
             <span>Sandboxed execution — writes, runs, and self-corrects</span>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               disabled={isRunning}
-              className="ml-1 h-8 px-2 rounded-lg border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-10 min-w-0 rounded-lg border border-border bg-background px-2 text-base text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:ml-1 sm:h-8 sm:text-xs"
             >
               {LANGUAGE_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>
@@ -328,7 +328,7 @@ export default function CodeAgentPage() {
 
       {/* Final explanation */}
       {finalExplanation && (
-        <div className="bg-card border-2 border-emerald-500/30 rounded-xl p-4 sm:p-6 shadow-lg space-y-4 max-w-full overflow-x-hidden">
+        <div className="w-full min-w-0 max-w-full space-y-4 rounded-xl border-2 border-emerald-500/30 bg-card p-4 shadow-lg sm:p-6">
           <div className="flex items-center gap-2 border-b pb-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
             <h2 className="text-lg font-bold text-foreground">Solution Summary</h2>

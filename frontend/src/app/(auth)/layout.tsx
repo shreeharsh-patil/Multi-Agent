@@ -4,7 +4,7 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="flex min-h-screen min-h-[100svh] items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-3 supports-[height:100dvh]:min-h-dvh sm:p-4">
       {children}
     </div>
   )

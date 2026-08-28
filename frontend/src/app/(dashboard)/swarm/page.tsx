@@ -114,7 +114,7 @@ export default function SwarmPage() {
   };
 
   return (
-    <div className="flex-1 p-6 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/40 pb-4">
         <div>
@@ -167,12 +167,12 @@ export default function SwarmPage() {
 
       {/* Live Collaboration Graph */}
       <div className="bg-card border rounded-xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Network className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-semibold text-foreground">Collaboration Flow</h2>
           </div>
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Idle
             </span>
@@ -293,7 +293,7 @@ export default function SwarmPage() {
 
       {/* Final Synthesized Consensus */}
       {consensus && (
-        <div className="bg-card border-2 border-primary/30 rounded-xl p-4 sm:p-6 shadow-lg space-y-4 max-w-full overflow-x-hidden">
+        <div className="w-full min-w-0 max-w-full space-y-4 rounded-xl border-2 border-primary/30 bg-card p-4 shadow-lg sm:p-6">
           <div className="flex items-center gap-2 border-b pb-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
             <h2 className="text-lg font-bold text-foreground">Synthesized Swarm Consensus Report</h2>

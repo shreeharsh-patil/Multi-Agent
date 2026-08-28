@@ -143,13 +143,13 @@ export function DevExSection() {
   const step = STEPS[active]!
 
   return (
-    <section id="devex" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
+    <section id="devex" className="border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-16">
+        <div className="mb-10 sm:mb-16">
           <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/[0.05] border border-black/[0.06] text-[10px] tracking-widest text-black/40 uppercase">
             Developer Experience
           </div>
-          <h2 className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+          <h2 className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
             Built for developers.<br />Loved by teams.
           </h2>
         </div>
@@ -196,7 +196,7 @@ export function DevExSection() {
 
           {/* Right — fixed-size code panel */}
           <div
-            className="lg:col-span-2 rounded-2xl border border-black/[0.06] p-8 flex flex-col"
+            className="flex min-w-0 flex-col rounded-2xl border border-black/[0.06] p-4 sm:p-6 lg:col-span-2 lg:p-8"
             style={{
               background: "rgba(255,255,255,0.7)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
@@ -230,9 +230,9 @@ export function DevExSection() {
             </div>
 
             {/* Code block — fixed height, content doesn't affect layout */}
-            <div className="flex-1 rounded-xl p-6 overflow-hidden" style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}>
+            <div className="min-w-0 flex-1 overflow-x-auto rounded-xl p-3 scrollbar-thin sm:p-6" style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}>
               <div
-                className="font-mono text-[12px] leading-6"
+                className="min-w-max font-mono text-[11px] leading-6 sm:text-[12px]"
                 style={{
                   opacity: visible ? 1 : 0,
                   filter: visible ? "blur(0px)" : "blur(6px)",

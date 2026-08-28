@@ -462,9 +462,9 @@ export default function ApiVaultPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-background text-foreground">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 bg-background text-foreground sm:space-y-8">
       {/* Top Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-600 p-6 md:p-8 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-600 p-4 text-white shadow-xl sm:p-6 md:p-8">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 space-y-3 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
@@ -979,8 +979,9 @@ export default function ApiVaultPage() {
                   <div className="relative rounded-xl border border-border bg-slate-950 p-3 text-slate-100 font-mono text-[11px] overflow-x-auto min-h-[140px]">
                     <button
                       onClick={copySnippet}
-                      className="absolute right-2 top-2 p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                      className="absolute right-2 top-2 flex h-10 w-10 items-center justify-center rounded-md bg-slate-800 text-slate-300 transition-colors hover:bg-slate-700"
                       title="Copy Snippet"
+                      aria-label="Copy generated code snippet"
                     >
                       {copiedSnippet ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>

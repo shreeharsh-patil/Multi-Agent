@@ -100,7 +100,7 @@ export function StackingAgentCards() {
 
                 {/* ── MOBILE: image top, fades out at bottom ── */}
                 {agent.img && (
-                  <div className="relative w-full h-52 pointer-events-none md:hidden">
+                  <div className="relative h-44 w-full pointer-events-none min-[390px]:h-52 md:hidden">
                     <img
                       src={agent.img}
                       alt={agent.label}
@@ -132,21 +132,21 @@ export function StackingAgentCards() {
 
                 {/* Text content */}
                 <div
-                  className="relative z-10 p-8"
+                  className="relative z-10 p-5 sm:p-6 md:p-8"
                   style={{ maxWidth: agent.img ? undefined : "100%" }}
                   // On desktop limit to left 60% so text doesn't overlap image
                 >
                   <div className="md:max-w-[60%]">
-                    <div className="flex items-start justify-between mb-6">
+                    <div className="mb-5 flex min-w-0 flex-wrap items-start justify-between gap-2 sm:mb-6">
                       <Tag>{agent.label}</Tag>
                     </div>
                     <h3 className="text-xl font-light mb-3">{agent.title}</h3>
                     <p className="text-sm text-black/45 leading-relaxed mb-8">{agent.desc}</p>
                   </div>
-                  <div className="flex gap-8 pt-6 border-t border-black/[0.06]">
+                  <div className="flex flex-wrap gap-x-6 gap-y-3 border-t border-black/[0.06] pt-5 sm:gap-8 sm:pt-6">
                     {agent.stats.map(s => (
                       <div key={s.l}>
-                        <div className="text-2xl font-light">{s.v}</div>
+                        <div className="text-xl font-light sm:text-2xl">{s.v}</div>
                         <div className="text-[11px] text-black/35 tracking-widest mt-0.5">{s.l}</div>
                       </div>
                     ))}

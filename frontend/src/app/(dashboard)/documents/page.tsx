@@ -238,15 +238,15 @@ export default function DocumentsPage() {
   const totalSize = documents.reduce((sum, d) => sum + d.fileSize, 0)
 
   return (
-    <div className="space-y-6 animate-fade-in bg-background">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 bg-background animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-sans font-normal tracking-[-0.03em] text-[#26251e]">Documents</h1>
+          <h1 className="font-sans text-2xl font-normal tracking-[-0.03em] text-[#26251e] sm:text-3xl">Documents</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {documents.length} document{documents.length !== 1 ? 's' : ''} · {formatBytes(totalSize)} total
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex w-full flex-wrap gap-3 sm:w-auto">
           <Button
             variant="outline"
             className="gap-2 shadow-sm"
@@ -332,7 +332,7 @@ export default function DocumentsPage() {
           <select 
             value={selectedWorkspace} 
             onChange={(e) => setSelectedWorkspace(e.target.value)} 
-            className="h-10 rounded-[8px] border border-border bg-card px-3 text-xs md:w-56 focus:outline-none focus:border-primary text-[#26251e] shadow-sm cursor-pointer"
+            className="h-10 w-full min-w-0 rounded-[8px] border border-border bg-card px-3 text-base text-[#26251e] shadow-sm focus:border-primary focus:outline-none cursor-pointer sm:text-xs md:w-56"
           >
             <option value="all">All workspaces</option>
             <option value="unfiled">Unfiled documents</option>
@@ -342,13 +342,13 @@ export default function DocumentsPage() {
               </option>
             ))}
           </select>
-          <div className="flex gap-2">
+          <div className="flex w-full min-w-0 flex-wrap gap-2 md:w-auto">
             <input 
               value={newWorkspaceName} 
               onChange={(e) => setNewWorkspaceName(e.target.value)} 
               onKeyDown={(e) => e.key === 'Enter' && createWorkspace()} 
               placeholder="New scope..." 
-              className="h-10 w-36 rounded-[8px] border border-border bg-card px-3 text-xs focus:outline-none focus:border-primary text-[#26251e] placeholder:text-muted-foreground shadow-sm" 
+              className="h-10 min-w-0 flex-1 rounded-[8px] border border-border bg-card px-3 text-base text-[#26251e] shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none sm:min-w-36 sm:text-xs"
             />
             <Button variant="outline" size="sm" onClick={createWorkspace} disabled={creatingWorkspace || !newWorkspaceName.trim()} className="gap-1 h-10 px-3 text-xs rounded-[8px]">
               <Plus className="h-3.5 w-3.5" /> Create
@@ -408,16 +408,16 @@ export default function DocumentsPage() {
                     key={doc.id}
                     id={`document-${doc.id}`}
                     className={cn(
-                      'flex items-center gap-4 p-3 rounded-[8px] border bg-secondary hover:bg-secondary/70 transition-colors group shadow-xs',
+                      'group flex min-w-0 flex-col items-stretch gap-3 rounded-[8px] border bg-secondary p-3 shadow-xs transition-colors hover:bg-secondary/70 sm:flex-row sm:items-center sm:gap-4',
                       highlightedDocumentId === doc.id ? 'border-primary ring-2 ring-primary/15' : 'border-border',
                     )}
                   >
-                    <div className="p-2 rounded-[8px] bg-card text-primary border border-border">
+                    <div className="hidden rounded-[8px] border border-border bg-card p-2 text-primary sm:block">
                       <FileText className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => downloadSecureFile(api.documents.downloadUrl(doc.id), doc.fileName)}>
                       <p className="font-medium text-sm text-foreground truncate">{doc.fileName}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span className="font-mono">{doc.fileType.toUpperCase()}</span>
                         <span>{formatBytes(doc.fileSize)}</span>
                         <span>{formatDate(doc.createdAt)}</span>
@@ -426,7 +426,7 @@ export default function DocumentsPage() {
                       </div>
                     </div>
                     <Badge
-                      className="rounded-full px-2.5 py-0.5 border"
+                      className="w-fit shrink-0 rounded-full border px-2.5 py-0.5"
                       variant={
                         doc.status === 'ready'
                           ? 'success'
@@ -438,6 +438,7 @@ export default function DocumentsPage() {
                       {doc.status === 'processing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                       {doc.status}
                     </Badge>
+                    <div className="flex min-w-0 flex-wrap items-center gap-1 sm:contents">
                     {doc.driveWebViewLink && (
                       <a
                         href={doc.driveWebViewLink}
@@ -462,7 +463,8 @@ export default function DocumentsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => downloadSecureFile(api.documents.downloadUrl(doc.id), doc.fileName)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-secondary/70 h-8 w-8 rounded-[8px]"
+                      className="h-10 w-10 rounded-[8px] text-muted-foreground opacity-100 transition-opacity hover:bg-secondary/70 hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      aria-label={`Download ${doc.fileName}`}
                       title="Download File"
                     >
                       <FileText className="h-4 w-4" />
@@ -471,10 +473,12 @@ export default function DocumentsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDelete(doc.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[#c64545] hover:bg-[#c64545]/10 h-8 w-8 rounded-[8px]"
+                      className="h-10 w-10 rounded-[8px] text-[#c64545] opacity-100 transition-opacity hover:bg-[#c64545]/10 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      aria-label={`Delete ${doc.fileName}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    </div>
                   </div>
                 ))}
               </div>

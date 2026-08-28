@@ -106,20 +106,20 @@ export function CodeSandbox({ html = '', css = '', js = '', fullHtml, className 
   }, [html, css, js, fullHtml])
 
   const containerClass = fullscreen
-    ? 'fixed inset-0 z-50 bg-background p-4'
-    : `rounded-lg border overflow-hidden ${className}`
+    ? 'fixed inset-0 z-50 flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh min-w-0 flex-col bg-background p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] sm:p-4'
+    : `flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border ${className}`
 
-  const iframeHeight = fullscreen ? 'calc(100vh - 80px)' : '400px'
+  const iframeHeight = fullscreen ? undefined : '400px'
 
   return (
     <div className={containerClass}>
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b rounded-t-lg">
+      <div className="flex min-h-11 shrink-0 items-center justify-between border-b bg-muted/50 px-2 py-1.5 sm:px-3 sm:py-2">
         <span className="text-xs font-medium text-muted-foreground">Live Preview</span>
         <div className="flex gap-1">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setKey(k => k + 1)} title="Refresh">
+          <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-8 sm:w-8" onClick={() => setKey(k => k + 1)} title="Refresh" aria-label="Refresh preview">
             <RefreshCw className="h-3 w-3" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setFullscreen(!fullscreen)} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+          <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-8 sm:w-8" onClick={() => setFullscreen(!fullscreen)} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'} aria-label={fullscreen ? 'Exit fullscreen preview' : 'Open fullscreen preview'}>
             {fullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
           </Button>
         </div>
@@ -128,7 +128,7 @@ export function CodeSandbox({ html = '', css = '', js = '', fullHtml, className 
         key={key}
         srcDoc={srcdoc}
         sandbox="allow-scripts"
-        className="w-full bg-white"
+        className="min-h-[260px] w-full min-w-0 flex-1 bg-white"
         style={{ height: iframeHeight, border: 'none' }}
         title="Code Preview"
       />

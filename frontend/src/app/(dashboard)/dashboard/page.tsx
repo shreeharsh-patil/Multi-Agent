@@ -212,7 +212,7 @@ export default function DashboardPage() {
   }, [captureContent, captureTags, captureTitle, capturing, resetCapture])
 
   return (
-    <div className="space-y-12 max-w-7xl mx-auto py-6 px-4 animate-fade-in bg-[#f7f7f4]">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-8 bg-[#f7f7f4] py-2 animate-fade-in sm:space-y-12 sm:py-4">
       {/* Header section with generous spacing */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-3">
@@ -493,9 +493,9 @@ export default function DashboardPage() {
       </div>
 
       {captureOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" role="presentation">
           <button type="button" className="absolute inset-0 bg-[#26251e]/35 backdrop-blur-[2px]" onClick={resetCapture} aria-label="Close note capture" />
-          <section role="dialog" aria-modal="true" aria-labelledby="capture-note-title" className="relative w-full max-w-lg rounded-[8px] border border-border bg-card shadow-2xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="capture-note-title" className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-[8px] border border-border bg-card shadow-2xl">
             <div className="flex items-start justify-between border-b border-border px-5 py-4">
               <div>
                 <h2 id="capture-note-title" className="text-sm font-semibold text-foreground">Capture a note</h2>

@@ -67,11 +67,11 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="bg-[#F5F4F0] text-[#111] min-h-screen font-sans antialiased landing-page">
+    <div className="landing-page min-h-screen w-full min-w-0 bg-[#F5F4F0] font-sans text-[#111] antialiased">
       <IntroAnimation onDone={handleIntroDone} />
       <MobileNav />
 
-      <section className="relative h-screen overflow-hidden">
+      <section className="relative h-[100svh] min-h-[700px] overflow-hidden supports-[height:100dvh]:h-dvh">
         <video
           autoPlay loop muted playsInline
           className="absolute inset-0 w-full h-full object-cover z-0"
@@ -89,12 +89,11 @@ export default function LandingPage() {
 
         <div className="h-20" />
 
-        <div className="absolute inset-x-0 z-30 flex flex-col justify-start px-6 md:px-12 pb-8 max-w-3xl"
-          style={{ top: '140px' }}
+        <div className="absolute inset-x-0 top-24 z-30 flex max-w-3xl flex-col justify-start px-4 pb-8 sm:top-32 sm:px-6 md:top-[140px] md:px-12"
         >
 
           <h1
-            className="text-4xl sm:text-5xl md:text-7xl font-light text-[#111] leading-[1.0] tracking-tight mb-3 sm:mb-5"
+            className="mb-3 text-3xl font-light leading-[1.02] tracking-tight text-[#111] min-[360px]:text-4xl sm:mb-5 sm:text-5xl md:text-7xl"
             style={{
               fontFamily: '"IBM Plex Sans", sans-serif',
               opacity: heroReady ? 1 : 0,
@@ -106,7 +105,7 @@ export default function LandingPage() {
             AI-powered<br />productivity assistant
           </h1>
 
-          <p className="text-base text-black/55 leading-relaxed max-w-md mb-6"
+          <p className="mb-5 max-w-md text-sm leading-relaxed text-black/55 sm:mb-6 sm:text-base"
             style={{
               opacity: heroReady ? 1 : 0,
               filter: heroReady ? "blur(0px)" : "blur(16px)",
@@ -138,7 +137,7 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div className="flex gap-8 sm:gap-12">
+          <div className="grid w-full max-w-xl grid-cols-3 gap-2 sm:gap-8">
             {[
               { value: "25+", label: "Domain Specialists" },
               { value: "4", label: "Google Workspace Apps" },
@@ -153,8 +152,8 @@ export default function LandingPage() {
                   transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${120 + i * 80}ms, filter 0.8s cubic-bezier(0.16,1,0.3,1) ${120 + i * 80}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${120 + i * 80}ms`,
                 }}
               >
-                <div className="text-3xl sm:text-4xl text-[#111] font-light tracking-tight">{stat.value}</div>
-                <div className="text-xs text-black/40 tracking-widest uppercase mt-1">{stat.label}</div>
+                <div className="text-2xl font-light tracking-tight text-[#111] sm:text-4xl">{stat.value}</div>
+                <div className="mt-1 text-[9px] uppercase tracking-wider text-black/40 sm:text-xs sm:tracking-widest">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -175,18 +174,18 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="platform" className="py-32 px-6 md:px-12 lg:px-20">
+      <section id="platform" className="px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-16">
             <PixelIcon type="platform" size={40} />
             <div className="mt-4"><Tag>PLATFORM</Tag></div>
-            <RevealText className="mt-5 text-4xl md:text-5xl lg:text-6xl font-light tracking-tight leading-[1.05]">
+            <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
               {"Everything you need\nto work with agents."}
             </RevealText>
           </div>
 
           <div className="grid grid-cols-12 grid-rows-auto gap-3" onMouseMove={handleMouse}>
-            <BentoCard className="col-span-12 p-8 min-h-[200px] flex flex-col justify-between relative overflow-hidden" delay={0}>
+            <BentoCard className="relative col-span-12 flex min-h-[200px] flex-col justify-between overflow-hidden p-5 sm:p-8" delay={0}>
               <img src="/images/arc.png" alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: "center 70%" }} />
               <div className="absolute inset-0" style={{ maskImage: "linear-gradient(to bottom, transparent 45%, black 100%)", WebkitMaskImage: "linear-gradient(to bottom, transparent 45%, black 100%)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }} />
               <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 35%, rgba(245,244,240,0.3) 50%, rgba(245,244,240,0.75) 65%, rgba(245,244,240,0.95) 80%, rgb(245,244,240) 100%)" }} />
@@ -199,7 +198,7 @@ export default function LandingPage() {
               </div>
             </BentoCard>
 
-            <BentoCard className="col-span-12 md:col-span-4 p-8 min-h-[200px]" delay={120}>
+            <BentoCard className="col-span-12 min-h-[200px] p-5 sm:p-8 md:col-span-4" delay={120}>
               <div className="w-10 h-10 rounded-xl border border-black/10 flex items-center justify-center mb-5">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
               </div>
@@ -207,7 +206,7 @@ export default function LandingPage() {
               <p className="text-sm text-black/45 leading-relaxed">Upload PDFs, documents, and images. Query your knowledge base with AI-powered search and get cited answers from your own data.</p>
             </BentoCard>
 
-            <BentoCard className="col-span-12 md:col-span-4 p-8 min-h-[200px]" delay={160}>
+            <BentoCard className="col-span-12 min-h-[200px] p-5 sm:p-8 md:col-span-4" delay={160}>
               <div className="w-10 h-10 rounded-xl border border-black/10 flex items-center justify-center mb-5">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 10h8M8 14h5"/></svg>
               </div>
@@ -215,7 +214,7 @@ export default function LandingPage() {
               <p className="text-sm text-black/45 leading-relaxed">Generate notes, flashcards, and revision materials. Create practice quizzes and exams with answer keys and explanations.</p>
             </BentoCard>
 
-            <BentoCard className="col-span-12 md:col-span-4 p-8 min-h-[200px]" delay={200}>
+            <BentoCard className="col-span-12 min-h-[200px] p-5 sm:p-8 md:col-span-4" delay={200}>
               <div className="w-10 h-10 rounded-xl border border-black/10 flex items-center justify-center mb-5">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               </div>
@@ -226,13 +225,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="agents" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
+      <section id="agents" className="border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-16">
+          <div className="mb-10 flex flex-col gap-8 sm:mb-16 md:flex-row md:items-end md:justify-between">
             <div>
               <PixelIcon type="agents" size={40} />
               <div className="mt-4"><Tag>AGENT TYPES</Tag></div>
-              <RevealText className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+              <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
                 {"Specialized agents\nfor every task."}
               </RevealText>
             </div>
@@ -242,12 +241,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="workflow" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06] overflow-hidden">
+      <section id="workflow" className="overflow-hidden border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-16">
             <PixelIcon type="workflow" size={40} />
             <div className="mt-4"><Tag>WORKFLOW</Tag></div>
-            <RevealText className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+            <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
               {"From curiosity to answers\nin four steps."}
             </RevealText>
           </div>
@@ -274,13 +273,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="integrations" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
+      <section id="integrations" className="border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-16">
+          <div className="mb-10 flex flex-col gap-8 sm:mb-16 md:flex-row md:items-end md:justify-between">
             <div>
               <PixelIcon type="integrations" size={40} />
               <div className="mt-4"><Tag>INTEGRATIONS</Tag></div>
-              <RevealText className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+              <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
               {"Connect your tools.\nExtend your agents."}
             </RevealText>
             </div>
@@ -315,12 +314,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="security" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
+      <section id="security" className="border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-16">
             <PixelIcon type="platform" size={40} />
             <div className="mt-4"><Tag>SECURITY</Tag></div>
-            <RevealText className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+            <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
               {"Enterprise-grade\nfrom day one."}
             </RevealText>
           </div>
@@ -408,13 +407,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="live" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
+      <section id="live" className="border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-20">
             <div>
               <PixelIcon type="agents" size={40} />
               <div className="mt-4"><Tag>LIVE RIGHT NOW</Tag></div>
-              <RevealText className="mt-5 text-4xl md:text-5xl lg:text-6xl font-light tracking-tight leading-[1.05]">
+              <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
                 {"Agents helping you\nright now, in real time."}
               </RevealText>
               <p className="mt-6 text-base text-black/40 leading-relaxed max-w-sm">Our platform processes thousands of queries daily — from document searches to quiz generations to web research tasks.</p>
@@ -430,12 +429,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="pricing" className="py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06]">
+      <section id="pricing" className="border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16 flex flex-col items-center">
+          <div className="mb-10 flex flex-col items-center text-center sm:mb-16">
             <PixelIcon type="pricing" size={40} />
             <div className="mt-4"><Tag>PRICING</Tag></div>
-            <RevealText className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+            <RevealText className="mt-5 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl">
               {"Start free. Scale as you go."}
             </RevealText>
           </div>
@@ -446,7 +445,7 @@ export default function LandingPage() {
               { name: "Pro", price: "$19", period: "/mo", sub: "For power users", features: ["Unlimited queries", "Custom agents", "Google Drive sync", "Priority support", "Advanced RAG", "Study tools"], highlight: true, delay: 80 },
               { name: "Team", price: "$49", period: "/mo", sub: "For teams & classrooms", features: ["Everything in Pro", "Team workspaces", "Shared knowledge bases", "Admin dashboard", "Usage analytics", "Dedicated support"], delay: 140 },
             ].map((plan) => (
-              <BentoCard key={plan.name} className={`p-8 flex flex-col ${plan.highlight ? "border-black/20 bg-[#F0EEE8]" : ""}`} delay={plan.delay}>
+              <BentoCard key={plan.name} className={`flex flex-col p-5 sm:p-8 ${plan.highlight ? "border-black/20 bg-[#F0EEE8]" : ""}`} delay={plan.delay}>
                 <div className="mb-8">
                   <div className="font-pixel text-[11px] tracking-widest text-black/40 mb-4">{plan.name}</div>
                   <div className="flex items-baseline gap-1 mb-1">
@@ -475,12 +474,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="relative py-32 px-6 md:px-12 lg:px-20 border-t border-black/[0.06] overflow-hidden">
+      <section className="relative overflow-hidden border-t border-black/[0.06] px-4 py-20 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
         <img src="/images/footer.png" alt="" aria-hidden="true" className="absolute bottom-0 left-0 w-full object-cover object-bottom pointer-events-none select-none" style={{ opacity: 0.85 }} />
         <div className="absolute inset-0 pointer-events-none" style={{ maskImage: "linear-gradient(to top, transparent 0%, black 55%)", WebkitMaskImage: "linear-gradient(to top, transparent 0%, black 55%)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)" }} />
         <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to top, rgb(245,244,240) 0%, rgba(245,244,240,0.92) 18%, rgba(245,244,240,0.55) 35%, transparent 55%)" }} />
         <div className="relative z-10 max-w-2xl mx-auto text-center">
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-light tracking-tight leading-[1.05] mb-6">Start working with<br />AI agents today.</h2>
+          <h2 className="mb-6 text-3xl font-light leading-[1.05] tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">Start working with<br />AI agents today.</h2>
           <p className="text-sm text-black/45 leading-relaxed mb-10">Join users leveraging AI agents for research, learning, and productivity.</p>
           {!submitted ? (
             <form onSubmit={e => { e.preventDefault(); if (email) setSubmitted(true) }} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">

@@ -94,6 +94,23 @@ export default function AgentsPage() {
   })
 
   useEffect(() => {
+    if (!testFor && !builderOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTestFor(null)
+        setBuilderOpen(false)
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [builderOpen, testFor])
+
+  useEffect(() => {
     let mounted = true
     const fetchAgents = async () => {
       setLoading(true)
@@ -171,7 +188,7 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-8 max-w-7xl">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 sm:space-y-8">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
@@ -180,19 +197,19 @@ export default function AgentsPage() {
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">100 Specialized AI Agents</h1>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">100 Specialized AI Agents</h1>
               <p className="text-muted-foreground text-sm mt-1">
                 Executive Boss Agent Orchestrator with capability-based routing across 10 functional departments
               </p>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
           <Badge variant="outline" className="px-3 py-1 text-xs border-primary/30 text-primary bg-primary/5">
             <CheckCircle className="w-3.5 h-3.5 mr-1 text-emerald-500" />
             {agents.length} Agents Active
           </Badge>
-          <Button onClick={() => setBuilderOpen(true)} className="gap-2 shadow-sm">
+          <Button onClick={() => setBuilderOpen(true)} className="w-full gap-2 shadow-sm sm:w-auto">
             <Plus className="w-4 h-4" /> Create Custom Agent
           </Button>
         </div>
@@ -340,11 +357,12 @@ export default function AgentsPage() {
 
       {/* Single Agent Test Playground Modal */}
       {testFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-xl p-6 space-y-4 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
+          <div className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-xl space-y-4 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6">
             <button
               onClick={() => setTestFor(null)}
-              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+              className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground sm:right-3 sm:top-3"
+              aria-label="Close agent test"
             >
               <X className="w-5 h-5" />
             </button>
@@ -392,11 +410,12 @@ export default function AgentsPage() {
 
       {/* Create Custom Agent Modal */}
       {builderOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
+          <div className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md space-y-4 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6">
             <button
               onClick={() => setBuilderOpen(false)}
-              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+              className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground sm:right-3 sm:top-3"
+              aria-label="Close custom agent form"
             >
               <X className="w-5 h-5" />
             </button>

@@ -130,10 +130,10 @@ export default function KnowledgeBasePage() {
     : null
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 animate-fade-in">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Knowledge Base</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Knowledge Base</h1>
           <p className="text-muted-foreground mt-1">
             Search and query your document knowledge
           </p>
@@ -340,7 +340,7 @@ export default function KnowledgeBasePage() {
                         </button>
                         <button
                           onClick={() => deleteHistoryItem(h.id)}
-                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                           aria-label="Delete search"
                         >
                           <X className="h-3.5 w-3.5" />

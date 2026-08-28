@@ -4,14 +4,14 @@ import React from 'react'
 
 export default function DashboardLoading() {
   return (
-    <div className="space-y-6 animate-pulse p-6 max-w-7xl mx-auto w-full">
+    <div className="mx-auto w-full min-w-0 max-w-7xl animate-pulse space-y-5 sm:space-y-6">
       {/* Header Skeleton */}
-      <div className="flex items-center justify-between border-b border-border/40 pb-4">
-        <div className="space-y-2">
-          <div className="h-7 w-48 bg-muted/60 rounded-lg" />
-          <div className="h-4 w-72 bg-muted/40 rounded-md" />
+      <div className="flex flex-col gap-4 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="h-7 w-40 max-w-full bg-muted/60 rounded-lg sm:w-48" />
+          <div className="h-4 w-60 max-w-full bg-muted/40 rounded-md sm:w-72" />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <div className="h-9 w-24 bg-muted/50 rounded-lg" />
           <div className="h-9 w-28 bg-muted/50 rounded-lg" />
         </div>
