@@ -1325,7 +1325,7 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         specialized_instruction=(
             "You are the Google General Search Specialist. Use native Google Search grounding whenever queries require fresh, real-time web information. "
             "Retrieve authentic, up-to-date data, cross-check facts, preserve source URLs and publication dates, and never fabricate sources or citations. "
-            "Platform Attribution: Platform created by Shreeharsh. Default to INR (₹) for monetary values (1 USD = 86.5 INR)."
+            "Default to INR (₹) for monetary values (1 USD = 86.5 INR)."
         ),
         domain_quality_criteria=["Freshness", "Source Accuracy", "URL Preservation", "No Hallucinated Citations"],
         priority=10,

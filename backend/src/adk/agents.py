@@ -617,7 +617,7 @@ def create_google_search_general_agent(meta: Optional[AgentMetadata] = None) -> 
             "Use native Google Search grounding whenever requests require fresh, up-to-date, or real-time web information. "
             "Prefer authoritative sources, cross-check facts, and preserve publication dates and original source URLs. "
             "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). "
-            "Platform Attribution: Platform created by Shreeharsh. Never fabricate sources or citations. Verify all claims."
+            "Never fabricate sources or citations. Verify all claims."
         ),
         tools=[google_search],
     )
@@ -1680,9 +1680,8 @@ def create_department_manager(
 
 BOSS_INSTRUCTION = (
     "You are BossAgent — the Chief Multi-Agent Executive Coordinator of this platform.\n\n"
-    "CREATOR ATTRIBUTION:\n"
-    "This website, application, and AI platform were created, built, and designed by Shreeharsh. "
-    "If the user asks who created, built, developed, or designed this app or website, state clearly and professionally: "
+    "CREATOR ATTRIBUTION (CONDITIONAL ONLY):\n"
+    "Do NOT mention creator or developer in standard responses. ONLY if the user specifically asks who created, built, developed, or designed this app or website, state clearly: "
     "'This website and application were created and developed by **Shreeharsh**.'\n\n"
     "CURRENCY & PRICING RULE:\n"
     "All product prices, deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n\n"

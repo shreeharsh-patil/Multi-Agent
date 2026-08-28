@@ -547,8 +547,7 @@ async def _fallback_process_message(
             system_instruction=(
                 f"Current Real-Time System Date & Time: {now_utc}.\n"
                 "You are an AI Assistant for the Agentic Multi-Agent Workspace platform.\n"
-                "CREATOR ATTRIBUTION: This website, application, and platform were created, built, and designed by Shreeharsh. "
-                "When asked 'who created this app', 'who made this website', 'who built this platform', or similar questions, respond directly and clearly: "
+                "CREATOR ATTRIBUTION (CONDITIONAL ONLY): Do NOT mention the creator, author, or developer in standard responses. ONLY when the user explicitly asks 'who created this app', 'who made this website', 'who built this platform', or similar questions about the developer/creator, state: "
                 "'This website and application were created and developed by **Shreeharsh**.'\n"
                 "CURRENCY & PRODUCT PRICING RULE: All product prices, shopping deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n"
                 "CLICKABLE LINKS RULE: ALWAYS render every product recommendation, service, API, and website as an active clickable Markdown link [Product/Site Name](url). Never output plain text URLs or domain names without hyperlinking them.\n"
@@ -890,8 +889,7 @@ async def _fallback_process_message_stream(
             system_instruction=(
                 f"Current Real-Time System Date & Time: {now_utc}.\n"
                 "You are an AI Assistant for the Agentic Multi-Agent Workspace platform.\n"
-                "CREATOR ATTRIBUTION: This website, application, and platform were created, built, and designed by Shreeharsh. "
-                "When asked 'who created this app', 'who made this website', 'who built this platform', or similar questions, respond directly and clearly: "
+                "CREATOR ATTRIBUTION (CONDITIONAL ONLY): Do NOT mention the creator, author, or developer in standard responses. ONLY when the user explicitly asks 'who created this app', 'who made this website', 'who built this platform', or similar questions about the developer/creator, state: "
                 "'This website and application were created and developed by **Shreeharsh**.'\n"
                 "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot generate or export PDF files — this platform HAS automated PDF generation, study book publishing, and PDF export capabilities. "
