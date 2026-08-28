@@ -606,6 +606,7 @@ async def process_message_stream(
 
         accumulated_content = ""
         current_agent = "orchestrator"
+        emitted_stages: set[str] = set()
 
         yield {"event": "start", "data": {"conversation_id": conversation_id}}
 
@@ -625,6 +626,41 @@ async def process_message_stream(
             if agent_id != current_agent:
                 current_agent = agent_id
                 yield {"event": "agent", "data": {"agent_id": agent_id}}
+
+            # High-level ADK progress events (Phase 13)
+            node_lower = str(agent_id).lower()
+
+            if any(k in node_lower for k in ["planner", "intent", "search_planner"]) and "search_started" not in emitted_stages:
+                emitted_stages.add("search_started")
+                yield {"event": "search_started", "data": {"query": message, "message": "Searching the web..."}}
+
+            if any(k in node_lower for k in ["search_planner", "planner"]) and "search_planned" not in emitted_stages:
+                emitted_stages.add("search_planned")
+                yield {"event": "search_planned", "data": {"message": "Planned targeted searches"}}
+
+            if any(k in node_lower for k in ["google_search", "google-search", "search_general", "news_researcher", "technology"]) and "searching" not in emitted_stages:
+                emitted_stages.add("searching")
+                yield {"event": "searching", "data": {"message": "Searching authoritative sources..."}}
+                yield {"event": "sources_found", "data": {"message": "Found candidate sources"}}
+
+            if any(k in node_lower for k in ["url_reader", "url-reader", "ranker", "result_ranker", "search_result_ranker"]) and "reading_sources" not in emitted_stages:
+                emitted_stages.add("reading_sources")
+                yield {"event": "reading_sources", "data": {"message": "Reading sources..."}}
+                yield {"event": "source_verified", "data": {"message": "Verified sources"}}
+
+            if any(k in node_lower for k in ["fact_checker", "verifier", "citation_auditor", "freshness_checker", "contradiction"]) and "fact_check_started" not in emitted_stages:
+                emitted_stages.add("fact_check_started")
+                yield {"event": "fact_check_started", "data": {"message": "Checking information..."}}
+                yield {"event": "fact_check_completed", "data": {"message": "Information checked"}}
+
+            if any(k in node_lower for k in ["evidence_synthesizer", "synthesizer", "research_synthesizer"]) and "synthesizing" not in emitted_stages:
+                emitted_stages.add("synthesizing")
+                yield {"event": "synthesizing", "data": {"message": "Preparing answer..."}}
+
+            # Stream final answer tokens as soon as synthesis begins
+            if (node_lower in ("boss_agent", "boss", "final_synthesizer") or is_partial or is_final) and "answer_started" not in emitted_stages:
+                emitted_stages.add("answer_started")
+                yield {"event": "answer_started", "data": {"message": "Preparing answer..."}}
 
             # In SSE mode ADK emits incremental partial events followed by a
             # final aggregated event that repeats the full text. Only stream
@@ -648,7 +684,7 @@ async def process_message_stream(
                 if not accumulated_content and final_output:
                     yield {"event": "chunk", "data": {"text": final_output}}
                 yield {
-                    "event": "complete",
+                    "event": "completed",
                     "data": {
                         "output": final_output,
                         "conversation_id": conversation_id,
@@ -658,7 +694,7 @@ async def process_message_stream(
                 return
 
         yield {
-            "event": "complete",
+            "event": "completed",
             "data": {
                 "output": accumulated_content,
                 "conversation_id": conversation_id,
@@ -868,9 +904,14 @@ async def _fallback_process_message_stream(
 
     if capability_detected == "web_search":
         from src.adk.tools import web_search
+        yield {"event": "search_started", "data": {"query": message, "message": "Searching the web..."}}
+        yield {"event": "searching", "data": {"message": "Searching authoritative sources..."}}
         try:
             search_results = await web_search(message, max_items=5)
             if search_results and len(search_results.strip()) > 30:
+                yield {"event": "sources_found", "data": {"message": "Found candidate sources"}}
+                yield {"event": "reading_sources", "data": {"message": "Reading sources..."}}
+                yield {"event": "fact_check_started", "data": {"message": "Checking information..."}}
                 prompt_with_context = (
                     f"{prompt_with_context}\n\n"
                     f"LIVE REAL-TIME WEB SEARCH RESULTS:\n"
@@ -880,6 +921,9 @@ async def _fallback_process_message_stream(
                 )
         except Exception as e:
             logger.warning(f"Fallback live web search execution failed in stream: {e}")
+
+    yield {"event": "synthesizing", "data": {"message": "Preparing answer..."}}
+    yield {"event": "answer_started", "data": {"message": "Preparing answer..."}}
 
     accumulated = ""
     system_instruction = (
@@ -924,16 +968,16 @@ async def _fallback_process_message_stream(
         if not accumulated.strip():
             accumulated = await recover_empty_stream()
         if accumulated.strip():
-            yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+            yield {"event": "completed", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
         else:
             yield {"event": "error", "data": {"error": "The model returned an empty response.", "conversation_id": conversation_id}}
-            yield {"event": "complete", "data": {"output": "", "conversation_id": conversation_id, "citations": []}}
+            yield {"event": "completed", "data": {"output": "", "conversation_id": conversation_id, "citations": []}}
     except Exception as e:
         if not accumulated.strip():
             accumulated = await recover_empty_stream()
             if accumulated.strip():
                 yield {"event": "chunk", "data": {"text": accumulated}}
-                yield {"event": "complete", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
+                yield {"event": "completed", "data": {"output": accumulated, "conversation_id": conversation_id, "citations": []}}
                 return
         if accumulated:
             yield {"event": "chunk", "data": {"text": "\n\n[Error during streaming, partial response returned]"}}
@@ -942,6 +986,6 @@ async def _fallback_process_message_stream(
         if accumulated:
             yield {"event": "chunk", "data": {"text": error_msg}}
         yield {
-            "event": "complete",
+            "event": "completed",
             "data": {"output": accumulated + error_msg, "conversation_id": conversation_id, "citations": []},
         }

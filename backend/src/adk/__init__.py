@@ -65,6 +65,16 @@ from src.adk.evidence_gap import (
     AdaptiveResearchLoopExecutor,
 )
 
+from src.adk.research_synthesizer import (
+    ResearchSynthesisPacket,
+    ResearchSynthesizer,
+    SynthesizedClaimRecord,
+    SynthesizedEvidenceItem,
+    SynthesizedSourceRecord,
+    ConflictRecord,
+    UncertaintyRecord,
+)
+
 __all__ = [
     "SearchPlan",
     "SearchPlanQuery",
@@ -109,4 +119,12 @@ __all__ = [
     "create_evidence_gap_agent",
     "create_adaptive_research_loop_agent",
     "AdaptiveResearchLoopExecutor",
+    # Phase 11
+    "ResearchSynthesisPacket",
+    "ResearchSynthesizer",
+    "SynthesizedClaimRecord",
+    "SynthesizedEvidenceItem",
+    "SynthesizedSourceRecord",
+    "ConflictRecord",
+    "UncertaintyRecord",
 ]

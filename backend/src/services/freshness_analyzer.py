@@ -24,22 +24,27 @@ class FreshnessLevel(str, Enum):
 
 
 class FreshnessAnalyzer:
-    """Semantic Freshness Detector."""
+    """Semantic Freshness Detector for Phase 15 Automatic Search Triggers."""
 
     LIVE_KEYWORDS = [
         "right now", "live", "bitcoin price", "crypto price", "stock price",
-        "weather in", "temperature", "score", "market rate", "usd to inr"
+        "weather", "weather in", "temperature", "score", "market rate", "stock",
+        "market", "company status", "usd to inr"
     ]
 
     CURRENT_KEYWORDS = [
-        "latest", "current", "best", "under ₹", "under rs", "under 500", "under 1000",
-        "under 60000", "today", "now", "2026", "2025", "price of", "buy", "purchase",
-        "admission", "courses", "fees", "placements", "ceo", "president", "version",
-        "cloudflare", "models", "gpu", "nvidia", "pcce", "college", "university"
+        "latest", "today", "current", "recent", "price", "available", "availability",
+        "news", "release", "released", "version", "security advisory", "github activity",
+        "github", "what's new", "whats new", "changes", "changelog", "best",
+        "under ₹", "under rs", "under 500", "under 1000", "under 60000", "now",
+        "2026", "2025", "price of", "buy", "purchase", "admission", "courses",
+        "fees", "placements", "ceo", "president", "cloudflare", "models", "gpu",
+        "nvidia", "pcce", "college", "university"
     ]
 
     RECENT_KEYWORDS = [
-        "news", "recent", "trending", "update", "release", "this week", "this month"
+        "news", "recent", "trending", "update", "release", "released",
+        "this week", "this month", "changes", "adk changes"
     ]
 
     HISTORICAL_KEYWORDS = [
@@ -48,16 +53,43 @@ class FreshnessAnalyzer:
     ]
 
     STATIC_PATTERNS = [
-        r"^what is (a|an)?\s*(tcp|http|udp|ip|dns|html|css|json|sql|python|react|linked list|stack|queue|tree|graph|binary search|sorting|algorithm|array|hash table|pointer|matrix|class|function|oop)\??$",
-        r"^how does (a|an)?\s*(mouse|keyboard|sensor|cpu|gpu|engine|compiler|linked list|stack|queue|array)\s*work\??$",
-        r"^explain (gravity|relativity|photosynthesis|binary search|linked list|recursion|dynamic programming)\??$",
+        r"^what is (a|an)?\s*(tcp|http|udp|ip|dns|html|css|json|sql|python|react|linked list|stack|queue|tree|graph|recursion|binary search|binary search algorithm|sorting|algorithm|array|hash table|pointer|matrix|class|function|oop|polymorphism|inheritance|encapsulation)( in (oop|python|java|c\+\+|cs))?[\.\?\!]?$",
+        r"^how (does|do) (a|an)?\s*(mouse|keyboard|sensor|cpu|gpu|engine|compiler|linked list|stack|queue|array|recursion)\s*work[\.\?\!]?$",
+        r"^explain (react hooks|hooks in react|react hook|gravity|relativity|photosynthesis|binary search|binary search algorithm|linked list|recursion|dynamic programming|oop|polymorphism|inheritance|encapsulation)[\.\?\!]?$",
+        r"^(calculate|compute|solve)\s+[\d\+\-\*\/\^\(\)\.\s]+$",
         r"\b(analyze|plot|chart|compute|dataset|summary statistics|csv)\b",
     ]
 
     def analyze(self, query: str) -> Dict[str, Any]:
         text = query.lower().strip()
 
-        # 1. Static pattern check
+        has_live_keyword = any(kw in text for kw in self.LIVE_KEYWORDS)
+        has_current_keyword = any(kw in text for kw in self.CURRENT_KEYWORDS)
+        has_recent_keyword = any(kw in text for kw in self.RECENT_KEYWORDS)
+
+        # 1. If query contains an explicit live or freshness trigger, fresh research is mandatory
+        if has_live_keyword:
+            return {
+                "level": FreshnessLevel.LIVE,
+                "research_required": True,
+                "reason": "Requires real-time streaming or live API financial/weather/market data.",
+            }
+
+        if has_current_keyword or re.search(r'\b(buy|mouse|laptop|phone|under|price|course|fee|admission)\b', text):
+            return {
+                "level": FreshnessLevel.CURRENT,
+                "research_required": True,
+                "reason": "Requires current real-time external data for products, versions, releases, or specifications.",
+            }
+
+        if has_recent_keyword:
+            return {
+                "level": FreshnessLevel.RECENT,
+                "research_required": True,
+                "reason": "Requires recent web research for news, updates, and announcements.",
+            }
+
+        # 2. Static / timeless pattern check (bypasses web when no freshness trigger exists)
         for pat in self.STATIC_PATTERNS:
             if re.search(pat, text):
                 return {
@@ -66,36 +98,12 @@ class FreshnessAnalyzer:
                     "reason": "Fundamental educational concept without real-time state requirement.",
                 }
 
-        # 2. Live requirement check
-        if any(kw in text for kw in self.LIVE_KEYWORDS):
-            return {
-                "level": FreshnessLevel.LIVE,
-                "research_required": True,
-                "reason": "Requires real-time streaming or live API financial/weather data.",
-            }
-
         # 3. Historical query check
-        if any(kw in text for kw in self.HISTORICAL_KEYWORDS) and not any(kw in text for kw in self.CURRENT_KEYWORDS):
+        if any(kw in text for kw in self.HISTORICAL_KEYWORDS):
             return {
                 "level": FreshnessLevel.HISTORICAL,
                 "research_required": False,
                 "reason": "Query focuses on past historical events.",
-            }
-
-        # 4. Current facts / Shopping / Institutions check
-        if any(kw in text for kw in self.CURRENT_KEYWORDS) or re.search(r'\b(buy|mouse|laptop|phone|under|price|course|fee|admission)\b', text):
-            return {
-                "level": FreshnessLevel.CURRENT,
-                "research_required": True,
-                "reason": "Requires current real-time external data for products, institutions, or live versions.",
-            }
-
-        # 5. Recent developments check
-        if any(kw in text for kw in self.RECENT_KEYWORDS):
-            return {
-                "level": FreshnessLevel.RECENT,
-                "research_required": True,
-                "reason": "Requires recent web research for news and announcements.",
             }
 
         # Default fallback

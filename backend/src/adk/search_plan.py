@@ -241,9 +241,86 @@ class IntelligentSearchPlanner:
         else:
             # Single topic or general investigative prompt
             objective = f"Investigate: {user_prompt.strip()}"
-            clean_topic = re.sub(r"(?i)^(search for|search the web for|what is|find online|look up|research)\s+", "", user_prompt).strip()
+            clean_topic = re.sub(r"(?i)^(search for|search the web for|what is|find online|look up|research|find the)\s+", "", user_prompt).strip()
 
-            if any(w in prompt_lower for w in ["price", "cost", "subscription", "pricing", "buy"]):
+            # 1. Fact-check Search (e.g. "Is Python 4 released?", "Is claim X true?")
+            if re.search(r"(?i)^(is|was|did|has|can)\b.*\b(released|true|fake|exist|announced|happen|real)\b", user_prompt) or "fact check" in prompt_lower or "fact-check" in prompt_lower:
+                objective = f"Fact-check release and factual status for {clean_topic}"
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} official confirmation fact check status",
+                    purpose="Verify factual accuracy, check rumor status, and evaluate claim authenticity",
+                    agent="google_search_fact_checker",
+                    priority=10,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} official release notes roadmap announcements",
+                    purpose="Inspect official vendor release notes and authoritative roadmaps",
+                    agent="official_docs_researcher",
+                    priority=9,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} primary source announcement origin",
+                    purpose="Locate primary canonical documentation and authoritative press releases",
+                    agent="primary_source_hunter",
+                    priority=8,
+                ))
+
+            # 2. Multi-source Changes & GitHub Activity (e.g. "Find the latest Google ADK changes")
+            elif any(w in prompt_lower for w in ["adk", "github activity", "changes", "changelog", "commit activity"]) and any(w in prompt_lower for w in ["latest", "recent", "find", "new", "adk", "google"]):
+                objective = f"Investigate latest changes and activity for {clean_topic}"
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} official documentation changelog",
+                    purpose="Retrieve official documentation and canonical changelog for the latest changes",
+                    agent="official_docs_researcher",
+                    priority=10,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} github repository commits pull requests releases",
+                    purpose="Inspect active GitHub repository commits, issues, and release activity",
+                    agent="github_researcher",
+                    priority=9,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} latest features updates announcements",
+                    purpose="Search Google for recent developer announcements and technological changes",
+                    agent="google_search_technology",
+                    priority=8,
+                ))
+
+            # 3. Security Advisory & CVE Research
+            elif any(w in prompt_lower for w in ["security advisory", "cve", "vulnerability", "vulnerabilities", "security", "patch advisory", "exploit"]):
+                objective = f"Investigate security advisories and vulnerabilities for {clean_topic}"
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} security advisory CVE vulnerability patch",
+                    purpose="Retrieve verified CVE records and vendor security advisories",
+                    agent="cybersecurity_researcher",
+                    priority=10,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} NIST NVD CERT official vulnerability report",
+                    purpose="Verify authoritative vulnerability metrics and CVSS severity",
+                    agent="primary_source_hunter",
+                    priority=9,
+                ))
+
+            # 4. Market / Stock / Company Status Research
+            elif any(w in prompt_lower for w in ["company status", "stock", "market", "valuation", "market cap", "earnings"]):
+                objective = f"Investigate market and corporate status for {clean_topic}"
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} public financial market status stock price",
+                    purpose="Retrieve real-time market data, stock performance, and public valuation",
+                    agent="google_search_market",
+                    priority=10,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} corporate developments executive leadership announcements",
+                    purpose="Inspect official corporate status, executive leadership, and strategic updates",
+                    agent="company_intelligence_agent",
+                    priority=9,
+                ))
+
+            # 5. Price / Availability / Products
+            elif any(w in prompt_lower for w in ["price", "cost", "subscription", "pricing", "buy", "available", "availability"]):
                 candidates.append(SearchPlanQuery(
                     query=f"{clean_topic} official pricing plans",
                     purpose="Retrieve authentic public pricing and subscription tiers",
@@ -251,13 +328,14 @@ class IntelligentSearchPlanner:
                     priority=10,
                 ))
                 candidates.append(SearchPlanQuery(
-                    query=f"{clean_topic} discounts enterprise deals",
-                    purpose="Check available discounts, student tiers, and enterprise packaging",
+                    query=f"{clean_topic} availability in stock purchase options",
+                    purpose="Check real-time availability, retailer stock, and enterprise packaging",
                     agent="google_search_products",
-                    priority=8,
+                    priority=9,
                 ))
 
-            if any(w in prompt_lower for w in ["release", "version", "update", "changelog", "new features", "latest"]):
+            # 6. Releases & Versioning
+            elif any(w in prompt_lower for w in ["release", "version", "update", "new features", "what's new", "whats new"]):
                 candidates.append(SearchPlanQuery(
                     query=f"{clean_topic} official release notes changelog",
                     purpose="Extract release details, version numbers, and changelog updates",
@@ -271,7 +349,8 @@ class IntelligentSearchPlanner:
                     priority=9,
                 ))
 
-            if any(w in prompt_lower for w in ["doc", "docs", "documentation", "api", "sdk"]):
+            # 7. Documentation & SDKs
+            elif any(w in prompt_lower for w in ["doc", "docs", "documentation", "api", "sdk"]):
                 candidates.append(SearchPlanQuery(
                     query=f"{clean_topic} official API reference guide",
                     purpose="Extract official API endpoints and SDK documentation",
@@ -279,25 +358,26 @@ class IntelligentSearchPlanner:
                     priority=10,
                 ))
 
-            # General technical coverage
-            candidates.append(SearchPlanQuery(
-                query=f"{clean_topic} official documentation",
-                purpose="Retrieve primary source technical specifications and documentation",
-                agent="google_search_technology",
-                priority=9,
-            ))
-            candidates.append(SearchPlanQuery(
-                query=f"{clean_topic} recent developments news",
-                purpose="Retrieve recent news articles and authoritative coverage",
-                agent="google_news_researcher",
-                priority=8,
-            ))
-            candidates.append(SearchPlanQuery(
-                query=f"{clean_topic} practical guide developer tutorial",
-                purpose="Retrieve real-world implementation patterns and best practices",
-                agent="deep_web_researcher",
-                priority=7,
-            ))
+            # 8. General technical & news fallback coverage
+            else:
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} official documentation",
+                    purpose="Retrieve primary source technical specifications and documentation",
+                    agent="google_search_technology",
+                    priority=9,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} recent developments news",
+                    purpose="Retrieve recent news articles and authoritative coverage",
+                    agent="google_news_researcher",
+                    priority=8,
+                ))
+                candidates.append(SearchPlanQuery(
+                    query=f"{clean_topic} practical guide developer tutorial",
+                    purpose="Retrieve real-world implementation patterns and best practices",
+                    agent="deep_web_researcher",
+                    priority=7,
+                ))
 
             if mode in (SearchPlanMode.DEEP, SearchPlanMode.CRITICAL):
                 candidates.append(SearchPlanQuery(

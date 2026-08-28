@@ -49,6 +49,7 @@ from src.adk.tools import (
     rank_and_select_passages_tool,
     verify_research_claim_tool,
     analyze_evidence_gaps_tool,
+    synthesize_research_tool,
 )
 
 MODEL = settings.gemini_model
@@ -138,6 +139,8 @@ ADK_TOOL_MAP: dict[str, Any] = {
     "weather_tool": weather_tool,
     "fetch_weather": weather_tool,
     "live_weather": weather_tool,
+    "analyze_evidence_gaps": analyze_evidence_gaps_tool,
+    "synthesize_research": synthesize_research_tool,
 }
 
 
@@ -691,6 +694,9 @@ def create_google_news_researcher_agent(meta: Optional[AgentMetadata] = None) ->
     )
 
 
+create_google_search_news_agent = create_google_news_researcher_agent
+
+
 def create_deep_web_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
     name = registry_id_to_adk_name("deep-web-researcher")
     return LlmAgent(
@@ -803,28 +809,7 @@ def create_google_search_fact_checker_agent(meta: Optional[AgentMetadata] = None
     )
 
 
-def create_fact_checker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name(meta.id) if meta else "fact_checker"
-    return LlmAgent(
-        name=name,
-        model=MODEL,
-        description="Fact Checker verifying whether claims are supported by verified evidence with standardized ClaimStatus verdicts.",
-        instruction=(
-            "You are the Fact Checker (fact_checker / google_search_fact_checker).\n\n"
-            "OPERATIONAL RULES:\n"
-            "1. Check whether claims are supported by authoritative passages and documentation.\n"
-            "2. Assign standardized claim statuses:\n"
-            "   - SUPPORTED: Claim is directly backed by primary official documentation or authoritative sources.\n"
-            "   - PARTIALLY_SUPPORTED: Claim is supported by community sources or secondary reports.\n"
-            "   - CONFLICTING: Multiple sources present conflicting data, figures, or dates.\n"
-            "   - UNVERIFIED: No empirical evidence found to substantiate the claim.\n"
-            "   - FALSE: Authoritative evidence refutes the claim.\n"
-            "   - OUTDATED: Evidence is stale for current/recent questions.\n"
-            "3. Do NOT approve any claim without evidence.\n"
-            "4. NEVER generate fake or hallucinated URLs."
-        ),
-        tools=[verify_research_claim_tool, google_search],
-    )
+create_fact_checker_agent = create_google_search_fact_checker_agent
 
 
 def create_source_verifier_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
@@ -876,6 +861,9 @@ def create_official_docs_researcher_agent(meta: Optional[AgentMetadata] = None) 
         ),
         tools=[google_search],
     )
+
+
+create_google_search_official_docs_agent = create_official_docs_researcher_agent
 
 
 def create_google_search_technology_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
@@ -939,7 +927,7 @@ def create_cybersecurity_researcher_agent(meta: Optional[AgentMetadata] = None) 
 
 
 def create_google_search_market_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name("google-search-market")
+    name = registry_id_to_adk_name(meta.id) if meta else "google_search_market"
     return LlmAgent(
         name=name,
         model=MODEL,
@@ -954,8 +942,11 @@ def create_google_search_market_agent(meta: Optional[AgentMetadata] = None) -> L
     )
 
 
+create_market_researcher_agent = create_google_search_market_agent
+
+
 def create_google_search_products_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name("google-search-products")
+    name = registry_id_to_adk_name(meta.id) if meta else "google_search_products"
     return LlmAgent(
         name=name,
         model=MODEL,
@@ -970,8 +961,11 @@ def create_google_search_products_agent(meta: Optional[AgentMetadata] = None) ->
     )
 
 
+create_product_researcher_agent = create_google_search_products_agent
+
+
 def create_google_search_local_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name("google-search-local")
+    name = registry_id_to_adk_name(meta.id) if meta else "google_search_local"
     return LlmAgent(
         name=name,
         model=MODEL,
@@ -985,8 +979,11 @@ def create_google_search_local_agent(meta: Optional[AgentMetadata] = None) -> Ll
     )
 
 
+create_local_researcher_agent = create_google_search_local_agent
+
+
 def create_google_search_travel_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name("google-search-travel")
+    name = registry_id_to_adk_name(meta.id) if meta else "google_search_travel"
     return LlmAgent(
         name=name,
         model=MODEL,
@@ -998,6 +995,9 @@ def create_google_search_travel_agent(meta: Optional[AgentMetadata] = None) -> L
         ),
         tools=[google_search],
     )
+
+
+create_travel_researcher_agent = create_google_search_travel_agent
 
 
 def create_community_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
@@ -1020,18 +1020,41 @@ def create_evidence_synthesizer_agent(meta: Optional[AgentMetadata] = None) -> L
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Deduplicates sources by canonical URL, resolves conflicting evidence, groups claims, and produces structured research packets.",
-        instruction=(
-            "You are the Evidence Synthesizer for the Internet Intelligence System. "
-            "Receive research findings from internet specialists, deduplicate sources by canonical URL, resolve conflicts, rank evidence tiers, "
-            "and produce a concise structured research packet. Verify all citations and never fabricate evidence or sources."
+        description=(
+            "Synthesizes all verified worker outputs into a compact, grounded ResearchSynthesisPacket "
+            "for BossAgent. Deduplicates claims and sources, explicitly surfaces conflicts, and flags "
+            "uncertainties. BossAgent uses this packet to write the final user response."
         ),
-        tools=[],
+        instruction=(
+            "You are the Research Synthesizer (evidence_synthesizer).\n\n"
+            "STRICT RULES — NEVER VIOLATE:\n"
+            "1. NEVER pass complete webpages, raw HTML, or full Google Search dumps to BossAgent.\n"
+            "2. NEVER generate fake URLs or fabricate evidence.\n"
+            "3. NEVER hide conflicts — surface them explicitly in the 'conflicts' field.\n"
+            "4. NEVER approve unverified claims as verified.\n\n"
+            "YOUR JOB:\n"
+            "Receive verified_claims (from verification pipeline) and passage_evidence (selected passages).\n"
+            "Call synthesize_research() to produce a compact ResearchSynthesisPacket containing:\n"
+            "  - verified_claims: supported/partially-supported findings with citation chains\n"
+            "  - evidence: selected grounded passages (max 2000 chars each, with URL/title/heading)\n"
+            "  - sources: deduplicated canonical source URLs with authority tiers\n"
+            "  - conflicts: explicit claim conflicts between sources\n"
+            "  - uncertainties: unverified, outdated, or false claims flagged with reasons\n"
+            "  - confidence: calibrated overall confidence score (penalized for conflicts)\n\n"
+            "DEDUPLICATION:\n"
+            "  - Remove near-duplicate claims (>=80% token overlap).\n"
+            "  - Canonicalize and deduplicate source URLs.\n"
+            "  - Never suppress conflicts — BossAgent must see them.\n\n"
+            "OUTPUT:\n"
+            "Return ONLY the JSON from synthesize_research(). Do not add prose or summaries.\n"
+            "BossAgent reads this JSON and writes the final user-facing response."
+        ),
+        tools=[synthesize_research_tool],
     )
 
 
 INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
-    # Planning & Intent Specialists
+    # Planning & Intent Specialists (24)
     "web_intent_agent",
     "freshness_agent",
     "search_planner",
@@ -1083,6 +1106,7 @@ INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
     "price_monitor_researcher",
     "availability_checker",
     "internet_evidence_judge",
+    "evidence_gap_agent",
 }
 
 
@@ -1187,7 +1211,7 @@ def create_primary_source_hunter_agent(meta: Optional[AgentMetadata] = None) -> 
 
 
 def create_citation_auditor_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name("citation-auditor")
+    name = registry_id_to_adk_name(meta.id) if meta else "citation_auditor"
     return LlmAgent(
         name=name,
         model=MODEL,
@@ -1197,15 +1221,16 @@ def create_citation_auditor_agent(meta: Optional[AgentMetadata] = None) -> LlmAg
             "OPERATIONAL RULES:\n"
             "1. Confirm that cited URLs and passage excerpts genuinely substantiate the attached factual claims.\n"
             "2. Audit for citation hallucination, out-of-context quotes, and URL misattribution.\n"
-            "3. Reject any claim where the cited passage does not contain direct corroborating text.\n"
-            "4. NEVER generate fake URLs."
+            "3. Classify each claim into SUPPORTED, PARTIAL, or UNSUPPORTED with clear corroboration chains.\n"
+            "4. Reject any claim where the cited passage does not contain direct corroborating text.\n"
+            "5. NEVER generate fake URLs."
         ),
         tools=[verify_research_claim_tool],
     )
 
 
 def create_contradiction_detector_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
-    name = registry_id_to_adk_name("contradiction-detector")
+    name = registry_id_to_adk_name(meta.id) if meta else "contradiction_detector"
     return LlmAgent(
         name=name,
         model=MODEL,
@@ -1215,8 +1240,9 @@ def create_contradiction_detector_agent(meta: Optional[AgentMetadata] = None) ->
             "OPERATIONAL RULES:\n"
             "1. Cross-examine extracted evidence across multiple independent sources.\n"
             "2. Find disagreements, opposing claims, and conflicting numbers/dates between sources.\n"
-            "3. Tag disputed claims with status CONFLICTING.\n"
-            "4. Never conceal or smooth over genuine factual discrepancies."
+            "3. Report each identified conflict with source_a, source_b, and likely_resolution rationale.\n"
+            "4. Tag disputed claims with status CONFLICTING.\n"
+            "5. Never conceal or smooth over genuine factual discrepancies."
         ),
         tools=[verify_research_claim_tool],
     )
@@ -1292,6 +1318,9 @@ def create_company_intelligence_agent(meta: Optional[AgentMetadata] = None) -> L
     )
 
 
+create_company_researcher_agent = create_company_intelligence_agent
+
+
 def create_startup_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
     name = registry_id_to_adk_name("startup-researcher")
     return LlmAgent(
@@ -1362,6 +1391,9 @@ def create_release_notes_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent
     )
 
 
+create_release_notes_researcher_agent = create_release_notes_agent
+
+
 def create_benchmark_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
     name = registry_id_to_adk_name("benchmark-researcher")
     return LlmAgent(
@@ -1416,6 +1448,9 @@ def create_paper_comparison_agent(meta: Optional[AgentMetadata] = None) -> LlmAg
         ),
         tools=[google_search],
     )
+
+
+create_research_paper_researcher_agent = create_paper_comparison_agent
 
 
 def create_methodology_reviewer_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
@@ -1598,8 +1633,34 @@ def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> 
     )
 
 
-# Backwards compatibility alias
-create_google_search_manager = create_internet_intelligence_manager
+def create_google_search_manager(search_specialists: Optional[list[LlmAgent]] = None) -> LlmAgent:
+    """Create the Google Search Manager responsible for coordinating search specialists
+    (e.g., google_search_general, google_news_researcher, google_search_technology, deep_web_researcher).
+    """
+    specialists = search_specialists or []
+    specialist_summaries = []
+    for sp in specialists:
+        desc = getattr(sp, "description", "") or "Google Search specialist"
+        specialist_summaries.append(f"- **{sp.name}**: {desc}")
+    specialists_roster = "\n".join(specialist_summaries) if specialist_summaries else "All Google Search Grounding Specialists"
+
+    instruction = (
+        "You are the Google Search Manager (google_search_manager) within the Internet Intelligence System.\n\n"
+        "Your role is to orchestrate and execute web queries across specialized Google Search agents:\n"
+        f"{specialists_roster}\n\n"
+        "Search Principles:\n"
+        "1. Dispatch targeted queries from the search plan to the appropriate search specialist.\n"
+        "2. Avoid sending raw duplicate prompts.\n"
+        "3. Collect authoritative search results, URLs, titles, and snippets.\n"
+        "4. Pass discovered search results downstream to ResultRanker (search_result_ranker)."
+    )
+    return LlmAgent(
+        name="google_search_manager",
+        model=MODEL,
+        instruction=instruction,
+        sub_agents=specialists,
+        description="Google Search Manager coordinating specialized Google Search grounding agents.",
+    )
 
 
 SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] = {
@@ -1628,7 +1689,7 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "art": create_art_agent,
     "weather_news": create_weather_news_agent,
     "weather-news": create_weather_news_agent,
-    # Internet Intelligence Specialists
+    # Internet Intelligence Specialists (Phase 14 Roster)
     "web-intent-agent": create_web_intent_agent,
     "web_intent_agent": create_web_intent_agent,
     "freshness-agent": create_freshness_agent,
@@ -1636,56 +1697,106 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "search-planner": create_search_planner_agent,
     "search_planner": create_search_planner_agent,
     "google-search-general": create_google_search_general_agent,
+    "google_search_general": create_google_search_general_agent,
     "google-news-researcher": create_google_news_researcher_agent,
+    "google_news_researcher": create_google_news_researcher_agent,
+    "google-search-news": create_google_search_news_agent,
+    "google_search_news": create_google_search_news_agent,
     "deep-web-researcher": create_deep_web_researcher_agent,
+    "deep_web_researcher": create_deep_web_researcher_agent,
     "url-reader": create_url_reader_agent,
+    "url_reader": create_url_reader_agent,
     "content-extractor": create_content_extractor_agent,
     "content_extractor": create_content_extractor_agent,
     "passage-ranker": create_passage_ranker_agent,
     "passage_ranker": create_passage_ranker_agent,
     "google-search-fact-checker": create_google_search_fact_checker_agent,
+    "google_search_fact_checker": create_google_search_fact_checker_agent,
     "source-verifier": create_source_verifier_agent,
+    "source_verifier": create_source_verifier_agent,
     "freshness-checker": create_freshness_checker_agent,
+    "freshness_checker": create_freshness_checker_agent,
     "official-docs-researcher": create_official_docs_researcher_agent,
+    "official_docs_researcher": create_official_docs_researcher_agent,
+    "google-search-official-docs": create_google_search_official_docs_agent,
+    "google_search_official_docs": create_google_search_official_docs_agent,
     "google-search-technology": create_google_search_technology_agent,
+    "google_search_technology": create_google_search_technology_agent,
     "github-researcher": create_github_researcher_agent,
+    "github_researcher": create_github_researcher_agent,
     "google-search-academic": create_google_search_academic_agent,
+    "google_search_academic": create_google_search_academic_agent,
     "cybersecurity-researcher": create_cybersecurity_researcher_agent,
+    "cybersecurity_researcher": create_cybersecurity_researcher_agent,
     "google-search-market": create_google_search_market_agent,
+    "google_search_market": create_google_search_market_agent,
     "google-search-products": create_google_search_products_agent,
+    "google_search_products": create_google_search_products_agent,
     "google-search-local": create_google_search_local_agent,
+    "google_search_local": create_google_search_local_agent,
     "google-search-travel": create_google_search_travel_agent,
+    "google_search_travel": create_google_search_travel_agent,
     "community-researcher": create_community_researcher_agent,
+    "community_researcher": create_community_researcher_agent,
     "evidence-synthesizer": create_evidence_synthesizer_agent,
+    "evidence_synthesizer": create_evidence_synthesizer_agent,
     # Advanced Research Layer (27 Specialists)
     "query-optimizer": create_query_optimizer_agent,
+    "query_optimizer": create_query_optimizer_agent,
     "multi-query-generator": create_multi_query_generator_agent,
+    "multi_query_generator": create_multi_query_generator_agent,
     "research-scope-controller": create_research_scope_controller_agent,
+    "research_scope_controller": create_research_scope_controller_agent,
     "search-result-ranker": create_search_result_ranker_agent,
+    "search_result_ranker": create_search_result_ranker_agent,
     "primary-source-hunter": create_primary_source_hunter_agent,
+    "primary_source_hunter": create_primary_source_hunter_agent,
     "citation-auditor": create_citation_auditor_agent,
+    "citation_auditor": create_citation_auditor_agent,
     "contradiction-detector": create_contradiction_detector_agent,
+    "contradiction_detector": create_contradiction_detector_agent,
     "bias-detector": create_bias_detector_agent,
+    "bias_detector": create_bias_detector_agent,
     "evidence-quality-judge": create_evidence_quality_judge_agent,
+    "evidence_quality_judge": create_evidence_quality_judge_agent,
     "timeline-researcher": create_timeline_researcher_agent,
+    "timeline_researcher": create_timeline_researcher_agent,
     "entity-researcher": create_entity_researcher_agent,
+    "entity_researcher": create_entity_researcher_agent,
     "company-intelligence-agent": create_company_intelligence_agent,
+    "company_intelligence_agent": create_company_intelligence_agent,
     "startup-researcher": create_startup_researcher_agent,
+    "startup_researcher": create_startup_researcher_agent,
     "public-osint-researcher": create_public_osint_researcher_agent,
+    "public_osint_researcher": create_public_osint_researcher_agent,
     "documentation-reader": create_documentation_reader_agent,
+    "documentation_reader": create_documentation_reader_agent,
     "api-documentation-researcher": create_api_documentation_researcher_agent,
+    "api_documentation_researcher": create_api_documentation_researcher_agent,
     "release-notes-agent": create_release_notes_agent,
+    "release_notes_agent": create_release_notes_agent,
     "benchmark-researcher": create_benchmark_researcher_agent,
+    "benchmark_researcher": create_benchmark_researcher_agent,
     "dataset-researcher": create_dataset_researcher_agent,
+    "dataset_researcher": create_dataset_researcher_agent,
     "standards-researcher": create_standards_researcher_agent,
+    "standards_researcher": create_standards_researcher_agent,
     "paper-comparison-agent": create_paper_comparison_agent,
+    "paper_comparison_agent": create_paper_comparison_agent,
     "methodology-reviewer": create_methodology_reviewer_agent,
+    "methodology_reviewer": create_methodology_reviewer_agent,
     "patent-researcher": create_patent_researcher_agent,
+    "patent_researcher": create_patent_researcher_agent,
     "regulation-researcher": create_regulation_researcher_agent,
+    "regulation_researcher": create_regulation_researcher_agent,
     "price-monitor-researcher": create_price_monitor_researcher_agent,
+    "price_monitor_researcher": create_price_monitor_researcher_agent,
     "availability-checker": create_availability_checker_agent,
+    "availability_checker": create_availability_checker_agent,
     "internet-evidence-judge": create_internet_evidence_judge_agent,
+    "internet_evidence_judge": create_internet_evidence_judge_agent,
     "evidence-gap-agent": create_evidence_gap_agent,
+    "evidence_gap_agent": create_evidence_gap_agent,
 }
 
 
@@ -1885,14 +1996,21 @@ BOSS_INSTRUCTION = (
     "'This website and application were created and developed by **Shreeharsh**.'\n\n"
     "CURRENCY & PRICING RULE:\n"
     "All product prices, deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n\n"
-    "CLICKABLE LINKS RULE:\n"
-    "ALWAYS render every product, documentation, API, service, and website as an active clickable Markdown link [Name](url). "
-    "Never output raw plain text URLs without hyperlinking them.\n\n"
+    "CLICKABLE LINKS & CITATIONS RULE:\n"
+    "ALWAYS render every product, documentation, API, service, and website as an active clickable Markdown link [Title](url). "
+    "Preserve citations from research packets and never output raw plain text URLs without hyperlinking them.\n\n"
+    "RESEARCH & GROUNDING RULES (NEVER VIOLATE):\n"
+    "1. USE VERIFIED CURRENT EVIDENCE: Base factual responses on verified evidence from the research hierarchy.\n"
+    "2. PRESERVE CITATIONS: Keep citation links intact and format them as active clickable Markdown links [Title](url).\n"
+    "3. EXPLAIN UNCERTAINTY: Clearly surface and explain conflicts, unverified claims, or outdated information.\n"
+    "4. NEVER INVENT SOURCES: Rely strictly on verified sources. Never fabricate or hallucinate URLs or citations.\n"
+    "5. COMBINE EVIDENCE WITH DOMAIN EXPLANATION: Blend empirical web evidence with rich, useful domain expertise and structured explanations.\n"
+    "6. NO DIRECT SCRAPING: BossAgent never scrapes websites directly; all research is delegated through the research hierarchy.\n\n"
     "HIERARCHICAL MULTI-AGENT ORCHESTRATION:\n"
     "You lead 10 specialized Department Managers who oversee 170+ specialist agents and a dedicated Internet Intelligence Division:\n"
     "1. **command_planning_manager**: Strategy, task decomposition, knowledge RAG, memory, planning.\n"
     "2. **coding_manager**: Frontend, backend, databases, systems engineering, cybersecurity, architecture.\n"
-    "3. **research_manager**: Directs internet_intelligence_manager (46 Internet Intelligence specialists) + scraping, medical, scientific, and news research.\n"
+    "3. **research_manager**: Directs internet_intelligence_manager (46+ Internet Intelligence specialists) + scraping, medical, scientific, and news research.\n"
     "4. **content_manager**: Study notes, quiz generation, technical writing, culinary, music, fitness.\n"
     "5. **visual_manager**: UI/UX design, visual critique, brand identity, art theory.\n"
     "6. **data_manager**: Tabular analytics, statistics, SQL querying, trend forecasting.\n"
@@ -1901,8 +2019,9 @@ BOSS_INSTRUCTION = (
     "9. **automation_manager**: Web scraping, browser automation, Google Drive, Calendar, Contacts, APIs.\n"
     "10. **business_quality_manager**: Corporate finance, CA accounting, economics, risk audit, QA.\n\n"
     "Execution Workflow:\n"
-    "- Understand the user's intent and identify all required departments.\n"
-    "- For multi-disciplinary requests (e.g. research + code + market analysis), delegate across the relevant department managers.\n"
+    "- Consult WebIntentAgent or analyze intent to evaluate if internet access is needed:\n"
+    "  * NO INTERNET REQUIRED -> Delegate to the normal domain specialist (e.g. coding, math, doctor).\n"
+    "  * INTERNET REQUIRED -> Delegate to research_manager -> internet_intelligence_manager -> search_planner -> google_search_manager -> search specialists -> search_result_ranker -> url_reader -> passage_ranker -> verification team -> evidence_synthesizer -> BossAgent.\n"
     "- Synthesize all department reports into a cohesive, beautifully structured final response for the user.\n"
     "- Always answer helpfully, accurately, and in the user's requested language."
 )

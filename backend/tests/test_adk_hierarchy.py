@@ -39,14 +39,14 @@ def test_registry_enabled_count_greater_than_100():
     all_metadata = AgentRegistry.get_all_metadata()
     enabled_meta = [m for m in all_metadata if m.enabled]
     assert len(enabled_meta) >= 100, f"Expected >= 100 enabled agents, got {len(enabled_meta)}"
-    assert len(enabled_meta) == 181, f"Expected 181 enabled agents, got {len(enabled_meta)}"
+    assert len(enabled_meta) == 182, f"Expected 182 enabled agents, got {len(enabled_meta)}"
 
 
 def test_adk_leaf_agent_count_greater_than_100():
     """Test 2: ADK leaf agent count must be > 100."""
     specialists = build_all_adk_specialists()
     assert len(specialists) >= 100, f"Expected >= 100 ADK leaf agents, got {len(specialists)}"
-    assert len(specialists) == 181, f"Expected 181 ADK leaf agents, got {len(specialists)}"
+    assert len(specialists) == 182, f"Expected 182 ADK leaf agents, got {len(specialists)}"
 
 
 def test_every_enabled_registry_specialist_maps_to_adk():
@@ -117,12 +117,12 @@ def test_every_specialist_belongs_to_exactly_one_manager():
 def test_registry_and_adk_counts_do_not_diverge():
     """Test 8: Registry count and ADK count do not silently diverge."""
     summary = get_adk_hierarchy_summary()
-    assert summary["registry_agents"] == 181
-    assert summary["adk_specialists"] == 181
+    assert summary["registry_agents"] == 182
+    assert summary["adk_specialists"] == 182
     assert summary["department_managers"] == 10
     assert summary["division_managers"] == 1
-    assert summary["total_adk_nodes"] == 193
-    assert sum(summary["departments"].values()) == 181
+    assert summary["total_adk_nodes"] == 194
+    assert sum(summary["departments"].values()) == 182
 
 
 def test_hierarchy_caching_and_reset():
@@ -186,7 +186,7 @@ async def test_massive_mode_batch_execution_concurrency():
     all_metadata = AgentRegistry.get_all_metadata()
     total_count = len(all_metadata)
     assert total_count >= 100
-    assert total_count == 181
+    assert total_count == 182
 
     # Create mock task items for all registered specialists
     tasks = [{"agent_id": m.id, "prompt": "Status check", "context": {}} for m in all_metadata]
@@ -206,11 +206,11 @@ def test_adk_status_telemetry():
     """Test 16: get_adk_status() telemetry reporting."""
     status = get_adk_status()
     assert "registry_agents" in status
-    assert status["registry_agents"] == 181
-    assert status["adk_specialists"] == 181
-    assert status["internet_intelligence_agents"] == 50
+    assert status["registry_agents"] == 182
+    assert status["adk_specialists"] == 182
+    assert status["internet_intelligence_agents"] == 51
     assert status["department_managers"] == 10
     assert status["division_managers"] == 1
-    assert status["total_adk_nodes"] == 193
+    assert status["total_adk_nodes"] == 194
     assert "departments" in status
     assert len(status["departments"]) == 10

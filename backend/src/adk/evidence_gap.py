@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 from google.adk.agents import LlmAgent, LoopAgent
 
-from src.adk.internet_provider import EvidencePacket, EvidenceSynthesizer, URLCanonicalizer
+from src.adk.internet_provider import EvidencePacket, URLCanonicalizer
 from src.adk.passage_extractor import PassageChunk
 from src.adk.sequential_pipeline import VerifiedWebPipelineExecutor
 from src.adk.verification import ClaimStatus, VerificationTeamEngine, VerificationTeamResult, VerifiedClaim

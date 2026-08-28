@@ -1770,6 +1770,66 @@ def analyze_evidence_gaps(
     return json.dumps(report.to_dict(), indent=2)
 
 
+def synthesize_research(
+    query: str,
+    verified_claims_json: str,
+    passage_evidence_json: str = "[]",
+) -> str:
+    """Combine all verified worker outputs into a compact, grounded ResearchSynthesisPacket for BossAgent.
+
+    Rules:
+    - NO raw HTML, NO full Google Search dumps, NO unfiltered worker output.
+    - Deduplicates claims semantically (exact + token-level).
+    - Deduplicates sources by canonical URL.
+    - Conflicts are EXPLICITLY surfaced — never hidden from BossAgent.
+    - Unverified / Outdated / False claims become uncertainties.
+
+    Args:
+        query: The user's original research question.
+        verified_claims_json: JSON string or list of VerifiedClaim dicts from the verification pipeline.
+        passage_evidence_json: JSON string or list of selected passage dicts with 'text', 'url', 'title', 'heading'.
+
+    Returns:
+        JSON string containing ResearchSynthesisPacket:
+        {
+            "query": str,
+            "verified_claims": [...],
+            "evidence": [...],
+            "sources": [...],
+            "conflicts": [...],
+            "uncertainties": [...],
+            "confidence": float,
+            "timestamp": float
+        }
+    """
+    from src.adk.research_synthesizer import ResearchSynthesizer
+
+    try:
+        raw_claims = json.loads(verified_claims_json) if isinstance(verified_claims_json, str) else verified_claims_json
+        if isinstance(raw_claims, dict) and "claims" in raw_claims:
+            raw_claims = raw_claims["claims"]
+        elif isinstance(raw_claims, dict) and "verified_claims" in raw_claims:
+            raw_claims = raw_claims["verified_claims"]
+    except Exception as e:
+        logger.warning(f"synthesize_research: error parsing verified_claims_json: {e}")
+        raw_claims = []
+
+    try:
+        passages = json.loads(passage_evidence_json) if isinstance(passage_evidence_json, str) else passage_evidence_json
+        if isinstance(passages, dict) and "selected_passages" in passages:
+            passages = passages["selected_passages"]
+    except Exception as e:
+        logger.warning(f"synthesize_research: error parsing passage_evidence_json: {e}")
+        passages = []
+
+    packet = ResearchSynthesizer.synthesize_from_dicts(
+        query=query,
+        raw_claims=raw_claims if isinstance(raw_claims, list) else [],
+        passage_evidence=passages if isinstance(passages, list) else [],
+    )
+    return json.dumps(packet.to_dict(), indent=2)
+
+
 # Export all tools as FunctionTool instances for ADK agents
 knowledge_search_tool = FunctionTool(func=knowledge_search)
 memory_store_tool = FunctionTool(func=memory_store)
@@ -1791,4 +1851,4 @@ split_page_into_passages_tool = FunctionTool(func=split_page_into_passages)
 rank_and_select_passages_tool = FunctionTool(func=rank_and_select_passages)
 verify_research_claim_tool = FunctionTool(func=verify_research_claim)
 analyze_evidence_gaps_tool = FunctionTool(func=analyze_evidence_gaps)
-
+synthesize_research_tool = FunctionTool(func=synthesize_research)
