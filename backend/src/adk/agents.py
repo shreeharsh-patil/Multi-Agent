@@ -47,6 +47,8 @@ from src.adk.tools import (
     rank_search_results_tool,
     split_page_into_passages_tool,
     rank_and_select_passages_tool,
+    verify_research_claim_tool,
+    analyze_evidence_gaps_tool,
 )
 
 MODEL = settings.gemini_model
@@ -782,14 +784,46 @@ def create_google_search_fact_checker_agent(meta: Optional[AgentMetadata] = None
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Verifies claims, rumors, and statistics against multiple independent Google Search results.",
+        description="Fact Checker verifying whether claims are supported by verified evidence with standardized ClaimStatus verdicts.",
         instruction=(
-            "You are the Google Fact Checker. "
-            "Verify factual claims, disputed assertions, and rumors by querying multiple independent, reputable sources. "
-            "Determine verdicts: SUPPORTED, PARTIALLY_SUPPORTED, UNVERIFIED, FALSE, or OUTDATED. "
-            "Provide objective reasoning, verify primary evidence, and never fabricate verification or citations."
+            "You are the Fact Checker (fact_checker / google_search_fact_checker).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Check whether claims are supported by authoritative passages and documentation.\n"
+            "2. Assign standardized claim statuses:\n"
+            "   - SUPPORTED: Claim is directly backed by primary official documentation or authoritative sources.\n"
+            "   - PARTIALLY_SUPPORTED: Claim is supported by community sources or secondary reports.\n"
+            "   - CONFLICTING: Multiple sources present conflicting data, figures, or dates.\n"
+            "   - UNVERIFIED: No empirical evidence found to substantiate the claim.\n"
+            "   - FALSE: Authoritative evidence refutes the claim.\n"
+            "   - OUTDATED: Evidence is stale for current/recent questions.\n"
+            "3. Do NOT approve any claim without evidence.\n"
+            "4. NEVER generate fake or hallucinated URLs."
         ),
-        tools=[google_search],
+        tools=[verify_research_claim_tool, google_search],
+    )
+
+
+def create_fact_checker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name(meta.id) if meta else "fact_checker"
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Fact Checker verifying whether claims are supported by verified evidence with standardized ClaimStatus verdicts.",
+        instruction=(
+            "You are the Fact Checker (fact_checker / google_search_fact_checker).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Check whether claims are supported by authoritative passages and documentation.\n"
+            "2. Assign standardized claim statuses:\n"
+            "   - SUPPORTED: Claim is directly backed by primary official documentation or authoritative sources.\n"
+            "   - PARTIALLY_SUPPORTED: Claim is supported by community sources or secondary reports.\n"
+            "   - CONFLICTING: Multiple sources present conflicting data, figures, or dates.\n"
+            "   - UNVERIFIED: No empirical evidence found to substantiate the claim.\n"
+            "   - FALSE: Authoritative evidence refutes the claim.\n"
+            "   - OUTDATED: Evidence is stale for current/recent questions.\n"
+            "3. Do NOT approve any claim without evidence.\n"
+            "4. NEVER generate fake or hallucinated URLs."
+        ),
+        tools=[verify_research_claim_tool, google_search],
     )
 
 
@@ -798,14 +832,16 @@ def create_source_verifier_agent(meta: Optional[AgentMetadata] = None) -> LlmAge
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Validates dates, claims, canonical URLs, publication authenticity, and citation integrity.",
+        description="Source Verifier determining source authority, primary documentation status, and domain trust.",
         instruction=(
-            "You are the Source Verifier. "
-            "Audit research findings, verify that cited URLs exist and match claims made, "
-            "check publication dates, evaluate source tiers (Tier 1 Primary vs Tier 2 Independent vs Tier 3 Community), "
-            "and flag any hallucinated or misattributed citations. Never fabricate citations or sources."
+            "You are the Source Verifier (source_verifier).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Determine source authority across multi-tier hierarchy (Tier 1 Primary Docs/Gov/CVE > Tier 2 Independent > Tier 3 Community).\n"
+            "2. Validate canonical URLs, domain trust scores, and publisher credibility.\n"
+            "3. Reject unauthenticated claims and flag SEO aggregator farms.\n"
+            "4. Never generate fake URLs."
         ),
-        tools=[google_search],
+        tools=[verify_research_claim_tool, google_search],
     )
 
 
@@ -814,14 +850,16 @@ def create_freshness_checker_agent(meta: Optional[AgentMetadata] = None) -> LlmA
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Detects time-sensitive assertions (software versions, prices, CVEs, releases, news, weather) requiring live internet search.",
+        description="Freshness Checker rejecting stale evidence for current and time-sensitive questions.",
         instruction=(
-            "You are the Freshness Checker. "
-            "Audit user prompts and agent assertions for temporal staleness. "
-            "Enforce live internet search for any requests involving versions, prices, releases, news, or today's events. "
-            "Verify all temporal claims, prevent stale assumptions, and never fabricate verification."
+            "You are the Freshness Checker (freshness_checker).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Audit evidence timestamps against temporal requirements of the query.\n"
+            "2. Reject stale evidence for current questions (e.g. 2021-2023 tutorials for a 2026 feature request).\n"
+            "3. Mark time-mismatched evidence as OUTDATED.\n"
+            "4. Ensure claims about 'latest', 'today', 'recent', or specific dates (e.g. August 2026) are corroborated by fresh evidence."
         ),
-        tools=[],
+        tools=[verify_research_claim_tool],
     )
 
 
@@ -1001,6 +1039,8 @@ INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
     "google_news_researcher",
     "deep_web_researcher",
     "url_reader",
+    "content_extractor",
+    "passage_ranker",
     "google_search_fact_checker",
     "source_verifier",
     "freshness_checker",
@@ -1151,13 +1191,16 @@ def create_citation_auditor_agent(meta: Optional[AgentMetadata] = None) -> LlmAg
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Audits citation validity, verifying whether referenced URLs directly substantiate assertions with SUPPORTED/PARTIAL/UNSUPPORTED verdicts.",
+        description="Citation Auditor confirming citation actually supports attached claim and flagging misattributions.",
         instruction=(
-            "You are the Citation Auditor. Verify whether cited URLs genuinely substantiate the specific claims made. "
-            "Assign strict verdicts: SUPPORTED, PARTIAL, UNSUPPORTED, or INACCESSIBLE. "
-            "Never approve citations solely because a title looks relevant. Flag misattributed or hallucinated citations immediately."
+            "You are the Citation Auditor (citation_auditor).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Confirm that cited URLs and passage excerpts genuinely substantiate the attached factual claims.\n"
+            "2. Audit for citation hallucination, out-of-context quotes, and URL misattribution.\n"
+            "3. Reject any claim where the cited passage does not contain direct corroborating text.\n"
+            "4. NEVER generate fake URLs."
         ),
-        tools=[],
+        tools=[verify_research_claim_tool],
     )
 
 
@@ -1166,14 +1209,16 @@ def create_contradiction_detector_agent(meta: Optional[AgentMetadata] = None) ->
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Compares evidence across sources to uncover conflicting claims, discrepancies, and competing interpretations with resolution analysis.",
+        description="Contradiction Detector finding disagreements, numerical disparities, and conflicting claims between sources.",
         instruction=(
-            "You are the Contradiction Detector. Cross-examine extracted evidence across multiple independent sources. "
-            "Identify conflicting statements, divergent metrics, or opposing claims. Output structured reports with:\n"
-            "{\n  'claim': '...',\n  'source_a': '...',\n  'source_b': '...',\n  'conflict': '...',\n  'likely_resolution': '...'\n}\n"
-            "Never conceal discrepancies."
+            "You are the Contradiction Detector (contradiction_detector).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Cross-examine extracted evidence across multiple independent sources.\n"
+            "2. Find disagreements, opposing claims, and conflicting numbers/dates between sources.\n"
+            "3. Tag disputed claims with status CONFLICTING.\n"
+            "4. Never conceal or smooth over genuine factual discrepancies."
         ),
-        tools=[],
+        tools=[verify_research_claim_tool],
     )
 
 
@@ -1465,6 +1510,26 @@ def create_internet_evidence_judge_agent(meta: Optional[AgentMetadata] = None) -
     )
 
 
+def create_evidence_gap_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name(meta.id) if meta else "evidence_gap_agent"
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Audits whether current evidence answers all facets of the query and generates targeted follow-up queries when gaps exist.",
+        instruction=(
+            "You are the Evidence Gap Agent (evidence_gap_agent).\n\n"
+            "OPERATIONAL RULES:\n"
+            "1. Evaluate whether verified findings completely answer the user's inquiry.\n"
+            "2. Identify missing sub-questions or specific missing factual details (e.g. exact release date, pricing numbers, benchmarks).\n"
+            "3. If evidence is complete -> set is_sufficient = True.\n"
+            "4. If evidence has gaps -> formulate narrow, targeted follow-up queries specifically targeting the missing facets.\n"
+            "5. Do NOT repeat the broad original query.\n"
+            "6. Never create infinite research loops."
+        ),
+        tools=[analyze_evidence_gaps_tool],
+    )
+
+
 def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> LlmAgent:
     """Create the Internet Intelligence Manager responsible for orchestrating
     the 46 real-time search, documentation, fact-checking, and evidence synthesis specialists.
@@ -1515,9 +1580,9 @@ def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> 
         "MULTI-STAGE DEEP RESEARCH PIPELINE:\n"
         "1. INTENT & PLAN: web_intent_agent -> freshness_agent -> search_planner -> query_optimizer -> multi_query_generator -> research_scope_controller\n"
         "2. PARALLEL SEARCH: parallel_web_research (ParallelAgent executing independent search specialists concurrently without duplicates)\n"
-        "3. RANK, READ & EXTRACT: search_result_ranker -> url_reader / documentation_reader -> content_extractor -> passage_ranker\n"
-        "4. AUDIT: source_verifier -> citation_auditor -> contradiction_detector -> bias_detector -> evidence_quality_judge\n"
-        "5. JUDGE & SYNTHESIZE: internet_evidence_judge -> evidence_synthesizer -> compressed evidence packet upward to BossAgent\n\n"
+        "3. VERIFIED PIPELINE: verified_web_pipeline (SequentialAgent: search_result_ranker -> url_reader_agent -> passage_ranker -> source_verifier -> fact_checker -> citation_auditor -> evidence_synthesizer)\n"
+        "4. AUDIT & GATE: contradiction_detector -> bias_detector -> evidence_quality_judge -> internet_evidence_judge\n"
+        "5. SYNTHESIZE: compressed, grounded evidence packet upward to BossAgent\n\n"
         "CONTEXT COMPRESSION & EFFICIENCY RULES:\n"
         "- Never pass raw uncompressed HTML/pages to BossAgent. Always compress via specialist notes, content_extractor, passage_ranker, and evidence_synthesizer.\n"
         "- Simple timeless queries (e.g. 'What is a linked list?') bypass live search.\n"
@@ -1620,6 +1685,7 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "price-monitor-researcher": create_price_monitor_researcher_agent,
     "availability-checker": create_availability_checker_agent,
     "internet-evidence-judge": create_internet_evidence_judge_agent,
+    "evidence-gap-agent": create_evidence_gap_agent,
 }
 
 

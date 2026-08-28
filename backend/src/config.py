@@ -188,6 +188,9 @@ class Settings(BaseSettings):
     search_plan_critical_min_queries: int = 8
     search_plan_critical_max_queries: int = 15
 
+    # ---- ADK Adaptive Research Loop (LoopAgent) Limits ----
+    max_research_loop_iterations: int = 3
+
     model_config = {
         # Resolve both env files so startup works from either the repository
         # root or backend directory. The backend file contains service keys;

@@ -1702,6 +1702,74 @@ def rank_and_select_passages(
     return json.dumps(packet.to_dict(), indent=2)
 
 
+def verify_research_claim(
+    claim: str,
+    passages_json: str,
+) -> str:
+    """Verify a factual research claim against extracted passages across authority, freshness, citation, and contradiction checks.
+
+    Args:
+        claim: The factual claim to verify (e.g. 'Google ADK introduced feature X in August 2026').
+        passages_json: JSON string representing list of extracted PassageChunk objects.
+
+    Returns:
+        JSON string containing VerifiedClaim structure with status, confidence, sources, and audit notes.
+    """
+    from src.adk.passage_extractor import PassageChunk
+    from src.adk.verification import VerificationTeamEngine
+    try:
+        raw_list = json.loads(passages_json) if isinstance(passages_json, str) else passages_json
+        if isinstance(raw_list, dict) and "selected_passages" in raw_list:
+            raw_list = raw_list["selected_passages"]
+        chunks = [PassageChunk.from_dict(item) for item in raw_list]
+    except Exception as e:
+        logger.warning(f"Error parsing passages JSON for claim verification: {e}")
+        chunks = []
+
+    verified = VerificationTeamEngine.verify_claim(claim=claim, passages=chunks)
+    return json.dumps(verified.to_dict(), indent=2)
+
+
+def analyze_evidence_gaps(
+    query: str,
+    verified_claims_json: str,
+    executed_queries_json: str = "[]",
+) -> str:
+    """Audit whether current verified research findings completely answer all facets of the query.
+
+    Args:
+        query: The user's original research question (e.g. 'When was feature X released and what changed?').
+        verified_claims_json: JSON string containing list of VerifiedClaim objects or claims dictionary.
+        executed_queries_json: JSON list of query strings already executed in previous research iterations.
+
+    Returns:
+        JSON string with EvidenceGapReport detailing is_sufficient, missing facets, and targeted follow-up queries.
+    """
+    from src.adk.evidence_gap import EvidenceGapAnalyzer
+    from src.adk.verification import VerifiedClaim
+
+    try:
+        raw_claims = json.loads(verified_claims_json) if isinstance(verified_claims_json, str) else verified_claims_json
+        if isinstance(raw_claims, dict) and "claims" in raw_claims:
+            raw_claims = raw_claims["claims"]
+        claims = [VerifiedClaim.from_dict(c) for c in raw_claims]
+    except Exception as e:
+        logger.warning(f"Error parsing verified claims JSON: {e}")
+        claims = []
+
+    try:
+        executed_queries = json.loads(executed_queries_json) if isinstance(executed_queries_json, str) else executed_queries_json
+    except Exception:
+        executed_queries = []
+
+    report = EvidenceGapAnalyzer.analyze_gaps(
+        query=query,
+        verified_claims=claims,
+        executed_queries=executed_queries,
+    )
+    return json.dumps(report.to_dict(), indent=2)
+
+
 # Export all tools as FunctionTool instances for ADK agents
 knowledge_search_tool = FunctionTool(func=knowledge_search)
 memory_store_tool = FunctionTool(func=memory_store)
@@ -1721,4 +1789,6 @@ create_search_plan_tool = FunctionTool(func=create_search_plan)
 rank_search_results_tool = FunctionTool(func=rank_search_results)
 split_page_into_passages_tool = FunctionTool(func=split_page_into_passages)
 rank_and_select_passages_tool = FunctionTool(func=rank_and_select_passages)
+verify_research_claim_tool = FunctionTool(func=verify_research_claim)
+analyze_evidence_gaps_tool = FunctionTool(func=analyze_evidence_gaps)
 

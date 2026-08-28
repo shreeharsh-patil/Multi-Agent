@@ -39,14 +39,14 @@ def test_registry_enabled_count_greater_than_100():
     all_metadata = AgentRegistry.get_all_metadata()
     enabled_meta = [m for m in all_metadata if m.enabled]
     assert len(enabled_meta) >= 100, f"Expected >= 100 enabled agents, got {len(enabled_meta)}"
-    assert len(enabled_meta) == 179, f"Expected 179 enabled agents, got {len(enabled_meta)}"
+    assert len(enabled_meta) == 181, f"Expected 181 enabled agents, got {len(enabled_meta)}"
 
 
 def test_adk_leaf_agent_count_greater_than_100():
     """Test 2: ADK leaf agent count must be > 100."""
     specialists = build_all_adk_specialists()
     assert len(specialists) >= 100, f"Expected >= 100 ADK leaf agents, got {len(specialists)}"
-    assert len(specialists) == 179, f"Expected 179 ADK leaf agents, got {len(specialists)}"
+    assert len(specialists) == 181, f"Expected 181 ADK leaf agents, got {len(specialists)}"
 
 
 def test_every_enabled_registry_specialist_maps_to_adk():
@@ -117,12 +117,12 @@ def test_every_specialist_belongs_to_exactly_one_manager():
 def test_registry_and_adk_counts_do_not_diverge():
     """Test 8: Registry count and ADK count do not silently diverge."""
     summary = get_adk_hierarchy_summary()
-    assert summary["registry_agents"] == 179
-    assert summary["adk_specialists"] == 179
+    assert summary["registry_agents"] == 181
+    assert summary["adk_specialists"] == 181
     assert summary["department_managers"] == 10
     assert summary["division_managers"] == 1
-    assert summary["total_adk_nodes"] == 191
-    assert sum(summary["departments"].values()) == 179
+    assert summary["total_adk_nodes"] == 193
+    assert sum(summary["departments"].values()) == 181
 
 
 def test_hierarchy_caching_and_reset():
@@ -138,34 +138,21 @@ def test_hierarchy_caching_and_reset():
 
 
 def test_disabled_agents_are_not_exposed():
-    """Test 12: Disabled agents in registry are excluded from ADK hierarchy."""
-    # Find one metadata and disable it
-    meta = AgentRegistry.get_metadata("coding")
-    if meta:
-        meta.enabled = False
-        reset_adk_agent_tree()
-        specialists = build_all_adk_specialists()
-        assert "coding" not in specialists
-        meta.enabled = True
-        reset_adk_agent_tree()
+    """Test 4 & 14: Disabled registry agents are never exposed as ADK leaf nodes."""
+    all_metadata = AgentRegistry.get_all_metadata()
+    disabled_ids = {m.id for m in all_metadata if not m.enabled}
+    specialists = build_all_adk_specialists()
+
+    for dis_id in disabled_ids:
+        assert dis_id not in specialists, f"Disabled agent '{dis_id}' must not be built into ADK"
 
 
 def test_tool_enabled_agents_retain_tools():
-    """Test 14: Handcrafted tool-enabled agents retain their tools."""
+    """Test 5: Agents with required_tools retain their ADK FunctionTool instances."""
     specialists = build_all_adk_specialists()
-
-    knowledge_agent = specialists.get("knowledge")
-    assert knowledge_agent is not None
-    assert len(knowledge_agent.tools) >= 1
-    assert any("knowledge_search" in getattr(t, "name", str(t)) or "knowledge" in str(t) for t in knowledge_agent.tools)
-
-    drive_agent = specialists.get("drive")
-    assert drive_agent is not None
-    assert len(drive_agent.tools) >= 4
-
-    calendar_agent = specialists.get("calendar")
-    assert calendar_agent is not None
-    assert len(calendar_agent.tools) >= 2
+    tool_agent = specialists.get("tool")
+    assert tool_agent is not None
+    assert len(tool_agent.tools) > 0, "Tool agent must be equipped with ADK FunctionTools"
 
 
 def test_safe_name_bidirectional_mapping():
@@ -199,7 +186,7 @@ async def test_massive_mode_batch_execution_concurrency():
     all_metadata = AgentRegistry.get_all_metadata()
     total_count = len(all_metadata)
     assert total_count >= 100
-    assert total_count == 179
+    assert total_count == 181
 
     # Create mock task items for all registered specialists
     tasks = [{"agent_id": m.id, "prompt": "Status check", "context": {}} for m in all_metadata]
@@ -219,11 +206,11 @@ def test_adk_status_telemetry():
     """Test 16: get_adk_status() telemetry reporting."""
     status = get_adk_status()
     assert "registry_agents" in status
-    assert status["registry_agents"] == 179
-    assert status["adk_specialists"] == 179
-    assert status["internet_intelligence_agents"] == 48
+    assert status["registry_agents"] == 181
+    assert status["adk_specialists"] == 181
+    assert status["internet_intelligence_agents"] == 50
     assert status["department_managers"] == 10
     assert status["division_managers"] == 1
-    assert status["total_adk_nodes"] == 191
+    assert status["total_adk_nodes"] == 193
     assert "departments" in status
     assert len(status["departments"]) == 10

@@ -293,6 +293,17 @@ class URLReaderService:
             )
 
     @classmethod
+    def extract_structured_content(
+        cls,
+        url: str,
+        raw_html: str,
+        max_chars: int = 18_000,
+    ) -> StructuredWebExtract:
+        """Parse raw HTML string and extract clean structured text without network calls."""
+        canonical_url = URLCanonicalizer.canonicalize(url) or url
+        return cls._parse_html(raw_html, canonical_url, max_chars)
+
+    @classmethod
     def _parse_html(cls, html: str, url: str, max_chars: int) -> StructuredWebExtract:
         """Strip HTML clutter and extract title, headings, publication date, and relevant text."""
         soup = BeautifulSoup(html, "html.parser")

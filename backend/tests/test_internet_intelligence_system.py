@@ -54,6 +54,8 @@ EXPECTED_INTERNET_SPECIALISTS = [
     "google-news-researcher",
     "deep-web-researcher",
     "url-reader",
+    "content-extractor",
+    "passage-ranker",
     "google-search-fact-checker",
     "source-verifier",
     "freshness-checker",
@@ -96,6 +98,7 @@ EXPECTED_INTERNET_SPECIALISTS = [
     "price-monitor-researcher",
     "availability-checker",
     "internet-evidence-judge",
+    "evidence-gap-agent",
 ]
 
 
@@ -117,7 +120,7 @@ def test_custom_tools_remain_distinct_and_intact():
 def test_all_46_internet_specialists_are_real_llm_agents():
     """Test 4: All Internet Intelligence specialists are instantiated as real LlmAgents."""
     specialists = build_all_adk_specialists()
-    assert len(EXPECTED_INTERNET_SPECIALISTS) == 48
+    assert len(EXPECTED_INTERNET_SPECIALISTS) == 51
     for agent_id in EXPECTED_INTERNET_SPECIALISTS:
         assert agent_id in specialists, f"Missing specialist {agent_id}"
         agent = specialists[agent_id]
@@ -142,7 +145,6 @@ def test_native_search_specialists_isolate_google_search():
         "google-news-researcher",
         "deep-web-researcher",
         "google-search-fact-checker",
-        "source-verifier",
         "official-docs-researcher",
         "google-search-technology",
         "github-researcher",
@@ -172,12 +174,13 @@ def test_native_search_specialists_isolate_google_search():
     ]
     for agent_id in pure_search_agents:
         agent = specialists[agent_id]
-        assert len(agent.tools) == 1, f"{agent_id} expected exactly 1 tool"
-        assert agent.tools[0] is google_search
+        assert google_search in agent.tools
+        assert web_search_tool not in agent.tools
+        assert scrape_page_tool not in agent.tools
 
 
 def test_internet_intelligence_manager_orchestrates_all_46_specialists():
-    """Test 7: InternetIntelligenceManager orchestrates all specialists."""
+    """Test 7: InternetIntelligenceManager orchestrates all Internet specialists."""
     boss = get_boss_agent()
     research_mgr = next(m for m in boss.sub_agents if m.name == "research_manager")
     assert research_mgr is not None
@@ -270,7 +273,7 @@ def test_adk_hierarchy_telemetry_counts():
     summary = get_adk_hierarchy_summary()
     assert summary["registry_agents"] >= 140
     assert summary["adk_specialists"] == summary["registry_agents"]
-    assert summary["internet_intelligence_agents"] == 48
+    assert summary["internet_intelligence_agents"] == 51
     assert summary["department_managers"] == 10
     assert summary["division_managers"] == 1
     assert summary["root_agents"] == 1

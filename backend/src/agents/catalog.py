@@ -2140,6 +2140,22 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         priority=10,
         icon="ShieldCheck",
     ),
+    AgentMetadata(
+        id="evidence-gap-agent",
+        name="Evidence Gap Agent",
+        department=AgentDepartment.RESEARCH,
+        description="Audits whether current evidence answers all facets of the query and generates targeted follow-up queries when gaps exist.",
+        capabilities=["internet-intelligence", "evidence-gap-analysis", "follow-up-generation", "multi-iteration-research", "completeness-audit"],
+        responsibilities=["Audit evidence completeness across all query facets", "Identify missing sub-questions or specific missing factual details", "Generate narrow, targeted follow-up queries without broad repetition", "Prevent infinite research loops by bounding iterations to 2 or 3"],
+        required_tools=["analyze_evidence_gaps"],
+        specialized_instruction=(
+            "You are the Evidence Gap Agent (evidence_gap_agent). Audit whether verified findings completely answer the user's inquiry. "
+            "Identify missing sub-questions or specific factual details (e.g. exact release date, pricing numbers). Formulate narrow, targeted follow-up queries specifically targeting missing facets without repeating broad queries."
+        ),
+        domain_quality_criteria=["Completeness Rigor", "Non-Repetitive Targeted Follow-ups", "Loop Bounding"],
+        priority=10,
+        icon="SearchCheck",
+    ),
 ]
 
 
