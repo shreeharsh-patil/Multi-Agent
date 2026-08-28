@@ -13,6 +13,9 @@ on:
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
+    env:
+      NEXTAUTH_SECRET: "ci-only-nextauth-secret-0123456789abcdef0123456789abcdef"
+      NEXTAUTH_URL: "http://localhost:3000"
 
     steps:
       - uses: actions/checkout@v4
