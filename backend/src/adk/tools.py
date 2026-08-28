@@ -409,7 +409,10 @@ async def _duckduckgo_search(query: str, max_items: int = 8) -> List[Dict[str, s
     """Execute DuckDuckGo Web & News search using python package or HTML fallback."""
     results = []
     try:
-        from duckduckgo_search import DDGS
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
         with DDGS() as ddgs:
             ddg_results = list(ddgs.text(query, max_results=max_items))
             for item in ddg_results:
