@@ -1297,18 +1297,55 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
     # INTERNET INTELLIGENCE SYSTEM (RESEARCH DEPARTMENT - 19 SPECIALISTS)
     # ═══════════════════════════════════════════════════════════════════════════
     AgentMetadata(
+        id="web-intent-agent",
+        name="Web Intent Agent",
+        department=AgentDepartment.RESEARCH,
+        description="Decides whether a user request needs internet access or can be answered directly from baseline knowledge.",
+        capabilities=["internet-intelligence", "web-intent", "retrieval-decision", "query-classification", "intent-detection"],
+        responsibilities=["Decide whether a user request needs internet access", "Detect timeless conceptual and programming questions to bypass web", "Identify explicit web search, fact checking, and documentation requests"],
+        required_tools=[],
+        specialized_instruction=(
+            "You are the Web Intent Agent for the Internet Intelligence System. "
+            "Analyze user requests to determine whether internet access is required. "
+            "Bypass web search for timeless conceptual, coding, and mathematical questions (e.g. 'What is recursion?', 'What is OOP?', 'Explain linked lists'). "
+            "Trigger web access for requests involving current facts, live data, releases, pricing, news, explicit search keywords, citations, or URLs. "
+            "Provide structured intent decisions with clear justification."
+        ),
+        domain_quality_criteria=["Accurate Intent Classification", "Zero False Positives on Timeless Concepts", "Proper Web Trigger Identification"],
+        priority=10,
+        icon="Target",
+    ),
+    AgentMetadata(
+        id="freshness-agent",
+        name="Freshness Agent",
+        department=AgentDepartment.RESEARCH,
+        description="Determines whether current/recent information is required and infers the exact temporal freshness window.",
+        capabilities=["internet-intelligence", "freshness-analysis", "temporal-grounding", "time-window-inference", "recency-scoring"],
+        responsibilities=["Determine whether current/recent information is required", "Infer the appropriate temporal window (realtime, 24h, 7d, 30d, anytime)", "Identify time-sensitive triggers such as latest releases, weather, and CVEs"],
+        required_tools=[],
+        specialized_instruction=(
+            "You are the Freshness Agent for the Internet Intelligence System. "
+            "Evaluate the temporal requirements of user queries to determine whether live, real-time, or recent data is required. "
+            "Classify queries into exact temporal windows: REALTIME (weather, live stock/crypto price), DAY (today's events), WEEK (latest releases, CVEs), MONTH (recent updates), or ANYTIME (timeless concepts). "
+            "Output precise temporal constraints to guide search specialists."
+        ),
+        domain_quality_criteria=["Precise Temporal Windowing", "Accurate Recency Detection", "Zero Latency Drift"],
+        priority=10,
+        icon="Clock",
+    ),
+    AgentMetadata(
         id="search-planner",
         name="Search Planner",
         department=AgentDepartment.RESEARCH,
-        description="Decomposes user queries into targeted research objectives, determines freshness requirements, and assigns search angles.",
+        description="Turns the user's request into targeted research objectives and multi-angle query plans.",
         capabilities=["internet-intelligence", "search-planning", "query-decomposition", "freshness-assessment", "source-strategy"],
-        responsibilities=["Decompose complex user questions into 4-8 distinct research angles", "Identify freshness and source type requirements", "Prevent redundant or identical search queries"],
+        responsibilities=["Turn the user's request into targeted research objectives", "Decompose complex questions into non-repetitive search angles", "Assign specific research angles to specialized domain agents"],
         required_tools=[],
         specialized_instruction=(
             "You are the Search Planner for the Internet Intelligence System. "
-            "Decompose user requests into targeted, non-repetitive search objectives. "
-            "Determine freshness requirements (real-time vs recent vs standard) and assign specific query angles. "
-            "Verify all query plans and never fabricate claims or sources."
+            "Turn the user's request into targeted research objectives. "
+            "Decompose complex topics into 4-8 distinct, non-repetitive search angles across authoritative domains. "
+            "Map objectives to domain specialists and verify all research plans without fabricating claims or sources."
         ),
         domain_quality_criteria=["Query Decomposition", "Zero Redundant Searches", "Freshness Categorization", "Objective Precision"],
         priority=10,

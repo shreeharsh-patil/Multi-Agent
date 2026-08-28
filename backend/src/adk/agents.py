@@ -590,17 +590,50 @@ def create_weather_news_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
 # 4B. INTERNET INTELLIGENCE SPECIALISTS (RESEARCH DEPARTMENT - 19 SPECIALISTS)
 # ═══════════════════════════════════════════════════════════════════════════
 
+def create_web_intent_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("web-intent-agent")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Decides whether a user request needs internet access or can be answered directly from baseline knowledge.",
+        instruction=(
+            "You are the Web Intent Agent for the Internet Intelligence System. "
+            "Decide whether a user request needs internet access or can be answered directly from baseline knowledge. "
+            "Bypass web search for timeless conceptual, coding, and mathematical questions (e.g. 'What is recursion?', 'What is OOP?', 'Explain linked lists'). "
+            "Trigger web access for requests involving current facts, live data, releases, pricing, news, explicit search keywords, citations, or URLs. "
+            "Provide structured intent decisions with clear justification."
+        ),
+        tools=[],
+    )
+
+
+def create_freshness_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("freshness-agent")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Determines whether current/recent information is required and infers the exact temporal freshness window.",
+        instruction=(
+            "You are the Freshness Agent for the Internet Intelligence System. "
+            "Evaluate the temporal requirements of user queries to determine whether live, real-time, or recent data is required. "
+            "Classify queries into exact temporal windows: REALTIME (weather, live stock/crypto price), DAY (today's events), WEEK (latest releases, CVEs), MONTH (recent updates), or ANYTIME (timeless concepts). "
+            "Output precise temporal constraints to guide search specialists."
+        ),
+        tools=[],
+    )
+
+
 def create_search_planner_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
     name = registry_id_to_adk_name("search-planner")
     return LlmAgent(
         name=name,
         model=MODEL,
-        description="Decomposes user queries into targeted research objectives, determines freshness requirements, and assigns search angles.",
+        description="Turns the user's request into targeted research objectives and multi-angle query plans.",
         instruction=(
             "You are the Search Planner for the Internet Intelligence System. "
-            "Decompose complex user questions into 4-8 distinct, non-repetitive search objectives across multiple angles. "
-            "Determine freshness requirements (realtime vs recent vs standard) and assign specific query angles to specialists. "
-            "Verify all query plans, avoid redundant searches, and never fabricate claims or sources."
+            "Turn the user's request into targeted research objectives. "
+            "Decompose complex topics into 4-8 distinct, non-repetitive search angles across authoritative domains. "
+            "Map objectives to domain specialists and verify all research plans without fabricating claims or sources."
         ),
         tools=[],
     )
@@ -891,7 +924,9 @@ def create_evidence_synthesizer_agent(meta: Optional[AgentMetadata] = None) -> L
 
 
 INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
-    # Original 19 Internet Intelligence Specialists
+    # Planning & Intent Specialists
+    "web_intent_agent",
+    "freshness_agent",
     "search_planner",
     "google_search_general",
     "google_news_researcher",
@@ -1358,6 +1393,9 @@ def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> 
         "Your role is to orchestrate, plan, and delegate queries across the 46 specialized Internet Intelligence agents:\n"
         f"{specialists_roster}\n\n"
         "ROUTING MATRIX & QUERY STRATEGY:\n"
+        "- Web access decision & conceptual bypassing -> web_intent_agent\n"
+        "- Temporal freshness evaluation & window inference -> freshness_agent\n"
+        "- Query research objectives & multi-angle decomposition -> search_planner\n"
         "- Vague / poor search queries -> query_optimizer -> multi_query_generator\n"
         "- Research budget & scope -> research_scope_controller (QUICK, STANDARD, DEEP, CRITICAL, MASSIVE)\n"
         "- Ranking discovered links -> search_result_ranker\n"
@@ -1388,7 +1426,7 @@ def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> 
         "- Final research quality gate -> internet_evidence_judge\n"
         "- Packet compression & canonical deduplication -> evidence_synthesizer\n\n"
         "MULTI-STAGE DEEP RESEARCH PIPELINE:\n"
-        "1. PLAN: search_planner -> query_optimizer -> multi_query_generator -> research_scope_controller\n"
+        "1. INTENT & PLAN: web_intent_agent -> freshness_agent -> search_planner -> query_optimizer -> multi_query_generator -> research_scope_controller\n"
         "2. SEARCH: parallel domain researchers (GoogleNewsResearcher, TechnologyResearcher, OfficialDocsResearcher, GitHubResearcher, etc.)\n"
         "3. RANK & READ: search_result_ranker -> url_reader / documentation_reader\n"
         "4. AUDIT: source_verifier -> citation_auditor -> contradiction_detector -> bias_detector -> evidence_quality_judge\n"
@@ -1438,8 +1476,13 @@ SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] =
     "art": create_art_agent,
     "weather_news": create_weather_news_agent,
     "weather-news": create_weather_news_agent,
-    # 46 Internet Intelligence Specialists
+    # 48 Internet Intelligence Specialists
+    "web-intent-agent": create_web_intent_agent,
+    "web_intent_agent": create_web_intent_agent,
+    "freshness-agent": create_freshness_agent,
+    "freshness_agent": create_freshness_agent,
     "search-planner": create_search_planner_agent,
+    "search_planner": create_search_planner_agent,
     "google-search-general": create_google_search_general_agent,
     "google-news-researcher": create_google_news_researcher_agent,
     "deep-web-researcher": create_deep_web_researcher_agent,

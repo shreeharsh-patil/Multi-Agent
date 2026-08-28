@@ -46,7 +46,9 @@ def setup_adk_environment():
 
 
 EXPECTED_INTERNET_SPECIALISTS = [
-    # 19 Original
+    # Planning & Intent
+    "web-intent-agent",
+    "freshness-agent",
     "search-planner",
     "google-search-general",
     "google-news-researcher",
@@ -113,9 +115,9 @@ def test_custom_tools_remain_distinct_and_intact():
 
 
 def test_all_46_internet_specialists_are_real_llm_agents():
-    """Test 4: All 46 Internet Intelligence specialists are instantiated as real LlmAgents."""
+    """Test 4: All Internet Intelligence specialists are instantiated as real LlmAgents."""
     specialists = build_all_adk_specialists()
-    assert len(EXPECTED_INTERNET_SPECIALISTS) == 46
+    assert len(EXPECTED_INTERNET_SPECIALISTS) == 48
     for agent_id in EXPECTED_INTERNET_SPECIALISTS:
         assert agent_id in specialists, f"Missing specialist {agent_id}"
         agent = specialists[agent_id]
@@ -175,14 +177,14 @@ def test_native_search_specialists_isolate_google_search():
 
 
 def test_internet_intelligence_manager_orchestrates_all_46_specialists():
-    """Test 7: InternetIntelligenceManager orchestrates all 46 specialists."""
+    """Test 7: InternetIntelligenceManager orchestrates all specialists."""
     boss = get_boss_agent()
     research_mgr = next(m for m in boss.sub_agents if m.name == "research_manager")
     assert research_mgr is not None
 
     intel_mgr = next(s for s in research_mgr.sub_agents if s.name == "internet_intelligence_manager")
     assert intel_mgr is not None
-    assert len(intel_mgr.sub_agents) == 46
+    assert len(intel_mgr.sub_agents) == len(EXPECTED_INTERNET_SPECIALISTS)
 
     sub_names = {s.name for s in intel_mgr.sub_agents}
     expected_names = {safe_adk_name(aid) for aid in EXPECTED_INTERNET_SPECIALISTS}
@@ -268,7 +270,7 @@ def test_adk_hierarchy_telemetry_counts():
     summary = get_adk_hierarchy_summary()
     assert summary["registry_agents"] >= 140
     assert summary["adk_specialists"] == summary["registry_agents"]
-    assert summary["internet_intelligence_agents"] == 46
+    assert summary["internet_intelligence_agents"] == 48
     assert summary["department_managers"] == 10
     assert summary["division_managers"] == 1
     assert summary["root_agents"] == 1

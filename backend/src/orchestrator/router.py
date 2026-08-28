@@ -49,6 +49,12 @@ class AgentRouter:
             (r"(?i)\b(google\s+task|google\s+tasks|tasks|to-do list|checklist)\b", "tasks"),
             (r"(?i)\b(plan|deadline|remind|task\s+list)\b", "planner"),
             (r"(?i)\b(deep research|multi-page research|multi page research|exhaustive research|detailed research report|deep dive report|academic research|long research|pages research|deep analysis report)\b", "deep_research"),
+            # Explicit Web Search & Internet Intelligence
+            (r"(?i)\b(search\s+(the\s+)?(web|internet|google)|web\s+search|online\s+search|find\s+online|look\s+up\s+online|research\s+online|investigate\s+online|search\s+for|look\s+up)\b", "research"),
+            # Fresh & Real-time queries (e.g. "Latest Google ADK update", "Latest Next.js release") -> research / InternetIntelligenceManager
+            (r"(?i)\b(latest\s+[a-z0-9_\-\.\s]+(update|release|news|version|features?|patch|adk)|newest\s+[a-z0-9_\-\.\s]+(update|release)|recent\s+(developments|breakthroughs|updates|changes)|today.s\s+news|breaking\s+news)\b", "research"),
+            # Timeless programming & CS concepts -> coding (normal agent, no web)
+            (r"(?i)\b(what is|what are|explain|how does)\s+(recursion|oop|object[- ]oriented programming|linked lists?|binary search|quicksort|mergesort|polymorphism|inheritance|encapsulation|data structures?|pointers?|dynamic programming|big o notation)\b", "coding"),
             (r"(?i)\b(web\s+search|search\s+(the\s+)?(internet|web)|find\s+online|online\s+search|google\s+search|research|report\s+on|investigate)\b", "research"),
 
             (r"(?i)\b(write code|code|program|debug|function|class|algorithm|implement)\b", "coding"),
