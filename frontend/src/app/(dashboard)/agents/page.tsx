@@ -31,6 +31,7 @@ import {
 import { api } from '@/lib/api'
 
 const ALL_DEPARTMENTS = 'All Agents'
+const SPECIALIZED_AGENT_COUNT = 100
 
 const DEPARTMENTS = [
   ALL_DEPARTMENTS,
@@ -201,10 +202,10 @@ export default function AgentsPage() {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                {loading ? 'Specialized AI Agents' : `${totalAgents} Specialized AI Agents`}
+                {SPECIALIZED_AGENT_COUNT} Specialized AI Agents
               </h1>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Executive Boss Agent Orchestrator with capability-based routing across 10 functional departments
+                Catalog specialists across 10 functional departments, plus core and custom agents in the active registry
               </p>
             </div>
           </div>

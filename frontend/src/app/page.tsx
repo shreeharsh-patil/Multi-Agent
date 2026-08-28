@@ -113,7 +113,7 @@ export default function LandingPage() {
               transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) 100ms, filter 0.8s cubic-bezier(0.16,1,0.3,1) 100ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) 100ms`,
             }}
           >
-            Agentic helps you organize notes, manage Google Drive files, and create or manage Google Calendar events using AI.
+            Work with 100 specialized AI agents across 10 functional departments to research, create, analyze, and automate everyday work.
           </p>
 
           <div
@@ -139,9 +139,9 @@ export default function LandingPage() {
 
           <div className="grid w-full max-w-xl grid-cols-3 gap-2 sm:gap-8">
             {[
-              { value: "25+", label: "Domain Specialists" },
-              { value: "4", label: "Google Workspace Apps" },
-              { value: "100%", label: "Local Data Control" },
+              { value: "100", label: "Specialized Agents" },
+              { value: "10", label: "Departments" },
+              { value: "4", label: "Workspace Apps" },
             ].map((stat, i) => (
               <div
                 key={i}
@@ -235,7 +235,7 @@ export default function LandingPage() {
                 {"Specialized agents\nfor every task."}
               </RevealText>
             </div>
-            <p className="text-sm text-black/45 leading-relaxed max-w-xs">Each agent is purpose-built for a specific domain. Use them individually or combine them in a single conversation.</p>
+            <p className="text-sm text-black/45 leading-relaxed max-w-xs">Choose from 100 purpose-built specialists across 10 functional departments. Use them individually or combine them in a single conversation.</p>
           </div>
           <StackingAgentCards />
         </div>
