@@ -86,7 +86,7 @@
   /* Word breaking & text safety */
   p, span, h1, h2, h3, h4, h5, h6, li, td, th {
     overflow-wrap: break-word;
-    word-break: break-word;
+    word-break: normal;
   }
   /* Headings */
   h1, h2, h3 {
@@ -136,6 +136,13 @@
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
     @apply bg-[#e6e5e0] rounded-full hover:bg-[#f54e00]/30 transition-colors;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
   
   /* Table & Formula Overflow Containment */

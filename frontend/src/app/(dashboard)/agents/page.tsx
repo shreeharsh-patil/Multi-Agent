@@ -30,8 +30,10 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 
+const ALL_DEPARTMENTS = 'All Agents'
+
 const DEPARTMENTS = [
-  'All 100 Agents',
+  ALL_DEPARTMENTS,
   'Command and Planning',
   'Coding',
   'Research',
@@ -73,7 +75,7 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeDepartment, setActiveDepartment] = useState('All 100 Agents')
+  const [activeDepartment, setActiveDepartment] = useState(ALL_DEPARTMENTS)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Test Modal State
@@ -135,9 +137,10 @@ export default function AgentsPage() {
     }
   }, [])
 
+  const totalAgents = agents.length
   const filteredAgents = agents.filter((agent) => {
     const matchesDept =
-      activeDepartment === 'All 100 Agents' ||
+      activeDepartment === ALL_DEPARTMENTS ||
       (agent.department && agent.department.toLowerCase() === activeDepartment.toLowerCase())
     const q = searchQuery.toLowerCase().trim()
     const matchesQuery =
@@ -190,36 +193,40 @@ export default function AgentsPage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 sm:space-y-8">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border pb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
-              <Sparkles className="w-6 h-6" />
+      <div className="flex min-w-0 flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="shrink-0 rounded-xl border border-primary/20 bg-primary/10 p-2.5 text-primary">
+              <Sparkles className="h-6 w-6" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">100 Specialized AI Agents</h1>
-              <p className="text-muted-foreground text-sm mt-1">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                {loading ? 'Specialized AI Agents' : `${totalAgents} Specialized AI Agents`}
+              </h1>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Executive Boss Agent Orchestrator with capability-based routing across 10 functional departments
               </p>
             </div>
           </div>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-          <Badge variant="outline" className="px-3 py-1 text-xs border-primary/30 text-primary bg-primary/5">
-            <CheckCircle className="w-3.5 h-3.5 mr-1 text-emerald-500" />
-            {agents.length} Agents Active
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center lg:shrink-0 lg:justify-end">
+          <Badge variant="outline" className="w-fit shrink-0 whitespace-nowrap border-primary/30 bg-primary/5 px-3 py-1 text-xs text-primary">
+            <CheckCircle className="mr-1 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            {loading ? 'Loading agents' : `${totalAgents} Agents Active`}
           </Badge>
           <Button onClick={() => setBuilderOpen(true)} className="w-full gap-2 shadow-sm sm:w-auto">
-            <Plus className="w-4 h-4" /> Create Custom Agent
+            <Plus className="h-4 w-4 shrink-0" /> Create Custom Agent
           </Button>
         </div>
       </div>
 
       {/* Search & Department Selector */}
       <div className="space-y-4">
-        <div className="relative max-w-md">
+        <div className="relative w-full lg:max-w-2xl">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            type="search"
+            aria-label="Search agents"
             placeholder="Search agents by name, capability, or slug ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -228,29 +235,30 @@ export default function AgentsPage() {
         </div>
 
         {/* Department Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <nav aria-label="Filter agents by department" className="scrollbar-none -mx-1 flex max-w-full flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-2 [scrollbar-gutter:auto] [touch-action:pan-x] lg:mx-0 lg:flex-wrap lg:overflow-x-visible lg:px-0 lg:pb-0">
           {DEPARTMENTS.map((dept) => {
             const Icon = departmentIconMap[dept] || Layers
             const isActive = activeDepartment === dept
             const count =
-              dept === 'All 100 Agents'
-                ? agents.length
+              dept === ALL_DEPARTMENTS
+                ? totalAgents
                 : agents.filter((a) => a.department && a.department.toLowerCase() === dept.toLowerCase()).length
 
             return (
               <button
                 key={dept}
                 onClick={() => setActiveDepartment(dept)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
+                aria-pressed={isActive}
+                className={`flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-3.5 py-2 text-xs font-medium transition-all lg:min-h-0 ${
                   isActive
                     ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                     : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50 border-border'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span>{dept}</span>
                 <span
-                  className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
+                  className={`ml-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
                     isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
                   }`}
                 >
@@ -259,7 +267,7 @@ export default function AgentsPage() {
               </button>
             )
           })}
-        </div>
+        </nav>
       </div>
 
       {/* Agents Grid */}
@@ -279,48 +287,46 @@ export default function AgentsPage() {
           <p className="text-xs text-muted-foreground mt-1">Try adjusting your search query or department filter.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredAgents.map((agent) => {
             const DeptIcon = (agent.department && departmentIconMap[agent.department]) || Bot
 
             return (
               <Card
                 key={agent.id}
-                className="group relative flex flex-col justify-between hover:shadow-md transition-all border-border hover:border-primary/40"
+                className="group relative flex h-full w-full min-w-0 flex-col border-border transition-all hover:border-primary/40 hover:shadow-md"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-primary/10 text-primary group-hover:scale-105 transition-transform border border-primary/20">
-                        <DeptIcon className="w-5 h-5" />
+                <CardHeader className="min-w-0 flex-1 pb-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                      <div className="shrink-0 rounded-lg border border-primary/20 bg-primary/10 p-2.5 text-primary transition-transform group-hover:scale-105">
+                        <DeptIcon className="h-5 w-5" />
                       </div>
-                      <div>
-                        <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="break-words text-base font-semibold [word-break:normal] transition-colors group-hover:text-primary">
                           {agent.name}
                         </CardTitle>
-                        <span className="font-mono text-[11px] text-muted-foreground">{agent.id}</span>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground" title={agent.id}>{agent.id}</p>
                       </div>
-                    </div>
-                    {agent.department && (
-                      <Badge variant="outline" className="text-[10px] px-2 py-0.5 whitespace-nowrap bg-muted/50">
-                        {agent.department}
-                      </Badge>
-                    )}
                   </div>
-                  <CardDescription className="text-xs line-clamp-2 mt-2 leading-relaxed">
+                  {agent.department && (
+                    <Badge variant="outline" className="mt-3 max-w-full self-start whitespace-nowrap bg-muted/50 px-2 py-0.5 text-[10px]">
+                      {agent.department}
+                    </Badge>
+                  )}
+                  <CardDescription className="mt-3 line-clamp-3 break-words text-xs leading-relaxed [word-break:normal]">
                     {agent.description}
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="space-y-3 pt-0">
+                <CardContent className="mt-auto min-w-0 space-y-3 pt-0">
                   {/* Capability Tags */}
                   {agent.capabilities && agent.capabilities.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
                       {agent.capabilities.slice(0, 4).map((cap) => (
                         <Badge
                           key={cap}
                           variant="secondary"
-                          className="text-[10px] px-2 py-0 bg-secondary/60 text-secondary-foreground font-normal"
+                          className="max-w-full truncate bg-secondary/60 px-2 py-0 text-[10px] font-normal text-secondary-foreground"
                         >
                           {cap}
                         </Badge>
