@@ -7,10 +7,16 @@ When the LLM provider is not Gemini, falls back to the custom agent
 system since ADK is tightly coupled to Google's GenAI SDK.
 """
 
+import asyncio
+import json
+import re
+from typing import Optional
+
 from google.adk import Runner
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+
 from src.adk.agents import create_boss_agent
 from src.config import settings
 from src.utils.logger import logger
@@ -19,32 +25,80 @@ SESSION_SERVICE = InMemorySessionService()
 APP_NAME = "agentic"
 
 
-def use_adk() -> bool:
-    """ADK only works with the Gemini provider.
+def _configured_gemini_keys() -> list[str]:
+    """Return configured Gemini credentials without empty entries."""
+    return [key.strip() for key in (settings.gemini_api_key or "").split(",") if key.strip()]
 
-    Returns True if a Gemini API key is configured (even if other
-    fallback providers are available via the RotatingProvider).
+
+def _looks_like_google_ai_api_key(key: str) -> bool:
+    """Reject OAuth/client secrets accidentally pasted into GEMINI_API_KEY.
+
+    Google AI Studio API keys currently use the ``AIza`` prefix. Keeping this
+    check local prevents ADK from repeatedly making doomed requests with an
+    OAuth client secret or access token and then appearing to be initialized.
     """
-    return bool(settings.gemini_api_key)
+    return bool(re.fullmatch(r"AIza[0-9A-Za-z_-]{30,60}", key))
+
+
+def get_adk_status() -> dict[str, object]:
+    """Return a secret-free ADK configuration status for logs and health checks."""
+    keys = _configured_gemini_keys()
+    if not settings.adk_enabled:
+        status = "disabled"
+    elif not keys:
+        status = "missing_key"
+    elif not any(_looks_like_google_ai_api_key(key) for key in keys):
+        status = "invalid_key_format"
+    else:
+        status = "configured"
+
+    base_status: dict[str, object] = {
+        "enabled": status == "configured",
+        "status": status,
+        "model": settings.gemini_model,
+    }
+
+    try:
+        from src.adk.agents import get_adk_hierarchy_summary
+        summary = get_adk_hierarchy_summary()
+        base_status.update({
+            "registry_agents": summary.get("registry_agents", 0),
+            "adk_specialists": summary.get("adk_specialists", 0),
+            "internet_intelligence_agents": summary.get("internet_intelligence_agents", 0),
+            "google_search_agents": summary.get("google_search_agents", 0),
+            "division_managers": summary.get("division_managers", 0),
+            "department_managers": summary.get("department_managers", 0),
+            "root_agents": summary.get("root_agents", 1),
+            "total_adk_nodes": summary.get("total_adk_nodes", 0),
+            "root_agent": summary.get("root_agent", "boss_agent"),
+            "architecture": summary.get("architecture", "hierarchical"),
+            "departments": summary.get("departments", {}),
+        })
+    except Exception as e:
+        logger.warning(f"Could not load ADK hierarchy summary for status: {e}")
+
+    return base_status
+
+
+def use_adk() -> bool:
+    """Use ADK only when it is enabled and has an AI Studio API key."""
+    return bool(get_adk_status()["enabled"])
 
 
 async def get_or_create_session(user_id: str, conversation_id: str):
     """Get an existing session or create a new one."""
-    import inspect
-    session_res = SESSION_SERVICE.get_session(
+    session = await SESSION_SERVICE.get_session(
         app_name=APP_NAME,
         user_id=user_id,
         session_id=conversation_id,
     )
-    session = await session_res if inspect.iscoroutine(session_res) else session_res
 
     if not session:
-        create_res = SESSION_SERVICE.create_session(
+        session = await SESSION_SERVICE.create_session(
             app_name=APP_NAME,
             user_id=user_id,
             session_id=conversation_id,
         )
-        session = await create_res if inspect.iscoroutine(create_res) else create_res
         logger.info(f"Created session: {conversation_id} for user: {user_id}")
     return session
 
@@ -121,6 +175,89 @@ def _get_content_piece(event) -> str:
     return ""
 
 
+def _format_agent_trace(node_name: str, event_type: str, has_content: bool) -> dict:
+    """Format rich telemetry trace for real ADK agent executions."""
+    from src.adk.agents import adk_name_to_registry_id
+    from src.agents.registry import AgentRegistry
+
+    reg_id = adk_name_to_registry_id(node_name)
+    meta = AgentRegistry.get_metadata(reg_id)
+
+    if meta:
+        dept = meta.department.value
+        name = meta.name
+    elif node_name in {"internet_intelligence_manager", "google_search_manager"}:
+        dept = "Internet Intelligence Division"
+        name = "Internet Intelligence Manager"
+    elif "manager" in node_name:
+        dept = "Department Management"
+        name = node_name.replace("_", " ").title()
+    elif node_name == "boss_agent":
+        dept = "Executive Orchestration"
+        name = "Boss Agent"
+    else:
+        dept = "Specialist"
+        name = node_name
+
+    return {
+        "agent_id": node_name,
+        "registry_id": reg_id,
+        "adk_name": node_name,
+        "name": name,
+        "department": dept,
+        "event_type": event_type,
+        "has_content": has_content,
+    }
+
+
+async def execute_adk_specialists_batch(
+    specialist_tasks: list[dict],
+    user_id: str = "default",
+    max_concurrency: Optional[int] = None,
+) -> list[dict]:
+    """Execute a batch of specialist agents with bounded concurrency and exponential backoff retry.
+    Prevents 429 quota exhaustion and memory spikes when dozens or >100 specialists run.
+    """
+    concurrency_limit = max_concurrency or settings.adk_max_concurrent_specialists
+    sem = asyncio.Semaphore(concurrency_limit)
+
+    async def _run_single(task_item: dict) -> dict:
+        agent_id = task_item.get("agent_id", "")
+        task_prompt = task_item.get("prompt", "")
+        context = task_item.get("context", {})
+        async with sem:
+            for attempt in range(3):
+                try:
+                    from src.agents.registry import AgentRegistry
+                    agent = AgentRegistry.get_agent(agent_id)
+                    if agent:
+                        res = await agent.execute(task_prompt, context)
+                        return {
+                            "agent_id": agent_id,
+                            "success": res.success,
+                            "output": res.output,
+                            "citations": res.citations,
+                        }
+                    else:
+                        return {"agent_id": agent_id, "success": False, "error": f"Agent '{agent_id}' not found"}
+                except Exception as e:
+                    if attempt < 2 and any(k in str(e).lower() for k in ["429", "rate", "quota", "resource"]):
+                        await asyncio.sleep(0.5 * (2 ** attempt))
+                        continue
+                    return {"agent_id": agent_id, "success": False, "error": str(e)}
+
+    tasks = [_run_single(t) for t in specialist_tasks]
+    return await asyncio.gather(*tasks)
+
+
+def reset_adk_agent_tree() -> None:
+    """Reset cached ADK agent tree."""
+    global _boss_agent
+    _boss_agent = None
+    from src.adk.agents import reset_adk_agent_tree as _reset_agents
+    _reset_agents()
+
+
 async def process_message(
     message: str,
     user_id: str = "default",
@@ -160,11 +297,10 @@ async def process_message(
 
         agent_traces = []
         for event in events:
-            agent_traces.append({
-                "agent_id": event.node_name if hasattr(event, "node_name") else "unknown",
-                "event_type": str(type(event).__name__),
-                "has_content": bool(_get_content_piece(event)),
-            })
+            node_name = event.node_name if hasattr(event, "node_name") else "unknown"
+            event_type = str(type(event).__name__)
+            has_content = bool(_get_content_piece(event))
+            agent_traces.append(_format_agent_trace(node_name, event_type, has_content))
 
         logger.info(
             f"ADK processed message",
@@ -386,13 +522,10 @@ async def process_message_stream(
                 accumulated_content += content_piece
                 yield {"event": "chunk", "data": {"text": content_piece}}
 
+            trace_info = _format_agent_trace(agent_id, event_type, bool(content_piece))
             yield {
                 "event": "trace",
-                "data": {
-                    "agent_id": agent_id,
-                    "event_type": event_type,
-                    "has_content": bool(content_piece),
-                },
+                "data": trace_info,
             }
 
             if is_final:

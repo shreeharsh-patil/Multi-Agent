@@ -175,7 +175,8 @@ Copy `.env.example` to the project root `.env`:
 
 ```ini
 # Core AI Services
-GEMINI_API_KEY="your_google_gemini_api_key"
+GEMINI_API_KEY="your_google_ai_studio_api_key"
+ADK_ENABLED="true"
 LLM_PROVIDER="groq" # Options: groq, gemini, openrouter, mistral
 
 # Database & Vector Stores

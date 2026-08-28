@@ -77,6 +77,13 @@ async def list_agents(request: Request) -> list[dict]:
     return built_ins + [serialize_custom(agent) for agent in custom_agents]
 
 
+@router.get("/adk-status")
+async def get_adk_hierarchy_status() -> dict:
+    """Return live dynamic status and hierarchy telemetry for Google ADK."""
+    from src.adk.runner import get_adk_status
+    return get_adk_status()
+
+
 @router.post("")
 async def create_custom_agent(request: Request, body: CustomAgentInput) -> dict:
     if not body.name.strip() or not body.system_instruction.strip():

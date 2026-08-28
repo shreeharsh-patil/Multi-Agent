@@ -31,10 +31,11 @@ import {
 import { api } from '@/lib/api'
 
 const ALL_DEPARTMENTS = 'All Agents'
-const SPECIALIZED_AGENT_COUNT = 100
+const INTERNET_INTELLIGENCE_FILTER = 'Internet Intelligence'
 
 const DEPARTMENTS = [
   ALL_DEPARTMENTS,
+  INTERNET_INTELLIGENCE_FILTER,
   'Command and Planning',
   'Coding',
   'Research',
@@ -48,6 +49,7 @@ const DEPARTMENTS = [
 ]
 
 const departmentIconMap: Record<string, import('lucide-react').LucideIcon> = {
+  'Internet Intelligence': Search,
   'Command and Planning': Workflow,
   Coding: Code2,
   Research: Globe,
@@ -138,11 +140,34 @@ export default function AgentsPage() {
     }
   }, [])
 
+  const isInternetIntelligenceAgent = (agent: AgentItem) => {
+    return (
+      agent.id.startsWith('google-search') ||
+      agent.id.startsWith('google-news') ||
+      agent.id === 'search-planner' ||
+      agent.id === 'deep-web-researcher' ||
+      agent.id === 'url-reader' ||
+      agent.id === 'source-verifier' ||
+      agent.id === 'freshness-checker' ||
+      agent.id === 'official-docs-researcher' ||
+      agent.id === 'github-researcher' ||
+      agent.id === 'cybersecurity-researcher' ||
+      agent.id === 'community-researcher' ||
+      agent.id === 'evidence-synthesizer' ||
+      (agent.capabilities && agent.capabilities.some((c) => c.toLowerCase().includes('internet-intelligence') || c.toLowerCase().includes('google-search'))) ||
+      (agent.tools && agent.tools.some((t) => t.toLowerCase().includes('google_search') || t.toLowerCase().includes('google-search') || t.toLowerCase().includes('scrape_page')))
+    )
+  }
+
   const totalAgents = agents.length
   const filteredAgents = agents.filter((agent) => {
     const matchesDept =
-      activeDepartment === ALL_DEPARTMENTS ||
-      (agent.department && agent.department.toLowerCase() === activeDepartment.toLowerCase())
+      activeDepartment === ALL_DEPARTMENTS
+        ? true
+        : activeDepartment === INTERNET_INTELLIGENCE_FILTER
+        ? isInternetIntelligenceAgent(agent)
+        : agent.department && agent.department.toLowerCase() === activeDepartment.toLowerCase()
+
     const q = searchQuery.toLowerCase().trim()
     const matchesQuery =
       !q ||
@@ -202,10 +227,10 @@ export default function AgentsPage() {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                {SPECIALIZED_AGENT_COUNT} Specialized AI Agents
+                {loading ? 'Specialized' : totalAgents} Specialized AI Agents
               </h1>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Catalog specialists across 10 functional departments, plus core and custom agents in the active registry
+                Catalog specialists across 10 functional departments including native Internet Intelligence division, plus core and custom agents in the active registry
               </p>
             </div>
           </div>
@@ -243,6 +268,8 @@ export default function AgentsPage() {
             const count =
               dept === ALL_DEPARTMENTS
                 ? totalAgents
+                : dept === INTERNET_INTELLIGENCE_FILTER
+                ? agents.filter(isInternetIntelligenceAgent).length
                 : agents.filter((a) => a.department && a.department.toLowerCase() === dept.toLowerCase()).length
 
             return (

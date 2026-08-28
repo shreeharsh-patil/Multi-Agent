@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     embedding_model: str = "text-embedding-004"
+    adk_enabled: bool = True
 
     openrouter_api_key: str = ""
     openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
@@ -162,6 +163,13 @@ class Settings(BaseSettings):
     agentic_include_reviewers: bool = True
     agentic_auto_evaluate: bool = True
     agentic_strong_synthesis: bool = True
+
+    # ---- Google ADK Hierarchical Multi-Agent Architecture ----
+    adk_max_specialists_per_task: int = 12
+    adk_default_max_specialists: int = 12
+    adk_deep_max_specialists: int = 40
+    adk_massive_max_specialists: int = 120
+    adk_max_concurrent_specialists: int = 8
 
     model_config = {
         # Resolve both env files so startup works from either the repository

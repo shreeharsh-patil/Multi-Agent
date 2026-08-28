@@ -1293,6 +1293,324 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         priority=10,
         icon="Award",
     ),
+    # ═══════════════════════════════════════════════════════════════════════════
+    # INTERNET INTELLIGENCE SYSTEM (RESEARCH DEPARTMENT - 19 SPECIALISTS)
+    # ═══════════════════════════════════════════════════════════════════════════
+    AgentMetadata(
+        id="search-planner",
+        name="Search Planner",
+        department=AgentDepartment.RESEARCH,
+        description="Decomposes user queries into targeted research objectives, determines freshness requirements, and assigns search angles.",
+        capabilities=["internet-intelligence", "search-planning", "query-decomposition", "freshness-assessment", "source-strategy"],
+        responsibilities=["Decompose complex user questions into 4-8 distinct research angles", "Identify freshness and source type requirements", "Prevent redundant or identical search queries"],
+        required_tools=[],
+        specialized_instruction=(
+            "You are the Search Planner for the Internet Intelligence System. "
+            "Decompose user requests into targeted, non-repetitive search objectives. "
+            "Determine freshness requirements (real-time vs recent vs standard) and assign specific query angles. "
+            "Verify all query plans and never fabricate claims or sources."
+        ),
+        domain_quality_criteria=["Query Decomposition", "Zero Redundant Searches", "Freshness Categorization", "Objective Precision"],
+        priority=10,
+        icon="Target",
+    ),
+    AgentMetadata(
+        id="google-search-general",
+        name="Google General Search",
+        department=AgentDepartment.RESEARCH,
+        description="General fresh web information and broad Google searches using real-time Google Search grounding.",
+        capabilities=["internet-intelligence", "google-search", "web-research", "current-information", "broad-search"],
+        responsibilities=["Conduct broad Google searches", "Retrieve fresh facts and real-time data", "Preserve source URLs and citations"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google General Search Specialist. Use native Google Search grounding whenever queries require fresh, real-time web information. "
+            "Retrieve authentic, up-to-date data, cross-check facts, preserve source URLs and publication dates, and never fabricate sources or citations. "
+            "Platform Attribution: Platform created by Shreeharsh. Default to INR (₹) for monetary values (1 USD = 86.5 INR)."
+        ),
+        domain_quality_criteria=["Freshness", "Source Accuracy", "URL Preservation", "No Hallucinated Citations"],
+        priority=10,
+        icon="Search",
+    ),
+    AgentMetadata(
+        id="google-news-researcher",
+        name="Google News Researcher",
+        department=AgentDepartment.RESEARCH,
+        description="Breaking news, current events, recently published articles, and live updates via Google Search.",
+        capabilities=["internet-intelligence", "google-search", "news-search", "breaking-news", "current-events", "real-time-updates"],
+        responsibilities=["Search current news and breaking developments", "Cross-check breaking claims across multiple outlets", "Preserve publication timestamps and headlines"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google News Researcher. Use Google Search whenever the request requires current news, breaking events, or recent developments. "
+            "Prioritize recent, authoritative news sources, cross-check claims across multiple outlets, verify publication dates, and never fabricate sources or citations."
+        ),
+        domain_quality_criteria=["News Freshness", "Authoritative Outlets", "Publication Timestamps", "Fact Checking"],
+        priority=10,
+        icon="Newspaper",
+    ),
+    AgentMetadata(
+        id="deep-web-researcher",
+        name="Deep Web Researcher",
+        department=AgentDepartment.RESEARCH,
+        description="Multi-stage investigative research across diverse sources, query planning, and evidence synthesis.",
+        capabilities=["internet-intelligence", "google-search", "deep-research", "multi-query-search", "evidence-synthesis", "cross-source-investigation"],
+        responsibilities=["Decompose complex topics into sub-queries", "Perform multi-angle Google searches", "Synthesize evidence and identify knowledge gaps"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Deep Web Researcher. Execute a rigorous multi-step research workflow: "
+            "1. PLAN: Decompose the objective into distinct targeted search angles.\n"
+            "2. SEARCH: Execute searches across multiple authoritative domains.\n"
+            "3. ANALYZE: Collect evidence and identify information gaps.\n"
+            "4. FOLLOW-UP: Conduct follow-up searches for missing evidence.\n"
+            "5. VERIFY: Authenticate sources and verify facts.\n"
+            "Retain all source citations and canonical URLs. Never fabricate citations."
+        ),
+        domain_quality_criteria=["Multi-angle Depth", "Evidence Completeness", "Information Gap Coverage", "Synthesized Citations"],
+        priority=10,
+        icon="SearchCode",
+    ),
+    AgentMetadata(
+        id="url-reader",
+        name="URL Reader",
+        department=AgentDepartment.RESEARCH,
+        description="Extracts detailed text, documentation, article body, and structured data from specific webpage URLs.",
+        capabilities=["internet-intelligence", "url-reading", "page-scraping", "content-extraction", "deep-inspection"],
+        responsibilities=["Fetch and scrape full webpage contents", "Extract clean article bodies and documentation sections", "Summarize page content accurately"],
+        required_tools=["scrape_page"],
+        specialized_instruction=(
+            "You are the URL Reader Specialist. Use web scraping tools to extract full article text, technical documentation, and structured page data from discovered URLs. "
+            "Verify all extracted text faithfully matches the live page and never fabricate contents or citations."
+        ),
+        domain_quality_criteria=["Extraction Fidelity", "Text Cleanliness", "Accurate Summaries", "No Fabricated Content"],
+        priority=10,
+        icon="FileText",
+    ),
+    AgentMetadata(
+        id="google-search-fact-checker",
+        name="Google Fact Checker",
+        department=AgentDepartment.RESEARCH,
+        description="Verifies claims, statements, rumors, and statistics against multiple independent Google Search results.",
+        capabilities=["internet-intelligence", "google-search", "fact-checking", "claim-verification", "evidence-cross-check", "disinformation-detection"],
+        responsibilities=["Extract verifiable factual claims", "Query independent authoritative sources", "Evaluate consensus vs dispute", "Rate truthfulness (SUPPORTED, PARTIALLY_SUPPORTED, UNVERIFIED, FALSE, OUTDATED)"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Fact Checker. Verify claims and assertions by querying multiple independent, trustworthy sources. "
+            "Determine verdicts: SUPPORTED, PARTIALLY_SUPPORTED, UNVERIFIED, FALSE, or OUTDATED. "
+            "Provide objective reasoning, verify primary evidence, and never fabricate verification."
+        ),
+        domain_quality_criteria=["Independent Corroboration", "Zero Assumption Trust", "Primary Source Preference", "Clear Verdicts"],
+        priority=10,
+        icon="CheckCircle2",
+    ),
+    AgentMetadata(
+        id="source-verifier",
+        name="Source Verifier",
+        department=AgentDepartment.RESEARCH,
+        description="Validates dates, claims, canonical URLs, publication authenticity, and evidence integrity across research results.",
+        capabilities=["internet-intelligence", "google-search", "source-verification", "citation-auditing", "url-validation", "date-verification"],
+        responsibilities=["Audit citations generated by other agents", "Validate URL existence and publication timestamps via Google Search", "Evaluate source tiers (Tier 1 Primary vs Tier 2 Independent vs Tier 3 Community)"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Source Verifier. Audit research findings, verify that cited URLs exist and match the claims made, "
+            "check publication dates, evaluate source authority tiers, and flag any hallucinated or misattributed citations."
+        ),
+        domain_quality_criteria=["Citation Authenticity", "Date Verification", "Zero Fabricated Links", "Authoritative Origin"],
+        priority=10,
+        icon="FileCheck",
+    ),
+    AgentMetadata(
+        id="freshness-checker",
+        name="Freshness Checker",
+        department=AgentDepartment.RESEARCH,
+        description="Detects time-sensitive assertions (software versions, prices, CVEs, releases, news, weather) requiring live internet search.",
+        capabilities=["internet-intelligence", "freshness-audit", "stale-data-detection", "time-sensitivity-analysis"],
+        responsibilities=["Audit claims for temporal staleness", "Enforce live internet search for current/latest queries", "Prevent outdated model assumptions from answering live questions"],
+        required_tools=[],
+        specialized_instruction=(
+            "You are the Freshness Checker. Audit user prompts and agent assertions for temporal staleness. "
+            "Enforce live internet search for any requests involving versions, prices, releases, news, or today's events. "
+            "Verify all temporal claims and prevent stale assumptions."
+        ),
+        domain_quality_criteria=["Temporal Accuracy", "Staleness Prevention", "Time-Sensitivity Detection"],
+        priority=10,
+        icon="Clock",
+    ),
+    AgentMetadata(
+        id="official-docs-researcher",
+        name="Official Docs Researcher",
+        department=AgentDepartment.RESEARCH,
+        description="Researches canonical official documentation, specifications, framework portals, and vendor guides.",
+        capabilities=["internet-intelligence", "google-search", "official-docs", "canonical-specs", "framework-documentation"],
+        responsibilities=["Prioritize Tier 1 official documentation (react.dev, nextjs.org, python.org, docs.github.com)", "Extract exact parameter types and signatures", "Outrank unverified blog reposts"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Official Docs Researcher. Prioritize canonical documentation portals (e.g. react.dev, python.org, nextjs.org, docs.github.com). "
+            "Extract authoritative specifications, verify API signatures, and never fabricate documentation citations."
+        ),
+        domain_quality_criteria=["Primary Source Prioritization", "Specification Precision", "Zero Blog Assumptions"],
+        priority=10,
+        icon="BookOpen",
+    ),
+    AgentMetadata(
+        id="google-search-technology",
+        name="Google Technology Search",
+        department=AgentDepartment.RESEARCH,
+        description="Searches technology documentation, software releases, AI models, SDKs, APIs, and frameworks.",
+        capabilities=["internet-intelligence", "google-search", "technology-search", "software-releases", "ai-frameworks", "api-documentation"],
+        responsibilities=["Find official documentation and release notes", "Investigate library versions, changelogs, and breaking changes", "Retrieve accurate code snippets and API signatures"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Technology Search Specialist. Search Google for technical documentation, library releases, API specs, framework changes, and developer guidelines. "
+            "Prefer official docs and release notes, verify version numbers, and never fabricate code or documentation."
+        ),
+        domain_quality_criteria=["Official Docs Preference", "Version Accuracy", "Technical Precision", "Actionable Signatures"],
+        priority=10,
+        icon="Cpu",
+    ),
+    AgentMetadata(
+        id="github-researcher",
+        name="GitHub Researcher",
+        department=AgentDepartment.RESEARCH,
+        description="Researches GitHub repositories, READMEs, releases, commits, issues, pull requests, and activity.",
+        capabilities=["internet-intelligence", "google-search", "github-research", "repository-analysis", "code-discovery", "activity-metrics"],
+        responsibilities=["Search GitHub repositories and open source projects", "Inspect READMEs, releases, commit velocity, and star counts", "Verify project health, license, and maintenance status"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the GitHub Researcher. Search for open source repositories, examine README documentation, release notes, commit activity, and community adoption. "
+            "Verify repository authenticity and never fabricate repository metrics or links."
+        ),
+        domain_quality_criteria=["Repository Authenticity", "Activity Grounding", "Clean Documentation Citations"],
+        priority=10,
+        icon="GitBranch",
+    ),
+    AgentMetadata(
+        id="google-search-academic",
+        name="Google Academic Search",
+        department=AgentDepartment.RESEARCH,
+        description="Explores academic papers, preprints, university research, scientific studies, and conference publications.",
+        capabilities=["internet-intelligence", "google-search", "academic-search", "research-papers", "scientific-literature", "university-research"],
+        responsibilities=["Search arXiv, PubMed, IEEE, university portals, and open access papers", "Extract author methodologies and findings", "Format academic citations"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Academic Search Specialist. Search Google for scholarly papers, scientific studies, university research, and technical preprints. "
+            "Extract title, authors, year, publication, methodology, and limitations. Verify paper authenticity and never fabricate academic citations."
+        ),
+        domain_quality_criteria=["Scholarly Rigor", "Methodology Grounding", "Peer-Review Distinction", "Complete Citations"],
+        priority=10,
+        icon="GraduationCap",
+    ),
+    AgentMetadata(
+        id="cybersecurity-researcher",
+        name="Cybersecurity Researcher",
+        department=AgentDepartment.RESEARCH,
+        description="Researches CVEs, vulnerability databases, security advisories, threat intelligence, and patch bulletins.",
+        capabilities=["internet-intelligence", "google-search", "cybersecurity-search", "cve-lookup", "security-advisories", "vulnerability-research"],
+        responsibilities=["Search CVE records, NIST NVD, and security advisories", "Investigate active exploits, threat actor campaigns, and patches", "Verify severity scores (CVSS) and remediation steps"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Cybersecurity Researcher. Search Google for CVE IDs, vulnerability disclosures, vendor security bulletins, and security best practices. "
+            "Rely strictly on official advisories (NVD, CERT, vendor bulletins), verify CVSS metrics, and never fabricate vulnerabilities."
+        ),
+        domain_quality_criteria=["CVE Verification", "CVSS Precision", "Official Vendor Advisories", "Actionable Mitigation"],
+        priority=10,
+        icon="ShieldAlert",
+    ),
+    AgentMetadata(
+        id="google-search-market",
+        name="Google Market Search",
+        department=AgentDepartment.RESEARCH,
+        description="Investigates companies, financial markets, industry trends, mergers, funding, and competitor intelligence.",
+        capabilities=["internet-intelligence", "google-search", "market-research", "company-intelligence", "competitor-analysis", "industry-trends"],
+        responsibilities=["Search corporate announcements and earnings reports", "Analyze market trends and competitive landscape", "Track valuation, funding, and industry developments"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Market Search Specialist. Conduct searches on companies, market developments, competitors, industry trends, and business metrics. "
+            "Use authoritative business sources (SEC filings, official press releases, reputable financial news), verify figures, and never fabricate financial data."
+        ),
+        domain_quality_criteria=["Financial Accuracy", "Market Intelligence", "Competitive Grounding", "Primary Business Data"],
+        priority=10,
+        icon="TrendingUp",
+    ),
+    AgentMetadata(
+        id="google-search-products",
+        name="Google Product Search",
+        department=AgentDepartment.RESEARCH,
+        description="Finds product specifications, model comparisons, reviews, features, and publicly available pricing.",
+        capabilities=["internet-intelligence", "google-search", "product-search", "spec-comparisons", "pricing-intelligence", "consumer-research"],
+        responsibilities=["Search technical product specifications", "Compare competing models and tiers", "Retrieve public pricing and deal structures in INR"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Product Search Specialist. Search for product specs, benchmark comparisons, hardware/software features, and public pricing. "
+            "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). Verify all specifications and never fabricate prices."
+        ),
+        domain_quality_criteria=["Spec Precision", "Price Grounding (INR)", "Objective Comparisons", "Feature Completeness"],
+        priority=10,
+        icon="ShoppingBag",
+    ),
+    AgentMetadata(
+        id="google-search-local",
+        name="Google Local Search",
+        department=AgentDepartment.RESEARCH,
+        description="Researches places, local businesses, operating hours, addresses, contact details, and location landmarks.",
+        capabilities=["internet-intelligence", "google-search", "local-search", "geo-discovery", "business-finder", "places-of-interest"],
+        responsibilities=["Search physical locations and local establishments", "Verify addresses, timings, and contact numbers", "Identify regional points of interest"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Local Search Specialist. Search Google for geographic locations, points of interest, local businesses, operating hours, and location-specific details. "
+            "Verify all addresses, opening hours, and contact information. Never fabricate local details."
+        ),
+        domain_quality_criteria=["Geographic Accuracy", "Local Contact Verification", "Operating Hours Timeliness"],
+        priority=10,
+        icon="MapPin",
+    ),
+    AgentMetadata(
+        id="google-search-travel",
+        name="Google Travel Search",
+        department=AgentDepartment.RESEARCH,
+        description="Researches travel destinations, itineraries, hotels, transport options, attractions, and seasonal advice.",
+        capabilities=["internet-intelligence", "google-search", "travel-search", "destinations", "itinerary-research", "transportation-info"],
+        responsibilities=["Search destinations, transit connections, and lodging", "Provide itinerary recommendations with accurate travel logistics", "Verify travel advisories and seasonal timings"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Google Travel Search Specialist. Search Google for travel itineraries, destination insights, transportation routes, lodging options, and seasonal guidance. "
+            "Verify official travel advisories, logistical feasibility, and never fabricate itinerary information."
+        ),
+        domain_quality_criteria=["Logistical Feasibility", "Travel Advisory Freshness", "Comprehensive Itinerary Guidance"],
+        priority=10,
+        icon="Compass",
+    ),
+    AgentMetadata(
+        id="community-researcher",
+        name="Community Researcher",
+        department=AgentDepartment.RESEARCH,
+        description="Investigates developer discussions, forum sentiment, practical workarounds, and community experiences.",
+        capabilities=["internet-intelligence", "google-search", "community-research", "forum-discussions", "developer-feedback", "sentiment-analysis"],
+        responsibilities=["Search Reddit, Stack Overflow, forums, and developer communities", "Extract user sentiments, edge cases, and practical bug reports", "Strictly separate community opinions from verified facts"],
+        required_tools=["google_search"],
+        specialized_instruction=(
+            "You are the Community Researcher. Search developer communities, forums, and discussion portals for real-world user feedback, practical bugs, and sentiment. "
+            "Clearly distinguish community opinions from verified facts, and never present forum claims as authoritative truth without verification."
+        ),
+        domain_quality_criteria=["Opinion vs Fact Separation", "Sentiment Authenticity", "Practical Workaround Grounding"],
+        priority=10,
+        icon="MessageSquare",
+    ),
+    AgentMetadata(
+        id="evidence-synthesizer",
+        name="Evidence Synthesizer",
+        department=AgentDepartment.RESEARCH,
+        description="Deduplicates sources by canonical URL, resolves conflicting evidence, groups claims, and produces structured research packets.",
+        capabilities=["internet-intelligence", "evidence-synthesis", "citation-preservation", "conflict-resolution", "source-ranking"],
+        responsibilities=["Deduplicate findings by canonical URL", "Resolve conflicting claims across sources", "Preserve full citation metadata and source tiers", "Deliver compressed structured evidence packet to BossAgent"],
+        required_tools=[],
+        specialized_instruction=(
+            "You are the Evidence Synthesizer for the Internet Intelligence System. "
+            "Receive research findings from internet specialists, deduplicate sources by canonical URL, resolve conflicts, rank evidence tiers, "
+            "and produce a concise structured research packet. Verify all citations and never fabricate evidence."
+        ),
+        domain_quality_criteria=["Citation Preservation", "Conflict Resolution", "Source Tier Ranking", "Summary Conciseness"],
+        priority=10,
+        icon="Layers",
+    ),
 ]
 
 

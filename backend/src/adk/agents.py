@@ -1,16 +1,33 @@
-"""Google ADK agent definitions.
+"""Google ADK Hierarchical Multi-Agent Architecture.
 
-Each agent is an adk.agents.LlmAgent with:
-- A specific instruction (system prompt)
-- Relevant tools
-- Sub-agents for delegation
+Unifies AgentRegistry (131+ specialists) with Google Agent Development Kit (ADK):
+1. Root BossAgent (executive orchestrator)
+2. 10 Department Manager Agents (matching AgentDepartment enum)
+3. 131+ Specialist ADK Agents dynamically built from AgentRegistry
 
-The root OrchestratorAgent routes requests to specialized sub-agents
-via TransferToAgentTool.
+Architecture:
+BossAgent
+ ├── CommandPlanningManager  (specialist ADK agents)
+ ├── CodingManager           (specialist ADK agents)
+ ├── ResearchManager         (specialist ADK agents)
+ ├── ContentManager          (specialist ADK agents)
+ ├── VisualManager           (specialist ADK agents)
+ ├── DataManager             (specialist ADK agents)
+ ├── ProductManager          (specialist ADK agents)
+ ├── AIMLManager             (specialist ADK agents)
+ ├── AutomationManager       (specialist ADK agents)
+ └── BusinessQualityManager  (specialist ADK agents)
 """
 
+import re
+from typing import Any, Callable, Optional
 from google.adk.agents import LlmAgent
+from google.adk.tools import FunctionTool, google_search
+
 from src.config import settings
+from src.agents.metadata import AgentDepartment, AgentMetadata
+from src.agents.registry import AgentRegistry
+from src.utils.logger import logger
 from src.adk.tools import (
     knowledge_search_tool,
     memory_store_tool,
@@ -27,147 +44,150 @@ from src.adk.tools import (
     calendar_create_tool,
 )
 
-
-def create_calendar_agent() -> LlmAgent:
-    return LlmAgent(
-        name="calendar",
-        model=MODEL,
-        instruction=(
-            "You are the Calendar Agent. You help users list, search, create, update, delete, and check availability on Google Calendar.\n"
-            "Capabilities:\n"
-            "1. calendar_list - List or search Google Calendar events\n"
-            "2. calendar_create - Create a new event on Google Calendar\n\n"
-            "To manage calendar events: call the appropriate tool with user_id."
-        ),
-        tools=[calendar_list_tool, calendar_create_tool],
-        description="Lists, creates, reschedules, and manages Google Calendar events and meetings.",
-    )
-
-
-def create_contacts_agent() -> LlmAgent:
-    return LlmAgent(
-        name="contacts",
-        model=MODEL,
-        instruction=(
-            "You are the Contacts Agent. You help users list and search their Google Contacts.\n"
-            "Capabilities:\n"
-            "1. contacts_list - List or search Google Contacts (names, email addresses, phone numbers)\n\n"
-            "To list or search contacts: call contacts_list with the user's ID and optional search query."
-        ),
-        tools=[contacts_list_tool],
-        description="Lists and searches Google Contacts for email addresses and phone numbers.",
-    )
-
-
-def create_boss_agent() -> LlmAgent:
-    """Create the central BossAgent with all sub-agents.
-
-    BossAgent uses TransferToAgentTool to route requests
-    to the appropriate specialized agent based on the user's intent.
-    """
-    knowledge = create_knowledge_agent()
-    drive = create_drive_agent()
-    notes = create_notes_agent()
-    quiz = create_quiz_agent()
-    planner = create_planner_agent()
-    research = create_research_agent()
-    coding = create_coding_agent()
-    memory = create_memory_agent()
-    tool_agent = create_tool_agent()
-    contacts = create_contacts_agent()
-    calendar = create_calendar_agent()
-
-
-    from src.agents.engineer.agent import EngineerAgent
-    from src.agents.pharmacologist.agent import PharmacologistAgent
-    from src.agents.doctor.agent import DoctorAgent
-    engineer = create_engineer_agent()
-    pharmacologist = create_pharmacologist_agent()
-    doctor = create_doctor_agent()
-    finance = create_finance_agent()
-    accountant = create_accountant_agent()
-    economics = create_economics_agent()
-    architect = create_architect_agent()
-    hacker = create_hacker_agent()
-    cooking = create_chef_agent()
-    music = create_music_agent()
-    fitness = create_fitness_agent()
-    art = create_art_agent()
-
-    sub_agents = [
-        knowledge,
-        drive,
-        notes,
-        quiz,
-        planner,
-        research,
-        coding,
-        memory,
-        tool_agent,
-        contacts,
-        calendar,
-        engineer,
-
-        pharmacologist,
-        doctor,
-        finance,
-        accountant,
-        economics,
-        architect,
-        hacker,
-        cooking,
-        music,
-        fitness,
-        art,
-    ]
-
-    return LlmAgent(
-        name="boss_agent",
-        model=MODEL,
-        instruction=(
-            "You are the BossAgent — the executive coordinator of this platform.\n"
-            "Developer & Creator Attribution: This website, application, and AI platform were created, built, and designed by Shreeharsh. If the user asks who created, built, developed, or designed this app or website, state clearly and professionally that Shreeharsh created this website/application.\n\n"
-            "Your job is to understand what the user needs and transfer them "
-            "to the most appropriate specialized agent.\n\n"
-
-            "Available agents:\n"
-            "- knowledge: RAG-based document search, summaries, citations\n"
-            "- drive: Google Drive file management\n"
-            "- notes: Note-taking, flashcards, revision notes\n"
-            "- quiz: MCQ generation, practice exams\n"
-            "- planner: Study planning, task management, schedules\n"
-            "- research: Internet research, report generation\n"
-            "- coding: Code writing, debugging, documentation\n"
-            "- memory: Long-term memory, preferences, recall\n"
-            "- tool: Calculator, web search, API tools\n"
-            "- contacts: Google Contacts search, emails, phone numbers\n"
-            "- engineer: Systems design, software/hardware engineering\n"
-            "- pharmacologist: Drugs, pharmacology, medication interactions\n"
-            "- doctor: Symptoms, medical conditions, health education\n"
-            "- finance: Financial statements, valuation, markets, investing\n"
-            "- accountant: Accounting, audit, taxation, GST (CA)\n"
-            "- economics: Micro and macro economics\n"
-            "- architect: Architecture, construction, structures, design\n"
-            "- hacker: Cybersecurity, networking, ethical hacking, defense\n"
-            "- cooking: Cooking, techniques, recipes, gastronomy\n"
-            "- music: Music theory, composition, analysis\n"
-            "- fitness: Fitness, exercise science, nutrition\n"
-            "- art: Art history, technique, design\n\n"
-
-            "Analyze the user's request and transfer to the best agent. "
-            "If the request spans multiple domains, handle it step by step. "
-            "Always respond in the user's language."
-        ),
-        sub_agents=sub_agents,
-        description="Central orchestrator that routes requests to specialized agents.",
-    )
-
 MODEL = settings.gemini_model
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 1. DETERMINISTIC SAFE ADK NAME MAPPING
+# ═══════════════════════════════════════════════════════════════════════════
 
-def create_knowledge_agent() -> LlmAgent:
+_ADK_NAME_TO_REGISTRY_ID: dict[str, str] = {}
+_REGISTRY_ID_TO_ADK_NAME: dict[str, str] = {}
+
+
+def safe_adk_name(agent_id: str) -> str:
+    """Convert an agent registry ID (e.g. 'supreme-commander', 'data_analysis')
+    into a deterministic, safe ADK identifier.
+    """
+    cleaned = re.sub(r"[^a-zA-Z0-9_]", "_", agent_id.strip()).lower()
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    if cleaned and cleaned[0].isdigit():
+        cleaned = f"agent_{cleaned}"
+    adk_name = cleaned or "agent"
+    _ADK_NAME_TO_REGISTRY_ID[adk_name] = agent_id
+    _REGISTRY_ID_TO_ADK_NAME[agent_id] = adk_name
+    return adk_name
+
+
+def register_adk_name_mapping(registry_id: str, adk_name: str) -> None:
+    """Register bidirectional mapping between registry ID and ADK name with collision check."""
+    if adk_name in _ADK_NAME_TO_REGISTRY_ID and _ADK_NAME_TO_REGISTRY_ID[adk_name] != registry_id:
+        raise ValueError(
+            f"ADK name collision detected: '{adk_name}' already mapped to '{_ADK_NAME_TO_REGISTRY_ID[adk_name]}', "
+            f"cannot map to '{registry_id}'"
+        )
+    _ADK_NAME_TO_REGISTRY_ID[adk_name] = registry_id
+    _REGISTRY_ID_TO_ADK_NAME[registry_id] = adk_name
+
+
+def adk_name_to_registry_id(name: str) -> str:
+    """Resolve an ADK node name back to its AgentRegistry ID."""
+    if name in _ADK_NAME_TO_REGISTRY_ID:
+        return _ADK_NAME_TO_REGISTRY_ID[name]
+    from src.agents.registry import AgentRegistry
+    for meta in AgentRegistry.get_all_metadata():
+        if safe_adk_name(meta.id) == name:
+            return meta.id
+    return name
+
+
+def registry_id_to_adk_name(reg_id: str) -> str:
+    """Resolve an AgentRegistry ID to its ADK node name."""
+    if reg_id in _REGISTRY_ID_TO_ADK_NAME:
+        return _REGISTRY_ID_TO_ADK_NAME[reg_id]
+    return safe_adk_name(reg_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2. TOOL MAPPING & RESOLUTION
+# ═══════════════════════════════════════════════════════════════════════════
+
+ADK_TOOL_MAP: dict[str, Any] = {
+    "google_search": google_search,
+    "google-search": google_search,
+    "native_google_search": google_search,
+    "web_search": web_search_tool,
+    "search": web_search_tool,
+    "scrape_page": scrape_page_tool,
+    "web_scrape": scrape_page_tool,
+    "scraper": scrape_page_tool,
+    "firecrawl": scrape_page_tool,
+    "calculator": calculator_tool,
+    "calc": calculator_tool,
+    "math": calculator_tool,
+    "knowledge_search": knowledge_search_tool,
+    "rag": knowledge_search_tool,
+    "document_search": knowledge_search_tool,
+    "memory_store": memory_store_tool,
+    "memory_search": memory_search_tool,
+    "drive_list": drive_list_tool,
+    "drive_read": drive_read_tool,
+    "drive_read_file": drive_read_tool,
+    "drive_upload": drive_upload_tool,
+    "drive_delete": drive_delete_tool,
+    "contacts_list": contacts_list_tool,
+    "calendar_list": calendar_list_tool,
+    "calendar_create": calendar_create_tool,
+}
+
+
+def resolve_adk_tools(meta: AgentMetadata) -> list[FunctionTool]:
+    """Resolve the minimum necessary ADK tools for a specialist from its metadata."""
+    tools: list[FunctionTool] = []
+    seen_names: set[str] = set()
+
+    for tool_name in (meta.required_tools or []) + (meta.optional_tools or []):
+        key = tool_name.strip().lower()
+        if key in ADK_TOOL_MAP:
+            tool_obj = ADK_TOOL_MAP[key]
+            # Use tool function name or id to avoid duplicate tools
+            tool_id = getattr(tool_obj, "name", str(tool_obj))
+            if tool_id not in seen_names:
+                seen_names.add(tool_id)
+                tools.append(tool_obj)
+    return tools
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3. SPECIALIST INSTRUCTION BUILDER
+# ═══════════════════════════════════════════════════════════════════════════
+
+def build_specialist_instruction(meta: AgentMetadata) -> str:
+    """Build a comprehensive, domain-grade instruction prompt for an ADK specialist.
+    Preserves capabilities, responsibilities, domain quality criteria, and the
+    8-step Self-Improvement Loop.
+    """
+    resp_lines = "\n".join(f"- {r}" for r in meta.responsibilities) if meta.responsibilities else "- Execute domain tasks with precision."
+    caps_lines = "\n".join(f"- {c}" for c in meta.capabilities) if meta.capabilities else "- Domain problem solving."
+    criteria_lines = "\n".join(f"- {c}" for c in meta.domain_quality_criteria) if meta.domain_quality_criteria else "- Accuracy\n- Depth\n- Rigor"
+
+    custom_instr = meta.specialized_instruction.strip() if meta.specialized_instruction else ""
+    if not custom_instr:
+        custom_instr = f"You are the {meta.name}, an elite specialist in {meta.department.value}."
+
+    return (
+        f"Role & Identity:\n{custom_instr}\n\n"
+        f"Department: {meta.department.value}\n"
+        f"Description: {meta.description}\n\n"
+        f"Core Responsibilities:\n{resp_lines}\n\n"
+        f"Domain Capabilities:\n{caps_lines}\n\n"
+        f"Domain Quality Criteria to Enforce:\n{criteria_lines}\n\n"
+        "Execution & Verification Workflow:\n"
+        "1. UNDERSTAND: Grasp the exact user objective, context, and domain constraints.\n"
+        "2. PLAN: Formulate an optimal, structured approach.\n"
+        "3. EXECUTE: Carry out deep domain analysis, code, or tool operations.\n"
+        "4. CHECK & CRITIQUE: Verify results strictly against the Domain Quality Criteria.\n"
+        "5. IMPROVE & RETURN: Provide rigorous, high-yield structured output with clear rationale."
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4. HANDCRAFTED FACTORIES (PRESERVING RICH BESPOKE BEHAVIORS)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def create_knowledge_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("knowledge")
     return LlmAgent(
-        name="knowledge",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Knowledge Agent. Your role is to answer questions using "
@@ -182,9 +202,10 @@ def create_knowledge_agent() -> LlmAgent:
     )
 
 
-def create_drive_agent() -> LlmAgent:
+def create_drive_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("drive")
     return LlmAgent(
-        name="drive",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Drive Agent. You help users manage and inspect their Google Drive files.\n"
@@ -207,9 +228,43 @@ def create_drive_agent() -> LlmAgent:
     )
 
 
-def create_notes_agent() -> LlmAgent:
+def create_calendar_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("calendar")
     return LlmAgent(
-        name="notes",
+        name=name,
+        model=MODEL,
+        instruction=(
+            "You are the Calendar Agent. You help users list, search, create, update, delete, and check availability on Google Calendar.\n"
+            "Capabilities:\n"
+            "1. calendar_list - List or search Google Calendar events\n"
+            "2. calendar_create - Create a new event on Google Calendar\n\n"
+            "To manage calendar events: call the appropriate tool with user_id."
+        ),
+        tools=[calendar_list_tool, calendar_create_tool],
+        description="Lists, creates, reschedules, and manages Google Calendar events and meetings.",
+    )
+
+
+def create_contacts_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("contacts")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        instruction=(
+            "You are the Contacts Agent. You help users list and search their Google Contacts.\n"
+            "Capabilities:\n"
+            "1. contacts_list - List or search Google Contacts (names, email addresses, phone numbers)\n\n"
+            "To list or search contacts: call contacts_list with the user's ID and optional search query."
+        ),
+        tools=[contacts_list_tool],
+        description="Lists and searches Google Contacts for email addresses and phone numbers.",
+    )
+
+
+def create_notes_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("notes")
+    return LlmAgent(
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Notes Agent. Create structured, well-organized notes. "
@@ -221,9 +276,10 @@ def create_notes_agent() -> LlmAgent:
     )
 
 
-def create_quiz_agent() -> LlmAgent:
+def create_quiz_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("quiz")
     return LlmAgent(
-        name="quiz",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Quiz Agent. Generate high-quality quiz questions. "
@@ -235,9 +291,10 @@ def create_quiz_agent() -> LlmAgent:
     )
 
 
-def create_planner_agent() -> LlmAgent:
+def create_planner_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("planner")
     return LlmAgent(
-        name="planner",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Planner Agent. Help users plan their schedules and manage tasks. "
@@ -249,9 +306,10 @@ def create_planner_agent() -> LlmAgent:
     )
 
 
-def create_research_agent() -> LlmAgent:
+def create_research_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("research")
     return LlmAgent(
-        name="research",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Research Agent. Conduct thorough research on topics. "
@@ -265,9 +323,10 @@ def create_research_agent() -> LlmAgent:
     )
 
 
-def create_coding_agent() -> LlmAgent:
+def create_coding_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("coding")
     return LlmAgent(
-        name="coding",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Coding Agent. Write clean, well-documented code. "
@@ -283,9 +342,10 @@ def create_coding_agent() -> LlmAgent:
     )
 
 
-def create_memory_agent() -> LlmAgent:
+def create_memory_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("memory")
     return LlmAgent(
-        name="memory",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Memory Agent. You manage the user's long-term memory. "
@@ -299,9 +359,10 @@ def create_memory_agent() -> LlmAgent:
     )
 
 
-def create_tool_agent() -> LlmAgent:
+def create_tool_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("tool")
     return LlmAgent(
-        name="tool",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Tool Agent. Execute tools and integrations for the user. "
@@ -314,9 +375,10 @@ def create_tool_agent() -> LlmAgent:
     )
 
 
-def create_engineer_agent() -> LlmAgent:
+def create_engineer_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("engineer")
     return LlmAgent(
-        name="engineer",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Engineer Agent — a study tutor for engineering students. Teach software and hardware "
@@ -329,43 +391,44 @@ def create_engineer_agent() -> LlmAgent:
     )
 
 
-def create_pharmacologist_agent() -> LlmAgent:
+def create_pharmacologist_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("pharmacologist")
     return LlmAgent(
-        name="pharmacologist",
+        name=name,
         model=MODEL,
-instruction=(
+        instruction=(
             "You are the Pharmacologist Agent — a pharmacy/medical study tutor. Teach pharmacology the way a "
             "professor would: drug class, mechanism of action at the molecular level, pharmacokinetics, "
             "therapeutic use, contraindications, interactions, and side effects. Use headings, tables, bullet "
             "points, bold for high-yield points, and exam-style notes and mnemonics. For real personal-health "
-            "questions, answer educationally and note a doctor/pharmacist should be consulted (emergency services "
-            "in emergencies). Use the web for up-to-date pharmacology evidence."
+            "questions, answer educationally and note a doctor/pharmacist should be consulted. Use the web for "
+            "up-to-date pharmacology evidence."
         ),
         tools=[web_search_tool],
         description="Drug information, pharmacology, and medication interaction education.",
     )
 
 
-def create_doctor_agent() -> LlmAgent:
+def create_doctor_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("doctor")
     return LlmAgent(
-        name="doctor",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Doctor Agent — a medical study tutor for pre-medical/pre-clinical students. Teach "
-            "anatomy, physiology, pathology, and clinical reasoning the way a professor would — explain, first "
+            "anatomy, physiology, pathology, and clinical reasoning the way a professor would — explain first "
             "principles first, then high-yield clinical details, using headings, tables, bullet points, and "
-            "bold for high-yield points. Give exam-ready notes and mnemonics. If a student asks a personal health "
-            "question, answer educationally and add a short note to see a doctor for personal care. Use the web "
-            "for up-to-date health topics where helpful."
+            "bold for high-yield points. Give exam-ready notes and mnemonics. Use the web for up-to-date health topics."
         ),
         tools=[web_search_tool],
         description="Explains medical subjects and clinical reasoning for medical students.",
     )
 
 
-def create_finance_agent() -> LlmAgent:
+def create_finance_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("finance")
     return LlmAgent(
-        name="finance",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Finance Agent — a finance study tutor. Teach financial statements, valuation, corporate "
@@ -378,135 +441,890 @@ def create_finance_agent() -> LlmAgent:
     )
 
 
-def create_accountant_agent() -> LlmAgent:
+def create_accountant_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("accountant")
     return LlmAgent(
-        name="accountant",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Accountant (CA) Agent — an accounting and CA study tutor. Cover financial accounting, "
             "journal/ledger entries, final accounts, cost/management accounting, auditing, taxation (income tax, "
             "GST), and company standards. Explain the principle first, then work through journal entries and "
-            "examples, with headings, tables, bullet points, bold high-yield points, and step-by-step methods "
-            "for exam problems. Use the web for up-to-date tax topics when helpful."
+            "examples with headings, tables, and step-by-step methods."
         ),
         tools=[web_search_tool],
         description="Accounting and taxation study tutor for CA/commerce students.",
     )
 
 
-def create_economics_agent() -> LlmAgent:
+def create_economics_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("economics")
     return LlmAgent(
-        name="economics",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Economics Agent — an economics study tutor for economics and commerce students. Cover "
             "microeconomics (demand/supply, market structures), macroeconomics (GDP, inflation, fiscal/monetary "
             "policy), and international trade. Explain concepts and models clearly, and use headings, bullet "
-            "points, and tables to illustrate shifts; add exam-style notes and mnemonics. Use the web for "
-            "up-to-date economic topics when helpful."
+            "points, and tables to illustrate shifts."
         ),
         tools=[web_search_tool],
         description="Economics study tutor for micro, macro, and trade.",
     )
 
 
-def create_architect_agent() -> LlmAgent:
+def create_architect_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("architect")
     return LlmAgent(
-        name="architect",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Architect Agent — an architecture study tutor for architecture and civil-engineering "
             "students. Cover architectural design and history, building construction, structures, materials, "
             "environmental systems, drafting/CAD, and professional practice. Teach concept and first principles "
-            "first, then practical application, with headings, tables, bullet points, and bold for high-yield "
-            "points; describe how to sketch and annotate key details. Add exam-style notes and mnemonics. Use "
-            "the web for up-to-date architecture topics when helpful."
+            "first, then practical application."
         ),
         tools=[web_search_tool],
         description="Architecture study tutor: design, construction, structures.",
     )
 
 
-def create_hacker_agent() -> LlmAgent:
+def create_hacker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("hacker")
     return LlmAgent(
-        name="hacker",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Cyber & Security Agent — a cybersecurity study tutor for cybersecurity and CS students. "
             "Cover networking, OS security, cryptography, web-app security, common vulnerabilities (OWASP), "
-            "secure coding, and ethical-hacking / penetration-testing methodology. Teach mechanism first, then "
-            "defense, with headings, bullet points, tables, step-by-step methodology, and bold high-yield "
-            "points. Explain offensive techniques only for study, certification, or authorized lab contexts and "
-            "remind students not to scan or exploit systems without explicit authorization. Use the web for "
-            "up-to-date security topics when helpful."
+            "secure coding, and ethical-hacking methodology. Teach mechanism first, then defense, with headings, "
+            "bullet points, and step-by-step methodology."
         ),
-tools=[web_search_tool],
+        tools=[web_search_tool],
         description="Cybersecurity and ethical-hacking study tutor.",
     )
 
 
-def create_chef_agent() -> LlmAgent:
+def create_chef_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("cooking")
     return LlmAgent(
-        name="cooking",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Chef Agent — a culinary study tutor for cooking and hospitality students. Cover cooking "
             "techniques, ingredient science, recipes with exact measurements, plating, food safety (HACCP), menu "
-            "planning, pastry, and gastronomy. Teach technique and the why behind it first, then step-by-step, "
-            "with headings, bullet points, tables, exact measurements/timings/temperatures, and bold for "
-            "high-yield points. Add exam-style notes and mnemonics. Use the web for up-to-date culinary topics "
-            "when helpful."
+            "planning, pastry, and gastronomy. Teach technique and the why behind it first, then step-by-step."
         ),
         tools=[web_search_tool],
         description="Cooking and culinary study tutor: techniques, recipes, gastronomy.",
     )
 
 
-def create_music_agent() -> LlmAgent:
+def create_music_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("music")
     return LlmAgent(
-        name="music",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Music Agent — a music study tutor for music and performing-arts students. Cover music "
             "theory, scales and intervals, melody and harmony, rhythm, ear training, composition, analysis, and "
-            "music history. Teach concept and first principles first, then examples, with headings, bullet "
-            "points, and tables; name notes, chords, and intervals clearly so they can be followed without "
-            "audio. Add exam-style notes and mnemonics. Use the web for up-to-date music topics when helpful."
+            "music history. Teach concept and first principles first, then examples."
         ),
         tools=[web_search_tool],
         description="Music theory and composition study tutor.",
     )
 
 
-def create_fitness_agent() -> LlmAgent:
+def create_fitness_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("fitness")
     return LlmAgent(
-        name="fitness",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Fitness & Health Agent — a fitness study tutor for physical-education and "
             "exercise-science students. Cover exercise physiology, kinesiology and muscle anatomy, resistance "
-            "and cardio programming, mobility, nutrition, and injury prevention. Explain the physiology/muscle "
-            "first, then its application to programming, with headings, bullet points, tables, sets/reps/rest "
-            "and progression descriptors, and bold high-yield points. Keep it general education and recommend a "
-            "professional for personal medical issues. Use the web for up-to-date sports-science topics when "
-            "helpful."
+            "and cardio programming, mobility, nutrition, and injury prevention."
         ),
         tools=[web_search_tool],
         description="Fitness and wellness study tutor for PE/sports science.",
     )
 
 
-def create_art_agent() -> LlmAgent:
+def create_art_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("art")
     return LlmAgent(
-        name="art",
+        name=name,
         model=MODEL,
         instruction=(
             "You are the Art & Design Agent — an art study tutor for art and design students. Cover art history "
             "and movements, drawing and painting technique, composition, color theory, perspective, graphic "
-            "design principles, and critique. Explain the theory or movement first, then its application, with "
-            "headings, bullet points, and tables on line, shape, value, color, and space. Add exam-style notes "
-            "and mnemonics. Use the web for up-to-date art topics when helpful."
+            "design principles, and critique."
         ),
         tools=[web_search_tool],
         description="Art history, technique, and design study tutor.",
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4B. INTERNET INTELLIGENCE SPECIALISTS (RESEARCH DEPARTMENT - 19 SPECIALISTS)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def create_search_planner_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("search-planner")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Decomposes user queries into targeted research objectives, determines freshness requirements, and assigns search angles.",
+        instruction=(
+            "You are the Search Planner for the Internet Intelligence System. "
+            "Decompose complex user questions into 4-8 distinct, non-repetitive search objectives across multiple angles. "
+            "Determine freshness requirements (realtime vs recent vs standard) and assign specific query angles to specialists. "
+            "Verify all query plans, avoid redundant searches, and never fabricate claims or sources."
+        ),
+        tools=[],
+    )
+
+
+def create_google_search_general_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-general")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Searches Google for general fresh web information and real-time facts.",
+        instruction=(
+            "You are the Google General Search Specialist. "
+            "Use native Google Search grounding whenever requests require fresh, up-to-date, or real-time web information. "
+            "Prefer authoritative sources, cross-check facts, and preserve publication dates and original source URLs. "
+            "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). "
+            "Platform Attribution: Platform created by Shreeharsh. Never fabricate sources or citations. Verify all claims."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_news_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-news-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Searches Google for breaking news, current events, and recent developments.",
+        instruction=(
+            "You are the Google News Researcher. "
+            "Use Google Search whenever the request requires current news, today's events, breaking stories, or recent developments. "
+            "Prioritize recent, authoritative news sources (reputable outlets, official press releases). "
+            "Cross-check breaking claims across multiple outlets. "
+            "Preserve original source URLs, headlines, and publication timestamps. Never fabricate sources or citations. Verify all claims."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_deep_web_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("deep-web-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Performs multi-query investigative research across diverse sources with structured evidence synthesis.",
+        instruction=(
+            "You are the Deep Web Researcher. "
+            "Execute a rigorous multi-step research workflow:\n"
+            "1. PLAN: Decompose the user's objective into distinct, targeted search queries across multiple angles.\n"
+            "2. SEARCH: Run Google searches to collect diverse empirical evidence.\n"
+            "3. ANALYZE: Identify gaps or discrepancies in the initial evidence.\n"
+            "4. FOLLOW-UP: Perform follow-up searches for missing evidence.\n"
+            "5. VERIFY: Authenticate sources and synthesize comprehensive, grounded conclusions.\n"
+            "Retain all source citations and canonical URLs. Never fabricate sources or citations. Verify all claims."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_url_reader_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("url-reader")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Extracts detailed text, documentation, article body, and structured data from specific webpage URLs.",
+        instruction=(
+            "You are the URL Reader Specialist. "
+            "Use web scraping tools to extract full article text, technical documentation, and structured page data from discovered URLs. "
+            "Verify all extracted text faithfully matches the live page and never fabricate contents or citations."
+        ),
+        tools=[scrape_page_tool],
+    )
+
+
+def create_google_search_fact_checker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-fact-checker")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Verifies claims, rumors, and statistics against multiple independent Google Search results.",
+        instruction=(
+            "You are the Google Fact Checker. "
+            "Verify factual claims, disputed assertions, and rumors by querying multiple independent, reputable sources. "
+            "Determine verdicts: SUPPORTED, PARTIALLY_SUPPORTED, UNVERIFIED, FALSE, or OUTDATED. "
+            "Provide objective reasoning, verify primary evidence, and never fabricate verification or citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_source_verifier_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("source-verifier")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Validates dates, claims, canonical URLs, publication authenticity, and citation integrity.",
+        instruction=(
+            "You are the Source Verifier. "
+            "Audit research findings, verify that cited URLs exist and match claims made, "
+            "check publication dates, evaluate source tiers (Tier 1 Primary vs Tier 2 Independent vs Tier 3 Community), "
+            "and flag any hallucinated or misattributed citations. Never fabricate citations or sources."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_freshness_checker_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("freshness-checker")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Detects time-sensitive assertions (software versions, prices, CVEs, releases, news, weather) requiring live internet search.",
+        instruction=(
+            "You are the Freshness Checker. "
+            "Audit user prompts and agent assertions for temporal staleness. "
+            "Enforce live internet search for any requests involving versions, prices, releases, news, or today's events. "
+            "Verify all temporal claims, prevent stale assumptions, and never fabricate verification."
+        ),
+        tools=[],
+    )
+
+
+def create_official_docs_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("official-docs-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches canonical official documentation, specifications, framework portals, and vendor guides.",
+        instruction=(
+            "You are the Official Docs Researcher. "
+            "Prioritize canonical documentation portals (e.g. react.dev, python.org, nextjs.org, docs.github.com). "
+            "Extract authoritative specifications, verify API signatures, and never fabricate documentation citations or sources."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_search_technology_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-technology")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Searches technology documentation, software releases, AI frameworks, libraries, and APIs.",
+        instruction=(
+            "You are the Google Technology Search Specialist. "
+            "Search Google for technical documentation, library releases, API specs, framework changes, and developer guidelines. "
+            "Prefer official docs and release notes, verify version numbers, and never fabricate code or documentation citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_github_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("github-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches GitHub repositories, READMEs, releases, commits, issues, pull requests, and activity.",
+        instruction=(
+            "You are the GitHub Researcher. "
+            "Search for open source repositories, examine README documentation, release notes, commit activity, and community adoption. "
+            "Verify repository authenticity and never fabricate repository metrics, citations, or links."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_search_academic_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-academic")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Explores academic papers, university research, scientific studies, and preprints via Google Search.",
+        instruction=(
+            "You are the Google Academic Search Specialist. "
+            "Search Google for scholarly publications, research papers, university portals, and scientific preprints (arXiv, PubMed, IEEE). "
+            "Extract title, authors, year, publication, methodology, and limitations. Verify paper authenticity and never fabricate academic citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_cybersecurity_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("cybersecurity-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches CVEs, vulnerability databases, security advisories, threat intelligence, and patches.",
+        instruction=(
+            "You are the Cybersecurity Researcher. "
+            "Search Google for CVE IDs, vulnerability disclosures, vendor security bulletins, and security best practices. "
+            "Rely strictly on official advisories (NVD, CERT, vendor bulletins), verify CVSS metrics, and never fabricate vulnerabilities or citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_search_market_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-market")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Investigates companies, financial markets, industry developments, funding, and competitor intelligence.",
+        instruction=(
+            "You are the Google Market Search Specialist. "
+            "Conduct searches on corporate developments, market trends, competitor strategies, valuations, and earnings. "
+            "Rely on authoritative financial and business sources (SEC filings, official press releases, reputable financial news). "
+            "Verify all figures and never fabricate financial data or citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_search_products_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-products")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Finds product specifications, model comparisons, reviews, and public pricing information.",
+        instruction=(
+            "You are the Google Product Search Specialist. "
+            "Search Google for product specifications, hardware/software benchmark comparisons, consumer reviews, and public pricing. "
+            "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). "
+            "Verify all specifications and never fabricate prices or product citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_search_local_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-local")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches places, local businesses, operating hours, addresses, contact details, and location landmarks.",
+        instruction=(
+            "You are the Google Local Search Specialist. "
+            "Search Google for geographic locations, local establishments, operating hours, street addresses, and local points of interest. "
+            "Verify all addresses, opening hours, and contact details. Never fabricate local details or citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_google_search_travel_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("google-search-travel")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Researches travel destinations, itineraries, hotels, transport options, attractions, and seasonal advice.",
+        instruction=(
+            "You are the Google Travel Search Specialist. "
+            "Search Google for travel itineraries, destination guides, transit options, hotels, attractions, and seasonal advisories. "
+            "Verify official travel advisories, logistical feasibility, and never fabricate itinerary information or citations."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_community_researcher_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("community-researcher")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Investigates developer discussions, forum sentiment, practical workarounds, and community experiences.",
+        instruction=(
+            "You are the Community Researcher. "
+            "Search developer communities, forums, and discussion portals for real-world user feedback, practical bugs, and sentiment. "
+            "Clearly distinguish community opinions from verified facts, and never present forum claims as authoritative truth without verification."
+        ),
+        tools=[google_search],
+    )
+
+
+def create_evidence_synthesizer_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
+    name = registry_id_to_adk_name("evidence-synthesizer")
+    return LlmAgent(
+        name=name,
+        model=MODEL,
+        description="Deduplicates sources by canonical URL, resolves conflicting evidence, groups claims, and produces structured research packets.",
+        instruction=(
+            "You are the Evidence Synthesizer for the Internet Intelligence System. "
+            "Receive research findings from internet specialists, deduplicate sources by canonical URL, resolve conflicts, rank evidence tiers, "
+            "and produce a concise structured research packet. Verify all citations and never fabricate evidence or sources."
+        ),
+        tools=[],
+    )
+
+
+INTERNET_INTELLIGENCE_SPECIALIST_NAMES: set[str] = {
+    "search_planner",
+    "google_search_general",
+    "google_news_researcher",
+    "deep_web_researcher",
+    "url_reader",
+    "google_search_fact_checker",
+    "source_verifier",
+    "freshness_checker",
+    "official_docs_researcher",
+    "google_search_technology",
+    "github_researcher",
+    "google_search_academic",
+    "cybersecurity_researcher",
+    "google_search_market",
+    "google_search_products",
+    "google_search_local",
+    "google_search_travel",
+    "community_researcher",
+    "evidence_synthesizer",
+}
+
+
+def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> LlmAgent:
+    """Create the Internet Intelligence Manager responsible for orchestrating
+    the 19 real-time search, documentation, fact-checking, and evidence synthesis specialists.
+    """
+    specialist_summaries = []
+    for sp in search_specialists:
+        desc = getattr(sp, "description", "") or "Internet Intelligence specialist"
+        specialist_summaries.append(f"- **{sp.name}**: {desc}")
+    specialists_roster = "\n".join(specialist_summaries)
+
+    instruction = (
+        "You are the Internet Intelligence Manager (internet_intelligence_manager) within the Research Department.\n\n"
+        "Your role is to orchestrate and delegate queries across the specialized Internet Intelligence division:\n"
+        f"{specialists_roster}\n\n"
+        "ROUTING MATRIX & QUERY STRATEGY:\n"
+        "- Breaking news, sports scores, today's events -> google_news_researcher\n"
+        "- Technical docs, library versions, APIs -> official_docs_researcher + google_search_technology\n"
+        "- GitHub repositories, open-source projects, READMEs -> github_researcher + google_search_technology\n"
+        "- Academic papers, scientific literature, arXiv -> google_search_academic\n"
+        "- Verifying claims, rumors, assertions -> google_search_fact_checker + source_verifier\n"
+        "- Reading specific webpage URLs or docs -> url_reader\n"
+        "- Defensive cybersecurity, CVEs, patches -> cybersecurity_researcher\n"
+        "- Financial markets, company funding, competitor teardowns -> google_search_market + google_news_researcher\n"
+        "- Product specs, pricing comparisons (INR ₹ default) -> google_search_products\n"
+        "- Places, local businesses, operating hours -> google_search_local\n"
+        "- Travel itineraries, logistics, advisories -> google_search_travel\n"
+        "- User feedback, forum sentiment, practical workarounds -> community_researcher\n"
+        "- Multi-angle deep investigations -> search_planner + deep_web_researcher + source_verifier + evidence_synthesizer\n\n"
+        "SOURCE AUTHORITY TIERS:\n"
+        "- TIER 1 (Primary): Official docs (react.dev, python.org), government, vendor bulletins, company releases, official repos, original papers.\n"
+        "- TIER 2 (Independent): Reputable tech publications, major news outlets, established research institutions.\n"
+        "- TIER 3 (Community): Reddit, forums, blogs (use solely for opinion/workaround context, never as sole factual proof).\n\n"
+        "EXECUTION & QUALITY RULES:\n"
+        "1. For single-focus queries, delegate to the single most specific specialist.\n"
+        "2. For complex queries (e.g. AI assistant market comparison), engage search_planner and parallel specialists.\n"
+        "3. Live search is MANDATORY for 'latest', 'today', 'current', 'recent', 'price', 'release', 'version', 'new'.\n"
+        "4. Deduplicate all search results by canonical URL and preserve source metadata.\n"
+        "5. For simple timeless queries (e.g. 'What is a linked list?'), answer directly without burning search quota unless sources are requested.\n"
+        "6. Never fabricate URLs, dates, or citations. Deliver authoritative, grounded synthesis."
+    )
+    return LlmAgent(
+        name="internet_intelligence_manager",
+        model=MODEL,
+        instruction=instruction,
+        sub_agents=search_specialists,
+        description="Internet Intelligence Manager orchestrating 19 real-time search, documentation, fact-checking, and evidence synthesis specialists.",
+    )
+
+
+# Backwards compatibility alias
+create_google_search_manager = create_internet_intelligence_manager
+
+
+SPECIALIST_FACTORIES: dict[str, Callable[[Optional[AgentMetadata]], LlmAgent]] = {
+    "knowledge": create_knowledge_agent,
+    "drive": create_drive_agent,
+    "calendar": create_calendar_agent,
+    "contacts": create_contacts_agent,
+    "notes": create_notes_agent,
+    "quiz": create_quiz_agent,
+    "planner": create_planner_agent,
+    "research": create_research_agent,
+    "coding": create_coding_agent,
+    "memory": create_memory_agent,
+    "tool": create_tool_agent,
+    "engineer": create_engineer_agent,
+    "pharmacologist": create_pharmacologist_agent,
+    "doctor": create_doctor_agent,
+    "finance": create_finance_agent,
+    "accountant": create_accountant_agent,
+    "economics": create_economics_agent,
+    "architect": create_architect_agent,
+    "hacker": create_hacker_agent,
+    "cooking": create_chef_agent,
+    "music": create_music_agent,
+    "fitness": create_fitness_agent,
+    "art": create_art_agent,
+    # 19 Internet Intelligence Specialists
+    "search-planner": create_search_planner_agent,
+    "google-search-general": create_google_search_general_agent,
+    "google-news-researcher": create_google_news_researcher_agent,
+    "deep-web-researcher": create_deep_web_researcher_agent,
+    "url-reader": create_url_reader_agent,
+    "google-search-fact-checker": create_google_search_fact_checker_agent,
+    "source-verifier": create_source_verifier_agent,
+    "freshness-checker": create_freshness_checker_agent,
+    "official-docs-researcher": create_official_docs_researcher_agent,
+    "google-search-technology": create_google_search_technology_agent,
+    "github-researcher": create_github_researcher_agent,
+    "google-search-academic": create_google_search_academic_agent,
+    "cybersecurity-researcher": create_cybersecurity_researcher_agent,
+    "google-search-market": create_google_search_market_agent,
+    "google-search-products": create_google_search_products_agent,
+    "google-search-local": create_google_search_local_agent,
+    "google-search-travel": create_google_search_travel_agent,
+    "community-researcher": create_community_researcher_agent,
+    "evidence-synthesizer": create_evidence_synthesizer_agent,
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. DYNAMIC SPECIALIST FACTORY
+# ═══════════════════════════════════════════════════════════════════════════
+
+def create_adk_specialist(meta: AgentMetadata) -> LlmAgent:
+    """Convert an AgentMetadata object into a Google ADK LlmAgent.
+    Uses handcrafted specialist factories for rich domain behaviors when available;
+    otherwise generates a high-quality dynamic specialist.
+    """
+    adk_name = safe_adk_name(meta.id)
+    register_adk_name_mapping(meta.id, adk_name)
+
+    if meta.id in SPECIALIST_FACTORIES:
+        return SPECIALIST_FACTORIES[meta.id](meta)
+
+    tools = resolve_adk_tools(meta)
+    instruction = build_specialist_instruction(meta)
+
+    return LlmAgent(
+        name=adk_name,
+        model=MODEL,
+        description=meta.description,
+        instruction=instruction,
+        tools=tools or [],
+    )
+
+
+def build_all_adk_specialists() -> dict[str, LlmAgent]:
+    """Dynamically build all enabled ADK specialist agents from AgentRegistry.
+    AgentRegistry is the single source of truth.
+    """
+    AgentRegistry.initialize()
+
+    all_metadata = AgentRegistry.get_all_metadata()
+    specialists: dict[str, LlmAgent] = {}
+
+    for meta in all_metadata:
+        if not meta.enabled:
+            continue
+        agent = create_adk_specialist(meta)
+        specialists[meta.id] = agent
+
+    registry_enabled_count = len([m for m in all_metadata if m.enabled])
+    adk_specialist_count = len(specialists)
+
+    if adk_specialist_count < 100:
+        raise ValueError(
+            f"Expected >= 100 ADK specialist agents, but only {adk_specialist_count} were created."
+        )
+
+    if adk_specialist_count != registry_enabled_count:
+        logger.warning(
+            f"ADK specialist count ({adk_specialist_count}) differs from enabled registry count ({registry_enabled_count})"
+        )
+
+    logger.info(
+        f"Built {adk_specialist_count} Google ADK specialist agents from AgentRegistry."
+    )
+    return specialists
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. DEPARTMENT MANAGERS (10 MANAGERS FOR 10 DEPARTMENTS)
+# ═══════════════════════════════════════════════════════════════════════════
+
+DEPARTMENT_MANAGER_CONFIG: dict[AgentDepartment, dict[str, str]] = {
+    AgentDepartment.COMMAND_PLANNING: {
+        "name": "command_planning_manager",
+        "description": "Coordinates high-level strategy, task decomposition, dependency planning, knowledge retrieval, and workflow orchestration.",
+        "focus": "Strategic planning, milestone sequencing, prompt optimization, knowledge recall, and orchestration.",
+    },
+    AgentDepartment.CODING: {
+        "name": "coding_manager",
+        "description": "Oversees frontend, backend, fullstack, database, devops, mobile, security, and hardware engineering specialists.",
+        "focus": "Code generation, system architecture, database design, debugging, security auditing, and refactoring.",
+    },
+    AgentDepartment.RESEARCH: {
+        "name": "research_manager",
+        "description": "Directs academic, market, technical, medical, scientific, competitive, and deep web research specialists.",
+        "focus": "Internet search, source verification, medical/pharmacy sciences, literature review, and comprehensive report synthesis.",
+    },
+    AgentDepartment.CONTENT: {
+        "name": "content_manager",
+        "description": "Leads technical writing, copywriting, educational notes, quiz formulation, study guides, music, culinary, and fitness content specialists.",
+        "focus": "Educational notes, exam generation, blog/article writing, formatting, flashcards, and creative guides.",
+    },
+    AgentDepartment.VISUAL: {
+        "name": "visual_manager",
+        "description": "Manages UI/UX design, brand design, art theory, visual critique, chart styling, and visual asset generation.",
+        "focus": "UI layouts, design systems, art critique, color palettes, visual hierarchy, and diagram design.",
+    },
+    AgentDepartment.DATA: {
+        "name": "data_manager",
+        "description": "Orchestrates data analysis, spreadsheet modeling, SQL queries, statistical forecasting, and report generation.",
+        "focus": "Data cleaning, statistical calculations, trend forecasting, tabular modeling, and data verification.",
+    },
+    AgentDepartment.PRODUCT: {
+        "name": "product_department_manager",
+        "description": "Guides product management, user research, competitor teardowns, feature prioritization, pricing, and growth strategy.",
+        "focus": "User journey mapping, market fit, product critique, pricing models, and feature specifications.",
+    },
+    AgentDepartment.AI_ML: {
+        "name": "ai_ml_manager",
+        "description": "Leads AI research, ML engineering, deep learning, prompt engineering, RAG architecture, model evaluation, and AI safety.",
+        "focus": "Machine learning architectures, RAG pipelines, fine-tuning strategies, prompt optimization, and AI governance.",
+    },
+    AgentDepartment.AUTOMATION: {
+        "name": "automation_manager",
+        "description": "Coordinates browser automation, scraping, external API integration, Google Drive, Calendar, Contacts, and scheduling.",
+        "focus": "Workflow automation, API execution, cloud drive file operations, calendar scheduling, and web scraping.",
+    },
+    AgentDepartment.BUSINESS_QUALITY: {
+        "name": "business_quality_manager",
+        "description": "Governs business analysis, finance, accounting (CA), economics, quality control, risk audit, and red-team review.",
+        "focus": "Financial modeling, CA accounting, macroeconomic analysis, quality assurance, risk evaluation, and executive review.",
+    },
+}
+
+
+def create_department_manager(
+    department: AgentDepartment,
+    specialists: list[LlmAgent],
+) -> LlmAgent:
+    """Create a Department Manager LlmAgent that coordinates all specialist workers
+    in its department.
+    """
+    config = DEPARTMENT_MANAGER_CONFIG.get(
+        department,
+        {
+            "name": f"{safe_adk_name(department.value)}_manager",
+            "description": f"Manages {department.value} specialists.",
+            "focus": f"Coordinates tasks within {department.value}.",
+        },
+    )
+
+    # For the Research Department, isolate the Internet Intelligence division under InternetIntelligenceManager
+    if department == AgentDepartment.RESEARCH:
+        internet_specialists = [
+            s for s in specialists if s.name in INTERNET_INTELLIGENCE_SPECIALIST_NAMES
+        ]
+        other_specialists = [
+            s for s in specialists if s.name not in INTERNET_INTELLIGENCE_SPECIALIST_NAMES
+        ]
+        if internet_specialists:
+            intel_manager = create_internet_intelligence_manager(internet_specialists)
+            managed_sub_agents = [intel_manager] + other_specialists
+        else:
+            managed_sub_agents = specialists
+    else:
+        managed_sub_agents = specialists
+
+    specialist_summaries = []
+    for sp in managed_sub_agents:
+        desc = getattr(sp, "description", "") or "Domain specialist"
+        specialist_summaries.append(f"- **{sp.name}**: {desc}")
+
+    specialists_roster = "\n".join(specialist_summaries)
+
+    instruction = (
+        f"You are the {config['name']} — executive manager of the '{department.value}' department.\n\n"
+        f"Department Focus: {config['focus']}\n\n"
+        f"Available Sub-Agents & Specialists in your department ({len(managed_sub_agents)} members):\n"
+        f"{specialists_roster}\n\n"
+        "Manager Responsibilities:\n"
+        "1. Analyze incoming departmental tasks delegated by BossAgent.\n"
+        "2. For live internet research, Google Search grounding, docs, and fact-checking, delegate to internet_intelligence_manager.\n"
+        "3. For specialized medical, pharmacology, video, and domain research, delegate to the dedicated research specialist.\n"
+        "4. Summarize and synthesize the specialist findings hierarchically.\n"
+        "5. Return a structured department report upward to BossAgent containing:\n"
+        "   - **Department**: The department name\n"
+        "   - **Specialists Consulted**: List of specialist names used\n"
+        "   - **Key Findings & Outputs**: High-yield factual results and technical solutions\n"
+        "   - **Confidence & Recommendations**: Verification score and next steps\n\n"
+        "Never leak internal raw chatter; always provide clean, authoritative synthesis."
+    )
+
+    return LlmAgent(
+        name=config["name"],
+        model=MODEL,
+        instruction=instruction,
+        sub_agents=managed_sub_agents,
+        description=config["description"],
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. ROOT BOSS AGENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+BOSS_INSTRUCTION = (
+    "You are BossAgent — the Chief Multi-Agent Executive Coordinator of this platform.\n\n"
+    "CREATOR ATTRIBUTION:\n"
+    "This website, application, and AI platform were created, built, and designed by Shreeharsh. "
+    "If the user asks who created, built, developed, or designed this app or website, state clearly and professionally: "
+    "'This website and application were created and developed by **Shreeharsh**.'\n\n"
+    "CURRENCY & PRICING RULE:\n"
+    "All product prices, deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n\n"
+    "CLICKABLE LINKS RULE:\n"
+    "ALWAYS render every product, documentation, API, service, and website as an active clickable Markdown link [Name](url). "
+    "Never output raw plain text URLs without hyperlinking them.\n\n"
+    "HIERARCHICAL MULTI-AGENT ORCHESTRATION:\n"
+    "You lead 10 specialized Department Managers who oversee 150+ specialist agents and a dedicated Internet Intelligence Division:\n"
+    "1. **command_planning_manager**: Strategy, task decomposition, knowledge RAG, memory, planning.\n"
+    "2. **coding_manager**: Frontend, backend, databases, systems engineering, cybersecurity, architecture.\n"
+    "3. **research_manager**: Directs internet_intelligence_manager (19 Internet Intelligence specialists) + scraping, medical, scientific, and news research.\n"
+    "4. **content_manager**: Study notes, quiz generation, technical writing, culinary, music, fitness.\n"
+    "5. **visual_manager**: UI/UX design, visual critique, brand identity, art theory.\n"
+    "6. **data_manager**: Tabular analytics, statistics, SQL querying, trend forecasting.\n"
+    "7. **product_department_manager**: Product requirements, user research, competitor teardown, pricing.\n"
+    "8. **ai_ml_manager**: ML models, RAG pipelines, fine-tuning, prompt engineering, AI safety.\n"
+    "9. **automation_manager**: Web scraping, browser automation, Google Drive, Calendar, Contacts, APIs.\n"
+    "10. **business_quality_manager**: Corporate finance, CA accounting, economics, risk audit, QA.\n\n"
+    "Execution Workflow:\n"
+    "- Understand the user's intent and identify all required departments.\n"
+    "- For multi-disciplinary requests (e.g. research + code + market analysis), delegate across the relevant department managers.\n"
+    "- Synthesize all department reports into a cohesive, beautifully structured final response for the user.\n"
+    "- Always answer helpfully, accurately, and in the user's requested language."
+)
+
+
+def create_boss_agent() -> LlmAgent:
+    """Create the full hierarchical Google ADK multi-agent tree:
+    Root (BossAgent) -> 10 Department Managers -> Internet Intelligence Manager -> 150+ Specialist Leaf Agents.
+    """
+    global _cached_boss_agent, _cached_hierarchy_info
+
+    # 1. Build all specialists
+    all_specialists = build_all_adk_specialists()
+
+    # 2. Group specialists by department
+    department_specialists_map: dict[AgentDepartment, list[LlmAgent]] = {
+        dept: [] for dept in AgentDepartment
+    }
+
+    all_metadata = AgentRegistry.get_all_metadata()
+    for meta in all_metadata:
+        if not meta.enabled or meta.id not in all_specialists:
+            continue
+        agent_node = all_specialists[meta.id]
+        dept = meta.department
+        if dept in department_specialists_map:
+            department_specialists_map[dept].append(agent_node)
+        else:
+            department_specialists_map[AgentDepartment.COMMAND_PLANNING].append(agent_node)
+
+    # 3. Create the 10 Department Managers
+    department_managers: list[LlmAgent] = []
+    department_counts: dict[str, int] = {}
+
+    for dept in AgentDepartment:
+        specialists = department_specialists_map.get(dept, [])
+        manager = create_department_manager(dept, specialists)
+        department_managers.append(manager)
+        department_counts[dept.value] = len(specialists)
+
+    # 4. Create the Root BossAgent
+    boss = LlmAgent(
+        name="boss_agent",
+        model=MODEL,
+        instruction=BOSS_INSTRUCTION,
+        sub_agents=department_managers,
+        description="Central Chief Multi-Agent Orchestrator leading 10 department managers and 150+ specialist agents.",
+    )
+
+    # Cache hierarchy summary
+    total_specialists = len(all_specialists)
+    internet_intel_count = len([s for s in all_specialists.values() if s.name in INTERNET_INTELLIGENCE_SPECIALIST_NAMES])
+    total_division_managers = 1 if internet_intel_count > 0 else 0
+    total_department_managers = len(department_managers)
+    total_roots = 1
+    total_nodes = total_specialists + total_division_managers + total_department_managers + total_roots
+
+    _cached_hierarchy_info = {
+        "enabled": True,
+        "provider": "gemini",
+        "model": MODEL,
+        "registry_agents": len(all_metadata),
+        "adk_specialists": total_specialists,
+        "internet_intelligence_agents": internet_intel_count,
+        "google_search_agents": internet_intel_count,
+        "department_managers": total_department_managers,
+        "division_managers": total_division_managers,
+        "root_agents": total_roots,
+        "total_adk_nodes": total_nodes,
+        "root_agent": "boss_agent",
+        "architecture": "hierarchical",
+        "departments": department_counts,
+    }
+
+    logger.info(
+        f"ADK hierarchy initialized:\n"
+        f"  Registry specialists: {len(all_metadata)}\n"
+        f"  ADK leaf specialists: {total_specialists}\n"
+        f"  Internet Intelligence division specialists: {internet_intel_count}\n"
+        f"  Division managers: {total_division_managers}\n"
+        f"  Department managers: {total_department_managers}\n"
+        f"  Root agents: {total_roots}\n"
+        f"  Total ADK nodes: {total_nodes}\n"
+        f"  Departments breakdown: {department_counts}"
+    )
+
+    _cached_boss_agent = boss
+    return boss
+
+
+_cached_boss_agent: Optional[LlmAgent] = None
+_cached_hierarchy_info: Optional[dict] = None
+
+
+def get_boss_agent() -> LlmAgent:
+    """Return cached BossAgent singleton, building the hierarchy lazily once."""
+    global _cached_boss_agent
+    if _cached_boss_agent is None:
+        _cached_boss_agent = create_boss_agent()
+    return _cached_boss_agent
+
+
+def get_orchestrator() -> LlmAgent:
+    """Alias for get_boss_agent."""
+    return get_boss_agent()
+
+
+def reset_adk_agent_tree() -> None:
+    """Clear cached ADK agent tree for tests or hot-reload."""
+    global _cached_boss_agent, _cached_hierarchy_info
+    _cached_boss_agent = None
+    _cached_hierarchy_info = None
+    logger.info("ADK agent tree cache reset.")
+
+
+def get_adk_hierarchy_summary() -> dict:
+    """Return telemetry and node counts for the active ADK hierarchy."""
+    global _cached_hierarchy_info
+    if _cached_hierarchy_info is None:
+        get_boss_agent()
+    return dict(_cached_hierarchy_info or {})

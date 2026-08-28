@@ -98,9 +98,19 @@ async def lifespan(app: FastAPI):
 
     # --- Initialize ADK orchestrator eagerly ---
     try:
-        from src.adk.runner import get_orchestrator
-        get_orchestrator()
-        logger.info("ADK multi-agent system initialized")
+        from src.adk.runner import get_adk_status, get_orchestrator
+        adk_status = get_adk_status()
+        if adk_status["enabled"]:
+            get_orchestrator()
+            logger.info(
+                "ADK multi-agent system initialized",
+                extra={"model": adk_status["model"]},
+            )
+        else:
+            logger.warning(
+                "ADK is unavailable; requests will use the configured fallback provider",
+                extra={"adk_status": adk_status["status"], "model": adk_status["model"]},
+            )
     except Exception as e:
         logger.warning(f"ADK orchestrator initialization warning: {e}")
 
@@ -182,11 +192,14 @@ async def health_check(request: Request) -> dict:
     except Exception:
         db_status = "disconnected"
 
+    from src.adk.runner import get_adk_status
+
     return {
         "status": "healthy",
         "app": settings.app_name,
         "version": settings.app_version,
         "database": db_status,
+        "adk": get_adk_status(),
     }
 
 
