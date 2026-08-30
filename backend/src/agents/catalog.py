@@ -1362,7 +1362,7 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         specialized_instruction=(
             "You are the Google General Search Specialist. Use native Google Search grounding whenever queries require fresh, real-time web information. "
             "Retrieve authentic, up-to-date data, cross-check facts, preserve source URLs and publication dates, and never fabricate sources or citations. "
-            "Default to INR (₹) for monetary values (1 USD = 86.5 INR)."
+            "Default to INR (₹) for monetary values using a live sourced exchange rate."
         ),
         domain_quality_criteria=["Freshness", "Source Accuracy", "URL Preservation", "No Hallucinated Citations"],
         priority=10,
@@ -1613,7 +1613,7 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         required_tools=["google_search"],
         specialized_instruction=(
             "You are the Google Product Search Specialist. Search for product specs, benchmark comparisons, hardware/software features, and public pricing. "
-            "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). Verify all specifications and never fabricate prices."
+            "Format monetary values in Indian Rupees (INR / ₹) by default using a live sourced exchange rate. Verify all specifications and never fabricate prices."
         ),
         domain_quality_criteria=["Spec Precision", "Price Grounding (INR)", "Objective Comparisons", "Feature Completeness"],
         priority=10,
@@ -2090,11 +2090,11 @@ AGENT_CATALOG_DATA: list[AgentMetadata] = [
         department=AgentDepartment.RESEARCH,
         description="Gathers current public pricing, subscription tiers, enterprise deals, and discounts with INR (₹) conversion and retrieval timestamps.",
         capabilities=["internet-intelligence", "google-search", "price-monitoring", "cost-intelligence", "subscription-plans", "inr-pricing"],
-        responsibilities=["Search live public pricing pages, SaaS subscription tiers, cloud token rates, and hardware costs", "Format pricing in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR)", "Record exact retrieval timestamps to prevent stale pricing assumptions"],
+        responsibilities=["Search live public pricing pages, SaaS subscription tiers, cloud token rates, and hardware costs", "Format pricing in Indian Rupees (INR / ₹) by default using a live sourced exchange rate", "Record exact retrieval timestamps to prevent stale pricing assumptions"],
         required_tools=["google_search"],
         specialized_instruction=(
             "You are the Price Monitor Researcher. Retrieve live public pricing for software, APIs, cloud services, hardware, and subscriptions. "
-            "Track: Product/Service, Price (INR / ₹ default, 1 USD = 86.5 INR), Plan/Tier, Source URL, and Retrieval Timestamp. Never use stale training memory for pricing questions."
+            "Track: Product/Service, Price (INR / ₹ default using a live exchange rate), Plan/Tier, Source URL, and Retrieval Timestamp. Never use stale training memory for pricing questions."
         ),
         domain_quality_criteria=["Live Price Freshness", "INR Currency Precision", "Tier Detail Completeness"],
         priority=10,

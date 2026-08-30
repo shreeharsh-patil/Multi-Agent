@@ -8,6 +8,7 @@ providers without falling out of the ADK runtime.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 from dataclasses import dataclass
 
@@ -84,10 +85,29 @@ class AdkModelRotator:
             self._key_indices[identity] = (key_index + 1) % len(keys)
             return AdkModelRoute(provider=provider, model=model, api_key=key, api_base=base)
 
+    async def next_gemini_route(self) -> AdkModelRoute:
+        """Select a healthy Gemini key for ADK control and Google grounding."""
+        provider = "gemini"
+        model = settings.gemini_model
+        keys = [
+            key for key in self._keys(settings.gemini_api_key, provider)
+            if self._key_identity(provider, model, None, key) not in self._blocked_keys
+        ]
+        if not keys:
+            raise ValueError("No healthy Gemini API key is configured for ADK Google Search grounding.")
+
+        async with self._lock:
+            identity = "gemini:google:grounding"
+            key_index = self._key_indices.get(identity, 0)
+            key = keys[key_index % len(keys)]
+            self._key_indices[identity] = (key_index + 1) % len(keys)
+            return AdkModelRoute(provider=provider, model=model, api_key=key)
+
     @staticmethod
     def _key_identity(provider: str, model: str, api_base: str | None, api_key: str) -> str:
         """Secret-free route identity used only for in-memory health tracking."""
-        return f"{provider}:{model}:{api_base or ''}:{api_key[-12:]}"
+        fingerprint = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
+        return f"{provider}:{model}:{api_base or ''}:{fingerprint}"
 
     async def record_failure(self, route: AdkModelRoute, error: Exception) -> None:
         """Quarantine credentials/models that cannot recover by retrying."""
@@ -104,6 +124,10 @@ class AdkModelRotator:
     async def record_success(self, route: AdkModelRoute) -> None:
         async with self._lock:
             self._blocked_keys.discard(self._key_identity(route.provider, route.model, route.api_base, route.api_key))
+
+    def reset_health(self) -> None:
+        """Clear in-memory quarantine after configuration or deployment changes."""
+        self._blocked_keys.clear()
 
 
 adk_model_rotator = AdkModelRotator()

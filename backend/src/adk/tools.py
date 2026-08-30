@@ -11,7 +11,7 @@ import time
 from urllib.parse import urlparse
 from typing import Optional, Dict, Any, List
 import httpx
-from google.adk.tools import FunctionTool
+from google.adk.tools import FunctionTool, ToolContext
 from src.utils.logger import logger
 from src.config import settings
 
@@ -137,7 +137,7 @@ firecrawl_rotator = FirecrawlRotator()
 
 
 
-async def knowledge_search(query: str, user_id: str = "default") -> str:
+async def knowledge_search(query: str, user_id: str = "default", workspace_id: str | None = None) -> str:
     """Search the knowledge base for relevant document chunks.
 
     Args:
@@ -172,7 +172,7 @@ async def knowledge_search(query: str, user_id: str = "default") -> str:
     from src.services.rag.retriever import get_retriever
 
     try:
-        docs = await get_retriever().retrieve(query, user_id=user_id, top_k=5)
+        docs = await get_retriever().retrieve(query, user_id=user_id, workspace_id=workspace_id, top_k=5)
         if not docs:
             return "No relevant documents found in knowledge base."
 
@@ -1484,6 +1484,7 @@ async def contacts_list(user_id: str = "default", query: str = "") -> str:
         return json.dumps(contacts, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Contacts list tool error: {e}")
+        return f"Failed to list contacts: {e}"
 async def calendar_list(user_id: str = "default", query: str = "") -> str:
     """List upcoming Google Calendar events for the user.
 
@@ -1886,20 +1887,105 @@ def synthesize_research(
 
 
 # Export all tools as FunctionTool instances for ADK agents
-knowledge_search_tool = FunctionTool(func=knowledge_search)
-memory_store_tool = FunctionTool(func=memory_store)
-memory_search_tool = FunctionTool(func=memory_search)
+def _tool_user_id(tool_context: ToolContext) -> str:
+    """Resolve the authenticated user from ADK session state."""
+    return str(tool_context.state.get("user_id") or "default")
+
+
+async def _adk_knowledge_search(query: str, tool_context: ToolContext) -> str:
+    """Search the authenticated user's document knowledge base."""
+    return await knowledge_search(
+        query,
+        user_id=_tool_user_id(tool_context),
+        workspace_id=tool_context.state.get("workspace_id"),
+    )
+
+
+async def _adk_memory_store(tool_context: ToolContext, key: str, content: str, type: str = "conversation") -> str:
+    """Store a memory for the authenticated user."""
+    return await memory_store(key, content, type, user_id=_tool_user_id(tool_context))
+
+
+async def _adk_memory_search(query: str, tool_context: ToolContext) -> str:
+    """Search the authenticated user's long-term memory."""
+    return await memory_search(query, user_id=_tool_user_id(tool_context))
+
+
+async def _adk_drive_list(tool_context: ToolContext) -> str:
+    """List files from the authenticated user's connected Google Drive."""
+    return await drive_list(user_id=_tool_user_id(tool_context))
+
+
+async def _adk_drive_read(tool_context: ToolContext, file_id_or_name: str = "") -> str:
+    """Read a file from the authenticated user's connected Google Drive."""
+    return await drive_read_file(user_id=_tool_user_id(tool_context), file_id_or_name=file_id_or_name)
+
+
+async def _adk_drive_upload(file_name: str, file_content: str, tool_context: ToolContext) -> str:
+    """Upload a text file to the authenticated user's connected Google Drive."""
+    return await drive_upload(user_id=_tool_user_id(tool_context), file_name=file_name, file_content=file_content)
+
+
+async def _adk_drive_delete(file_id: str, tool_context: ToolContext) -> str:
+    """Delete a file from the authenticated user's connected Google Drive."""
+    return await drive_delete(user_id=_tool_user_id(tool_context), file_id=file_id)
+
+
+async def _adk_contacts_list(tool_context: ToolContext, query: str = "") -> str:
+    """List or search the authenticated user's connected Google Contacts."""
+    return await contacts_list(user_id=_tool_user_id(tool_context), query=query)
+
+
+async def _adk_calendar_list(tool_context: ToolContext, query: str = "") -> str:
+    """List events from the authenticated user's connected Google Calendar."""
+    return await calendar_list(user_id=_tool_user_id(tool_context), query=query)
+
+
+async def _adk_calendar_create(
+    tool_context: ToolContext,
+    summary: str,
+    start: str,
+    end: str = "",
+    description: str = "",
+    location: str = "",
+) -> str:
+    """Create an event in the authenticated user's connected Google Calendar."""
+    return await calendar_create(
+        user_id=_tool_user_id(tool_context),
+        summary=summary,
+        start=start,
+        end=end,
+        description=description,
+        location=location,
+    )
+
+
+_adk_knowledge_search.__name__ = "knowledge_search"
+_adk_memory_store.__name__ = "memory_store"
+_adk_memory_search.__name__ = "memory_search"
+_adk_drive_list.__name__ = "drive_list"
+_adk_drive_read.__name__ = "drive_read_file"
+_adk_drive_upload.__name__ = "drive_upload"
+_adk_drive_delete.__name__ = "drive_delete"
+_adk_contacts_list.__name__ = "contacts_list"
+_adk_calendar_list.__name__ = "calendar_list"
+_adk_calendar_create.__name__ = "calendar_create"
+
+
+knowledge_search_tool = FunctionTool(func=_adk_knowledge_search)
+memory_store_tool = FunctionTool(func=_adk_memory_store)
+memory_search_tool = FunctionTool(func=_adk_memory_search)
 calculator_tool = FunctionTool(func=calculator)
 web_search_tool = FunctionTool(func=web_search)
 scrape_page_tool = FunctionTool(func=scrape_page)
 weather_tool = FunctionTool(func=fetch_live_weather)
-drive_list_tool = FunctionTool(func=drive_list)
-drive_read_tool = FunctionTool(func=drive_read_file)
-drive_upload_tool = FunctionTool(func=drive_upload)
-drive_delete_tool = FunctionTool(func=drive_delete)
-contacts_list_tool = FunctionTool(func=contacts_list)
-calendar_list_tool = FunctionTool(func=calendar_list)
-calendar_create_tool = FunctionTool(func=calendar_create)
+drive_list_tool = FunctionTool(func=_adk_drive_list)
+drive_read_tool = FunctionTool(func=_adk_drive_read)
+drive_upload_tool = FunctionTool(func=_adk_drive_upload)
+drive_delete_tool = FunctionTool(func=_adk_drive_delete)
+contacts_list_tool = FunctionTool(func=_adk_contacts_list)
+calendar_list_tool = FunctionTool(func=_adk_calendar_list)
+calendar_create_tool = FunctionTool(func=_adk_calendar_create)
 create_search_plan_tool = FunctionTool(func=create_search_plan)
 rank_search_results_tool = FunctionTool(func=rank_search_results)
 split_page_into_passages_tool = FunctionTool(func=split_page_into_passages)

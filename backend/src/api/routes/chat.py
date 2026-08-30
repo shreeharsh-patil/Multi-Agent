@@ -702,6 +702,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
             )
 
         now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
+        augmented_message = f"SYSTEM TIME CONTEXT: Current server time is {now_str}.\n\n" + augmented_message
         google_agent_context = {
             "user_id": user_id,
             "workspace_id": body.workspace_id,
@@ -714,7 +715,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
         }
 
         explicit_agent_id = body.agent_id if (body.agent_id and body.agent_id not in ("auto", "image") and not body.agent_id.startswith("custom_")) else None
-        registry_agent = get_boss_agent().registry.get_agent(explicit_agent_id) if explicit_agent_id else None
+        registry_agent = get_boss_agent().registry.get_metadata(explicit_agent_id) if explicit_agent_id else None
         if (
             body.agent_id not in (None, "auto", "image")
             and not body.agent_id.startswith("custom_")
@@ -724,7 +725,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
             raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
         if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
             raise HTTPException(status_code=422, detail="Unknown or disabled custom agent")
-        invalid_team_agents = [agent_id for agent_id in body.team_agents if not get_boss_agent().registry.get_agent(agent_id)]
+        invalid_team_agents = [agent_id for agent_id in body.team_agents if not get_boss_agent().registry.get_metadata(agent_id)]
         if invalid_team_agents:
             raise HTTPException(status_code=422, detail=f"Unknown or disabled team agent: {invalid_team_agents[0]}")
 
@@ -737,7 +738,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
             )
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
         else:
-            result = await process_message(message=augmented_message, user_id=user_id, conversation_id=conv_id)
+            result = await process_message(message=augmented_message, user_id=user_id, conversation_id=conv_id, workspace_id=body.workspace_id)
 
         # Persist messages to MongoDB (use clean body.message for display/title, not augmented)
         attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
@@ -838,7 +839,7 @@ async def chat_stream(
     )
     _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=effective_agent_id, automatic=automatic_mode, supervisor=use_dynamic_orchestration)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
-    explicit_registry_agent = get_boss_agent().registry.get_agent(effective_agent_id) if effective_agent_id else None
+    explicit_registry_agent = get_boss_agent().registry.get_metadata(effective_agent_id) if effective_agent_id else None
     if (
         body.agent_id not in (None, "auto", "image")
         and not body.agent_id.startswith("custom_")
@@ -848,7 +849,7 @@ async def chat_stream(
         raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
     if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
         raise HTTPException(status_code=422, detail="Unknown or disabled custom agent")
-    invalid_team_agents = [agent_id for agent_id in body.team_agents if not get_boss_agent().registry.get_agent(agent_id)]
+    invalid_team_agents = [agent_id for agent_id in body.team_agents if not get_boss_agent().registry.get_metadata(agent_id)]
     if invalid_team_agents:
         raise HTTPException(status_code=422, detail=f"Unknown or disabled team agent: {invalid_team_agents[0]}")
 
@@ -888,6 +889,7 @@ async def chat_stream(
                 )
 
             now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
+            augmented_message = f"SYSTEM TIME CONTEXT: Current server time is {now_str}.\n\n" + augmented_message
             stream_google_context = {
                 "user_id": user_id,
                 "workspace_id": body.workspace_id,
@@ -933,7 +935,7 @@ async def chat_stream(
             # from bypassing Google grounding and provider/key failover via the
             # legacy llm_service execution paths below.
             async for sse_event in process_message_stream(
-                message=augmented_message, user_id=user_id, conversation_id=conv_id,
+                message=augmented_message, user_id=user_id, conversation_id=conv_id, workspace_id=body.workspace_id,
             ):
                 if await http_request.is_disconnected():
                     return

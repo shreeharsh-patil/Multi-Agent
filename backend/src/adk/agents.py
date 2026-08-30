@@ -139,6 +139,11 @@ ADK_TOOL_MAP: dict[str, Any] = {
     "weather_tool": weather_tool,
     "fetch_weather": weather_tool,
     "live_weather": weather_tool,
+    "create_search_plan": create_search_plan_tool,
+    "rank_search_results": rank_search_results_tool,
+    "split_page_into_passages": split_page_into_passages_tool,
+    "rank_and_select_passages": rank_and_select_passages_tool,
+    "verify_research_claim": verify_research_claim_tool,
     "analyze_evidence_gaps": analyze_evidence_gaps_tool,
     "synthesize_research": synthesize_research_tool,
 }
@@ -208,8 +213,8 @@ def create_knowledge_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
             "retrieved documents from the knowledge base. "
             "Use the knowledge_search tool to find relevant information. "
             "For a named organisation, acronym, address, campus, location, or any "
-            "fact that is not present in retrieved documents, you MUST use native "
-            "Google Search grounding before answering. Never expand an unfamiliar "
+            "fact that is not present in retrieved documents, return a clear request "
+            "to BossAgent to use the Google Search research workflow. Never expand an unfamiliar "
             "acronym from guesswork and never invent a campus, city, address, or "
             "institution name. Prefer the organisation's official site or a government "
             "source; if the identity cannot be verified, explicitly say so. "
@@ -217,7 +222,7 @@ def create_knowledge_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
             "If documents are found, summarize the information with proper citations. "
             "If no documents are found, say so and offer to help with general knowledge."
         ),
-        tools=[knowledge_search_tool, google_search],
+        tools=[knowledge_search_tool],
         description="Answers questions using the document knowledge base with citations (RAG).",
     )
 
@@ -676,7 +681,7 @@ def create_google_search_general_agent(meta: Optional[AgentMetadata] = None) -> 
             "You are the Google General Search Specialist. "
             "Use native Google Search grounding whenever requests require fresh, up-to-date, or real-time web information. "
             "Prefer authoritative sources, cross-check facts, and preserve publication dates and original source URLs. "
-            "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). "
+            "Format monetary values in Indian Rupees (INR / ₹) by default and use a live sourced exchange rate for conversions. "
             "Never fabricate sources or citations. Verify all claims."
         ),
         tools=[google_search],
@@ -960,7 +965,7 @@ def create_google_search_products_agent(meta: Optional[AgentMetadata] = None) ->
         instruction=(
             "You are the Google Product Search Specialist. "
             "Search Google for product specifications, hardware/software benchmark comparisons, consumer reviews, and public pricing. "
-            "Format monetary values in Indian Rupees (INR / ₹) by default (1 USD = 86.5 INR). "
+            "Format monetary values in Indian Rupees (INR / ₹) by default and use a live sourced exchange rate for conversions. "
             "Verify all specifications and never fabricate prices or product citations."
         ),
         tools=[google_search],
@@ -1509,7 +1514,7 @@ def create_price_monitor_researcher_agent(meta: Optional[AgentMetadata] = None) 
         description="Gathers current public pricing, subscription tiers, enterprise deals, and discounts with INR (₹) conversion and retrieval timestamps.",
         instruction=(
             "You are the Price Monitor Researcher. Retrieve live public pricing for software, APIs, cloud services, hardware, and subscriptions. "
-            "Track: Product/Service, Price (INR / ₹ default, 1 USD = 86.5 INR), Plan/Tier, Source URL, and Retrieval Timestamp. Never use stale training memory for pricing questions."
+            "Track: Product/Service, Price (INR / ₹ default using a live exchange rate), Plan/Tier, Source URL, and Retrieval Timestamp. Never use stale training memory for pricing questions."
         ),
         tools=[google_search],
     )
@@ -1605,7 +1610,7 @@ def create_internet_intelligence_manager(search_specialists: list[LlmAgent]) -> 
         "- Defensive cybersecurity, CVEs, patches -> cybersecurity_researcher\n"
         "- Patents, prior art, filings -> patent_researcher\n"
         "- Regulations, compliance laws vs proposed rules -> regulation_researcher\n"
-        "- Live pricing (INR ₹ default, 1 USD = 86.5 INR) -> price_monitor_researcher + google_search_products\n"
+        "- Live pricing (INR ₹ default using a live exchange rate) -> price_monitor_researcher + google_search_products\n"
         "- Live service availability, outages, beta waitlists -> availability_checker\n"
         "- Corporate intelligence, leadership, public funding -> company_intelligence_agent + startup_researcher\n"
         "- Public OSINT, infrastructure footprints -> public_osint_researcher\n"
@@ -2001,7 +2006,7 @@ BOSS_INSTRUCTION = (
     "Do NOT mention creator or developer in standard responses. ONLY if the user specifically asks who created, built, developed, or designed this app or website, state clearly: "
     "'This website and application were created and developed by **Shreeharsh**.'\n\n"
     "CURRENCY & PRICING RULE:\n"
-    "All product prices, deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n\n"
+    "All product prices, deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Use a live, cited exchange rate for currency conversions and include its retrieval date.\n\n"
     "CLICKABLE LINKS & CITATIONS RULE:\n"
     "ALWAYS render every product, documentation, API, service, and website as an active clickable Markdown link [Title](url). "
     "Preserve citations from research packets and never output raw plain text URLs without hyperlinking them.\n\n"

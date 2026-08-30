@@ -92,7 +92,7 @@ def use_adk() -> bool:
     return bool(get_adk_status()["enabled"])
 
 
-async def get_or_create_session(user_id: str, conversation_id: str):
+async def get_or_create_session(user_id: str, conversation_id: str, workspace_id: str | None = None):
     """Get an existing session or create a new one."""
     session = await SESSION_SERVICE.get_session(
         app_name=APP_NAME,
@@ -105,8 +105,15 @@ async def get_or_create_session(user_id: str, conversation_id: str):
             app_name=APP_NAME,
             user_id=user_id,
             session_id=conversation_id,
+            state={"user_id": user_id, "workspace_id": workspace_id},
         )
         logger.info(f"Created session: {conversation_id} for user: {user_id}")
+    elif session.state.get("user_id") != user_id:
+        # Tools read identity from authenticated ADK session state. Never let
+        # the model choose or override the account a tool operates on.
+        session.state["user_id"] = user_id
+    if session.state.get("workspace_id") != workspace_id:
+        session.state["workspace_id"] = workspace_id
     return session
 
 
@@ -124,8 +131,15 @@ _boss_agents_by_key: dict[str, object] = {}
 
 
 def _uses_native_google_search(agent) -> bool:
-    """Native Google Search grounding is supported only by Gemini 2 models."""
-    return any("GoogleSearchTool" in type(tool).__name__ for tool in (getattr(agent, "tools", []) or []))
+    """Detect native Google Search regardless of ADK wrapper/version shape."""
+    from google.adk.tools import google_search
+
+    for tool in getattr(agent, "tools", []) or []:
+        tool_name = str(getattr(tool, "name", "")).lower()
+        class_name = type(tool).__name__.lower()
+        if tool is google_search or tool_name in {"google_search", "google-search"} or "googlesearchtool" in class_name:
+            return True
+    return False
 
 
 def _requires_gemini_leadership(agent) -> bool:
@@ -176,7 +190,10 @@ def get_boss_agent(route=None, grounding_api_key: Optional[str] = None):
             logger.info("ADK BossAgent created")
         return _boss_agent
 
-    cache_key = f"{route.provider}:{route.model}:{route.api_base or ''}:{route.api_key[-8:]}:{(grounding_api_key or route.api_key)[-8:]}"
+    import hashlib
+    route_fingerprint = hashlib.sha256(route.api_key.encode("utf-8")).hexdigest()[:16]
+    grounding_fingerprint = hashlib.sha256((grounding_api_key or route.api_key).encode("utf-8")).hexdigest()[:16]
+    cache_key = f"{route.provider}:{route.model}:{route.api_base or ''}:{route_fingerprint}:{grounding_fingerprint}"
     if cache_key not in _boss_agents_by_key:
         boss = create_boss_agent()
         gemini_key = grounding_api_key or route.api_key
@@ -214,21 +231,23 @@ def reset_adk_runner_cache() -> None:
     global _boss_agent
     _boss_agent = None
     _boss_agents_by_key.clear()
-
-
-async def create_runner(user_id: str, conversation_id: str) -> tuple[Runner, object]:
-    """Create an ADK Runner bound to a user session."""
-    await get_or_create_session(user_id, conversation_id)
     from src.services.llm.adk_model_rotator import adk_model_rotator
-    from src.services.llm.key_rotator import gemini_rotator
+    adk_model_rotator.reset_health()
+
+
+async def create_runner(user_id: str, conversation_id: str, workspace_id: str | None = None) -> tuple[Runner, object, object]:
+    """Create an ADK Runner bound to a user session."""
+    await get_or_create_session(user_id, conversation_id, workspace_id)
+    from src.services.llm.adk_model_rotator import adk_model_rotator
     route = await adk_model_rotator.next_route()
-    grounding_api_key = route.api_key if route.provider == "gemini" else await gemini_rotator.next_api_key()
+    grounding_route = route if route.provider == "gemini" else await adk_model_rotator.next_gemini_route()
+    grounding_api_key = grounding_route.api_key
     return Runner(
         agent=get_boss_agent(route, grounding_api_key),
         app_name=APP_NAME,
         session_service=SESSION_SERVICE,
         auto_create_session=False,
-    ), route
+    ), route, grounding_route
 
 
 def _get_content_piece(event) -> str:
@@ -398,6 +417,8 @@ def reset_adk_agent_tree() -> None:
     global _boss_agent
     _boss_agent = None
     _boss_agents_by_key.clear()
+    from src.services.llm.adk_model_rotator import adk_model_rotator
+    adk_model_rotator.reset_health()
     from src.adk.agents import reset_adk_agent_tree as _reset_agents
     _reset_agents()
 
@@ -406,6 +427,7 @@ async def process_message(
     message: str,
     user_id: str = "default",
     conversation_id: str = "default",
+    workspace_id: str | None = None,
     _failover_attempt: int = 0,
 ) -> dict:
     """Process a user message through the ADK multi-agent system.
@@ -423,13 +445,15 @@ async def process_message(
 
     # Try ADK first, fall back to RotatingProvider on failure
     route = None
+    grounding_route = None
     try:
-        runner, route = await create_runner(user_id, conversation_id)
+        run_session_id = conversation_id if _failover_attempt == 0 else f"{conversation_id}-retry-{_failover_attempt}"
+        runner, route, grounding_route = await create_runner(user_id, run_session_id, workspace_id)
         content = _to_content(message)
 
         events = []
         async for event in runner.run_async(
-            session_id=conversation_id,
+            session_id=run_session_id,
             user_id=user_id,
             new_message=content,
         ):
@@ -480,6 +504,7 @@ async def process_message(
 
         from src.services.llm.adk_model_rotator import adk_model_rotator
         await adk_model_rotator.record_success(route)
+        await adk_model_rotator.record_success(grounding_route)
         return {
             "output": output,
             "citations": citations,
@@ -489,7 +514,13 @@ async def process_message(
     except Exception as e:
         if route is not None:
             from src.services.llm.adk_model_rotator import adk_model_rotator
-            await adk_model_rotator.record_failure(route, e)
+            error_text = str(e).lower()
+            failed_route = grounding_route if (
+                grounding_route is not None
+                and route.provider != "gemini"
+                and any(marker in error_text for marker in ("gemini", "generativelanguage", "googleapis.com"))
+            ) else route
+            await adk_model_rotator.record_failure(failed_route, e)
         if _failover_attempt < MAX_ADK_FAILOVER_ATTEMPTS - 1:
             logger.warning(
                 "ADK attempt %s/%s failed; retrying the next provider/key route: %s",
@@ -501,6 +532,7 @@ async def process_message(
                 message,
                 user_id,
                 conversation_id,
+                workspace_id,
                 _failover_attempt=_failover_attempt + 1,
             )
         logger.warning("All ADK provider/key failover attempts failed: %s", e)
@@ -665,14 +697,17 @@ async def _fallback_process_message(
                     }
                 elif capability_detected == "crypto_price":
                     asset = norm.get("asset", "BITCOIN")
-                    price_inr = norm.get("price_inr", 7737425)
-                    price_usd = norm.get("price_usd", 89450)
-                    change = norm.get("change_24h", 0.0)
+                    price_inr = norm.get("price_inr")
+                    price_usd = norm.get("price_usd")
+                    if price_inr is None or price_usd is None:
+                        raise RuntimeError("Live cryptocurrency provider returned no price")
+                    change = norm.get("change_24h")
+                    change_line = f"- **24h Change**: {change:+.2f}%\n" if change is not None else "- **24h Change**: unavailable\n"
                     output = (
                         f"### 🪙 Live {asset} Price\n"
                         f"- **Price (INR)**: ₹{price_inr:,.2f}\n"
                         f"- **Price (USD)**: ${price_usd:,.2f}\n"
-                        f"- **24h Change**: {change:+.2f}%\n\n"
+                        f"{change_line}\n"
                         f"Source: [CoinGecko](https://api.coingecko.com)"
                     )
                     return {
@@ -684,7 +719,9 @@ async def _fallback_process_message(
                 elif capability_detected == "exchange_rate":
                     base = norm.get("base", "USD")
                     target = norm.get("target", "INR")
-                    rate = norm.get("rate", 86.5)
+                    rate = norm.get("rate")
+                    if rate is None:
+                        raise RuntimeError("Live exchange-rate provider returned no rate")
                     output = (
                         f"### 💱 Real-Time Foreign Exchange Rate\n"
                         f"- **1 {base}** = **₹{rate:.2f} {target}**\n\n"
@@ -748,7 +785,7 @@ async def _fallback_process_message(
                 "You are an AI Assistant for the Agentic Multi-Agent Workspace platform.\n"
                 "CREATOR ATTRIBUTION (CONDITIONAL ONLY): Do NOT mention the creator, author, or developer in standard responses. ONLY when the user explicitly asks 'who created this app', 'who made this website', 'who built this platform', or similar questions about the developer/creator, state: "
                 "'This website and application were created and developed by **Shreeharsh**.'\n"
-                "CURRENCY & PRODUCT PRICING RULE: All product prices, shopping deals, and costs MUST be stated in Indian Rupees (INR / ₹) by default. Convert USD prices to INR (1 USD = 86.5 INR).\n"
+                "CURRENCY & PRODUCT PRICING RULE: State prices in Indian Rupees (INR / ₹) by default and use a live sourced exchange rate for conversions.\n"
                 "CLICKABLE LINKS RULE: ALWAYS render every product recommendation, service, API, and website as an active clickable Markdown link [Product/Site Name](url). Never output plain text URLs or domain names without hyperlinking them.\n"
                 "Always provide accurate, up-to-date real-time information based on current date and live web search when applicable. "
                 "Never claim you cannot generate or export PDF files — this platform HAS automated PDF generation, study book publishing, and PDF export capabilities. "
@@ -778,6 +815,7 @@ async def process_message_stream(
     message: str,
     user_id: str = "default",
     conversation_id: str = "default",
+    workspace_id: str | None = None,
     _failover_attempt: int = 0,
 ):
     """Process a user message and yield SSE events.
@@ -795,8 +833,10 @@ async def process_message_stream(
     # reached the client; otherwise re-running could duplicate a partial reply.
     emitted_answer_text = False
     route = None
+    grounding_route = None
     try:
-        runner, route = await create_runner(user_id, conversation_id)
+        run_session_id = conversation_id if _failover_attempt == 0 else f"{conversation_id}-retry-{_failover_attempt}"
+        runner, route, grounding_route = await create_runner(user_id, run_session_id, workspace_id)
         content = _to_content(message)
 
         accumulated_content = ""
@@ -808,7 +848,7 @@ async def process_message_stream(
         yield {"event": "start", "data": {"conversation_id": conversation_id}}
 
         async for event in runner.run_async(
-            session_id=conversation_id,
+            session_id=run_session_id,
             user_id=user_id,
             new_message=content,
             run_config=RunConfig(streaming_mode=StreamingMode.SSE),
@@ -901,6 +941,7 @@ async def process_message_stream(
                 }
                 from src.services.llm.adk_model_rotator import adk_model_rotator
                 await adk_model_rotator.record_success(route)
+                await adk_model_rotator.record_success(grounding_route)
                 return
 
         if not accumulated_content.strip():
@@ -916,10 +957,17 @@ async def process_message_stream(
         }
         from src.services.llm.adk_model_rotator import adk_model_rotator
         await adk_model_rotator.record_success(route)
+        await adk_model_rotator.record_success(grounding_route)
     except Exception as e:
         if route is not None:
             from src.services.llm.adk_model_rotator import adk_model_rotator
-            await adk_model_rotator.record_failure(route, e)
+            error_text = str(e).lower()
+            failed_route = grounding_route if (
+                grounding_route is not None
+                and route.provider != "gemini"
+                and any(marker in error_text for marker in ("gemini", "generativelanguage", "googleapis.com"))
+            ) else route
+            await adk_model_rotator.record_failure(failed_route, e)
         if not emitted_answer_text and _failover_attempt < MAX_ADK_FAILOVER_ATTEMPTS - 1:
             logger.warning(
                 "ADK stream attempt %s/%s failed before output; retrying next provider/key route: %s",
@@ -931,6 +979,7 @@ async def process_message_stream(
                 message,
                 user_id,
                 conversation_id,
+                workspace_id,
                 _failover_attempt=_failover_attempt + 1,
             ):
                 # The caller already received the initial start event.
@@ -1068,14 +1117,17 @@ async def _fallback_process_message_stream(
                     return
                 elif capability_detected == "crypto_price":
                     asset = norm.get("asset", "BITCOIN")
-                    price_inr = norm.get("price_inr", 7737425)
-                    price_usd = norm.get("price_usd", 89450)
-                    change = norm.get("change_24h", 0.0)
+                    price_inr = norm.get("price_inr")
+                    price_usd = norm.get("price_usd")
+                    if price_inr is None or price_usd is None:
+                        raise RuntimeError("Live cryptocurrency provider returned no price")
+                    change = norm.get("change_24h")
+                    change_line = f"- **24h Change**: {change:+.2f}%\n" if change is not None else "- **24h Change**: unavailable\n"
                     output = (
                         f"### 🪙 Live {asset} Price\n"
                         f"- **Price (INR)**: ₹{price_inr:,.2f}\n"
                         f"- **Price (USD)**: ${price_usd:,.2f}\n"
-                        f"- **24h Change**: {change:+.2f}%\n\n"
+                        f"{change_line}\n"
                         f"Source: [CoinGecko](https://api.coingecko.com)"
                     )
                     words = output.split(" ")
@@ -1091,7 +1143,9 @@ async def _fallback_process_message_stream(
                 elif capability_detected == "exchange_rate":
                     base = norm.get("base", "USD")
                     target = norm.get("target", "INR")
-                    rate = norm.get("rate", 86.5)
+                    rate = norm.get("rate")
+                    if rate is None:
+                        raise RuntimeError("Live exchange-rate provider returned no rate")
                     output = (
                         f"### 💱 Real-Time Foreign Exchange Rate\n"
                         f"- **1 {base}** = **₹{rate:.2f} {target}**\n\n"
