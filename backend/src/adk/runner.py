@@ -346,6 +346,11 @@ def _format_agent_trace(node_name: str, event_type: str, has_content: bool) -> d
     }
 
 
+def _is_boss_agent(node_name: object) -> bool:
+    """Return whether an ADK event belongs to the user-facing coordinator."""
+    return str(node_name or "").strip().lower() in {"boss_agent", "boss"}
+
+
 async def execute_adk_specialists_batch(
     specialist_tasks: list[dict],
     user_id: str = "default",
@@ -428,10 +433,19 @@ async def process_message(
             events.append(event)
 
         final_event = None
+        fallback_final_event = None
         for event in reversed(events):
             if event.is_final_response():
-                final_event = event
-                break
+                if fallback_final_event is None:
+                    fallback_final_event = event
+                if _is_boss_agent(getattr(event, "node_name", None)):
+                    final_event = event
+                    break
+
+        # Some SDK/model combinations do not emit a distinct Boss event. Keep
+        # a non-empty result available rather than returning nothing, while the
+        # streaming path still waits for BossAgent when that event is present.
+        final_event = final_event or fallback_final_event
 
         output = ""
         citations: list[dict[str, str]] = []
@@ -844,7 +858,7 @@ async def process_message_stream(
             # In SSE mode ADK emits incremental partial events followed by a
             # final aggregated event that repeats the full text. Only stream
             # (and accumulate) the partial chunks to avoid duplicating output.
-            if content_piece and is_partial:
+            if content_piece and is_partial and _is_boss_agent(agent_id):
                 accumulated_content += content_piece
                 emitted_answer_text = True
                 yield {"event": "chunk", "data": {"text": content_piece}}
@@ -856,6 +870,10 @@ async def process_message_stream(
             }
 
             if is_final:
+                # Worker finals are internal reports.  Let the root manager
+                # consume them and emit the only user-facing answer.
+                if not _is_boss_agent(agent_id):
+                    continue
                 # Prefer the aggregated final text; fall back to accumulated
                 # partials if the final event carried no content.
                 final_output = content_piece if content_piece else accumulated_content

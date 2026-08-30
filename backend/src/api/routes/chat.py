@@ -37,18 +37,20 @@ ADK_BUILTIN_AGENT_IDS = {"knowledge"}
 
 
 def _adk_routing_preamble(agent_id: str | None, team_agents: list[str]) -> str:
-    """Preserve UI routing choices while keeping execution inside Google ADK."""
+    """Pass UI choices to BossAgent as hints, never as a forced workflow."""
     if team_agents:
         return (
-            "SYSTEM ROUTING: Coordinate the requested ADK specialists: "
-            f"{', '.join(team_agents)}. Verify any current or external claim with "
-            "native Google Search grounding; do not invent facts.\n\n"
+            "SYSTEM ROUTING HINT: The user suggested these specialists: "
+            f"{', '.join(team_agents)}. BossAgent must independently select the "
+            "smallest suitable workflow and may use different specialists. Verify "
+            "current or external claims with native Google Search grounding.\n\n"
         )
     if agent_id and agent_id not in {"auto", "image"}:
         return (
-            f"SYSTEM ROUTING: Delegate this request to the ADK {agent_id} specialist. "
-            "For unverified named entities, locations, acronyms, or current facts, "
-            "use native Google Search grounding and cite sources; do not guess.\n\n"
+            f"SYSTEM ROUTING HINT: The user selected `{agent_id}`. BossAgent decides "
+            "whether that specialist is needed and selects the workflow. For unverified "
+            "named entities, locations, acronyms, or current facts, use native Google "
+            "Search grounding and cite sources; do not guess.\n\n"
         )
     return ""
 
