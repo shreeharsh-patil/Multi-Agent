@@ -168,6 +168,7 @@ function ChatContent() {
       page_number?: number
       section?: string
       text?: string
+      url?: string
       score?: number
       document_id?: string
       chunk_id?: string
@@ -1913,7 +1914,8 @@ function ChatContent() {
                                     key={`${cit.document_id || cit.file_name || 'cit'}-${ci}`}
                                     type="button"
                                     onClick={() => {
-                                      if (cit.document_id) window.open(`/documents?doc=${encodeURIComponent(cit.document_id)}`, '_blank', 'noopener,noreferrer')
+                                      if (cit.url) window.open(cit.url, '_blank', 'noopener,noreferrer')
+                                      else if (cit.document_id) window.open(`/documents?doc=${encodeURIComponent(cit.document_id)}`, '_blank', 'noopener,noreferrer')
                                     }}
                                     title={cit.text || undefined}
                                     className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors max-w-full"

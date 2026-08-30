@@ -175,6 +175,51 @@ def _get_content_piece(event) -> str:
     return ""
 
 
+def _field(value, name: str, default=None):
+    """Read an SDK field from either a dict or a generated model object."""
+    if isinstance(value, dict):
+        return value.get(name, default)
+    return getattr(value, name, default)
+
+
+def _extract_grounding_citations(event) -> list[dict[str, str]]:
+    """Convert Gemini/ADK grounding metadata into UI-safe source records.
+
+    Google Search grounding returns ``groundingChunks`` / ``grounding_chunks``
+    with web titles and URIs.  ADK event shapes vary by SDK version, so this
+    intentionally supports both camelCase API payloads and Python model fields.
+    """
+    carriers = [
+        event,
+        _field(event, "content"),
+        _field(event, "response"),
+        _field(_field(event, "response"), "candidates"),
+    ]
+    metadata = None
+    for carrier in carriers:
+        if isinstance(carrier, list):
+            for item in carrier:
+                metadata = _field(item, "grounding_metadata") or _field(item, "groundingMetadata")
+                if metadata:
+                    break
+        else:
+            metadata = _field(carrier, "grounding_metadata") or _field(carrier, "groundingMetadata")
+        if metadata:
+            break
+
+    chunks = _field(metadata, "grounding_chunks") or _field(metadata, "groundingChunks") or []
+    citations: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for chunk in chunks:
+        web = _field(chunk, "web") or {}
+        url = _field(web, "uri") or _field(web, "url") or ""
+        title = _field(web, "title") or url
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            citations.append({"file_name": str(title), "text": str(url), "url": str(url)})
+    return citations
+
+
 def _format_agent_trace(node_name: str, event_type: str, has_content: bool) -> dict:
     """Format rich telemetry trace for real ADK agent executions."""
     from src.adk.agents import adk_name_to_registry_id
@@ -605,6 +650,8 @@ async def process_message_stream(
         content = _to_content(message)
 
         accumulated_content = ""
+        citations: list[dict[str, str]] = []
+        citation_urls: set[str] = set()
         current_agent = "orchestrator"
         emitted_stages: set[str] = set()
 
@@ -620,6 +667,10 @@ async def process_message_stream(
             agent_id = event.node_name if hasattr(event, "node_name") else "unknown"
 
             content_piece = _get_content_piece(event)
+            for citation in _extract_grounding_citations(event):
+                if citation["url"] not in citation_urls:
+                    citation_urls.add(citation["url"])
+                    citations.append(citation)
             is_partial = bool(getattr(event, "partial", False))
             is_final = bool(getattr(event, "is_final_response", None) and event.is_final_response())
 
@@ -688,7 +739,7 @@ async def process_message_stream(
                     "data": {
                         "output": final_output,
                         "conversation_id": conversation_id,
-                        "citations": [],
+                        "citations": citations,
                     },
                 }
                 return
@@ -698,7 +749,7 @@ async def process_message_stream(
             "data": {
                 "output": accumulated_content,
                 "conversation_id": conversation_id,
-                "citations": [],
+                "citations": citations,
             },
         }
     except Exception as e:
@@ -916,8 +967,10 @@ async def _fallback_process_message_stream(
                     f"{prompt_with_context}\n\n"
                     f"LIVE REAL-TIME WEB SEARCH RESULTS:\n"
                     f"{search_results}\n\n"
-                    f"INSTRUCTIONS: Use the live search results above to answer the user's question accurately. "
-                    f"Always preserve and render clickable Markdown links [Source Name](url) for all cited sources."
+                    "GROUNDING RULES: Treat these results as the only evidence for time-sensitive facts. "
+                    "Do not invent a date, price, availability, quote, or source that is not supported by a result. "
+                    "If the results conflict or do not answer the question, say so plainly. "
+                    "Cite every material current claim with its exact clickable Markdown link [Source Name](url)."
                 )
         except Exception as e:
             logger.warning(f"Fallback live web search execution failed in stream: {e}")

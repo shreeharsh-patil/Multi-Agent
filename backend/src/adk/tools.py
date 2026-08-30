@@ -7,6 +7,7 @@ so agents can invoke them via function calling.
 import json
 import asyncio
 import ipaddress
+import time
 from urllib.parse import urlparse
 from typing import Optional, Dict, Any, List
 import httpx
@@ -16,6 +17,13 @@ from src.config import settings
 
 # Shared httpx client for Firecrawl to reuse TCP connections across requests.
 _firecrawl_client: httpx.AsyncClient | None = None
+
+# A short cache removes duplicate network calls made by the planner, verifier,
+# and answer agent in the same turn.  It is deliberately short-lived: search
+# results for a "latest" question must not be treated as durable knowledge.
+_web_search_cache: dict[tuple[str, bool, int], tuple[float, str]] = {}
+_WEB_SEARCH_CACHE_TTL_SECONDS = 45.0
+_WEB_SEARCH_CACHE_MAX_ENTRIES = 100
 
 
 def _validate_outbound_url(url: str) -> bool:
@@ -486,41 +494,62 @@ async def _searxng_search_items(query: str, max_items: int = 6) -> List[Dict[str
     return results
 
 
-async def web_search(query: str, for_research: bool = False) -> str:
+async def web_search(
+    query: str,
+    for_research: bool = False,
+    max_items: Optional[int] = None,
+) -> str:
     """Search the internet for current live information across multiple web engines.
 
     Aggregates up to-the-minute news, live web pages, and authoritative articles
     from Google News RSS, DuckDuckGo, Jina AI, SearXNG, and academic databases.
     """
-    max_items = 12 if for_research else 8
+    clean_query = " ".join((query or "").split())
+    if not clean_query:
+        return "No live search results found: a non-empty query is required."
+
+    # Keep the tool bounded regardless of an agent-supplied value.  This keeps
+    # latency predictable and avoids flooding the synthesis context.
+    result_limit = max_items if max_items is not None else (12 if for_research else 8)
+    result_limit = max(1, min(int(result_limit), 20))
+    cache_key = (clean_query.lower(), for_research, result_limit)
+    now = time.monotonic()
+    cached = _web_search_cache.get(cache_key)
+    if cached and (now - cached[0]) < _WEB_SEARCH_CACHE_TTL_SECONDS:
+        return cached[1]
 
     raw_items: List[Dict[str, str]] = []
 
-    # 1. Run primary live search engines concurrently
+    # General queries need web results first.  Google News is only useful for
+    # explicitly time-sensitive/news requests; using it for every lookup used
+    # to crowd out canonical documentation with unrelated headlines.
+    lowered = clean_query.lower()
+    needs_news = any(token in lowered for token in (
+        "news", "breaking", "today", "current", "latest", "recent",
+        "announced", "release", "launch", "update", "right now",
+    ))
     tasks = [
-        _google_news_search(query, max_items=6),
-        _duckduckgo_search(query, max_items=8),
+        _duckduckgo_search(clean_query, max_items=min(result_limit, 8)),
+        _jina_search_items(clean_query, max_items=min(result_limit, 6)),
     ]
+    if needs_news:
+        tasks.append(_google_news_search(clean_query, max_items=min(result_limit, 6)))
     engine_results = await asyncio.gather(*tasks, return_exceptions=True)
 
     for res in engine_results:
         if isinstance(res, list):
             raw_items.extend(res)
 
-    # 2. Enrich with Jina AI Search if more results needed
-    if len(raw_items) < max_items:
-        jina_items = await _jina_search_items(query, max_items=6)
-        raw_items.extend(jina_items)
-
-    # 3. SearXNG Meta-Search fallback
+    # SearXNG is a final fallback only.  The primary providers already ran in
+    # parallel, which is faster and less likely to return a stale mirror.
     if len(raw_items) < 4:
-        searx_items = await _searxng_search_items(query, max_items=6)
+        searx_items = await _searxng_search_items(clean_query, max_items=min(result_limit, 6))
         raw_items.extend(searx_items)
 
     # 4. Academic/Encyclopedic fallbacks if live web results are sparse
     if len(raw_items) < 3:
         try:
-            wiki_res = await _wikipedia_search(query)
+            wiki_res = await _wikipedia_search(clean_query)
             if wiki_res and len(wiki_res.strip()) > 30:
                 raw_items.append({"title": "Wikipedia Reference", "url": "", "snippet": wiki_res, "source": "Wikipedia"})
         except Exception:
@@ -552,11 +581,29 @@ async def web_search(query: str, for_research: bool = False) -> str:
         seen_titles.add(norm_title)
         unique_results.append(item)
 
-        if len(unique_results) >= max_items:
+        if len(unique_results) >= result_limit:
             break
 
     if not unique_results:
-        return f"No live search results found for '{query}'."
+        return f"No live search results found for '{clean_query}'."
+
+    # Prefer primary documentation and diversify domains before handing the
+    # evidence to the model.  Search snippets are leads, not facts; the
+    # explicit source URLs let the agent cite and, when needed, read the page.
+    try:
+        from src.adk.search_ranker import SearchResultRanker
+
+        ranking = SearchResultRanker.rank_sources(
+            clean_query, unique_results, max_selected=result_limit
+        )
+        by_url = {item.get("url", "").split("#")[0].rstrip("/"): item for item in unique_results}
+        selected_urls = [source["url"].split("#")[0].rstrip("/") for source in ranking.selected_sources]
+        ranked_results = [by_url[url] for url in selected_urls if url in by_url]
+        if ranked_results:
+            unique_results = ranked_results
+    except Exception as exc:
+        # Ranking improves quality but must never make live search unavailable.
+        logger.warning("Search ranking failed for '%s': %s", clean_query, exc)
 
     formatted = []
     for idx, item in enumerate(unique_results, 1):
@@ -565,10 +612,15 @@ async def web_search(query: str, for_research: bool = False) -> str:
         s = item.get("snippet", "")
         src = item.get("source", "Web")
         url_line = f"\nURL: {u}" if u else ""
-        formatted.append(f"### [{idx}] {t} ({src}){url_line}\n{s}\n")
+        formatted.append(f"### Source {idx}: {t} ({src}){url_line}\n{s}\n")
 
-    logger.info(f"Successfully aggregated {len(unique_results)} search results across engines for: '{query}'")
-    return "\n".join(formatted)
+    output = "\n".join(formatted)
+    if len(_web_search_cache) >= _WEB_SEARCH_CACHE_MAX_ENTRIES:
+        oldest_key = min(_web_search_cache, key=lambda key: _web_search_cache[key][0])
+        _web_search_cache.pop(oldest_key, None)
+    _web_search_cache[cache_key] = (now, output)
+    logger.info("Successfully aggregated %s ranked search results for: '%s'", len(unique_results), clean_query)
+    return output
 
 
 
