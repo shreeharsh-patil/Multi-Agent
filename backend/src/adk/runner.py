@@ -14,7 +14,10 @@ from typing import Optional
 
 from google.adk import Runner
 from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.models import Gemini
+from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import InMemorySessionService
+from google import genai
 from google.genai import types
 
 from src.adk.agents import create_boss_agent
@@ -113,25 +116,111 @@ def _to_content(message: str) -> types.Content:
 
 
 _boss_agent = None
+_boss_agents_by_key: dict[str, object] = {}
 
 
-def get_boss_agent():
+def _uses_native_google_search(agent) -> bool:
+    """Native Google Search grounding is supported only by Gemini 2 models."""
+    return any("GoogleSearchTool" in type(tool).__name__ for tool in (getattr(agent, "tools", []) or []))
+
+
+def _requires_gemini_leadership(agent) -> bool:
+    """Keep routing, grounding, verification, and final synthesis Gemini-led.
+
+    Third-party models remain useful ADK workers, but a Gemini control plane
+    gives every provider route the same tool discipline, source policy, and
+    final-answer quality bar as the native ADK experience.
+    """
+    name = str(getattr(agent, "name", "")).lower()
+    leadership_names = {
+        "boss_agent",
+        "internet_intelligence_manager",
+        "google_search_manager",
+        "evidence_synthesizer",
+        "research_synthesizer",
+    }
+    return (
+        _uses_native_google_search(agent)
+        or name in leadership_names
+        or name.endswith("_manager")
+        or any(marker in name for marker in ("fact_checker", "source_verifier", "citation_auditor", "freshness_checker"))
+    )
+
+
+def _apply_adk_models(agent, primary_model, grounding_model: Gemini, visited: Optional[set[int]] = None) -> None:
+    """Apply provider workers while preserving Gemini as the ADK control plane."""
+    visited = visited if visited is not None else set()
+    if id(agent) in visited:
+        return
+    visited.add(id(agent))
+    agent.model = grounding_model if _requires_gemini_leadership(agent) else primary_model
+    for sub_agent in getattr(agent, "sub_agents", []) or []:
+        _apply_adk_models(sub_agent, primary_model, grounding_model, visited)
+
+
+def get_boss_agent(route=None, grounding_api_key: Optional[str] = None):
+    """Return an ADK hierarchy bound to a rotated provider route.
+
+    LiteLLM-backed providers power ordinary ADK reasoning. Search-grounded
+    specialists always receive an explicit Gemini client because the ADK
+    ``google_search`` tool is Gemini-only.
+    """
     global _boss_agent
-    if _boss_agent is None:
-        _boss_agent = create_boss_agent()
-        logger.info("ADK BossAgent created")
-    return _boss_agent
+    if route is None:
+        if _boss_agent is None:
+            _boss_agent = create_boss_agent()
+            logger.info("ADK BossAgent created")
+        return _boss_agent
+
+    cache_key = f"{route.provider}:{route.model}:{route.api_base or ''}:{route.api_key[-8:]}:{(grounding_api_key or route.api_key)[-8:]}"
+    if cache_key not in _boss_agents_by_key:
+        boss = create_boss_agent()
+        gemini_key = grounding_api_key or route.api_key
+        grounding_model = Gemini(
+            model=settings.gemini_model,
+            client=genai.Client(api_key=gemini_key),
+            retry_options=types.HttpRetryOptions(initial_delay=1, attempts=2),
+        )
+        if route.provider == "gemini":
+            primary_model = Gemini(
+                model=route.model,
+                client=genai.Client(api_key=route.api_key),
+                retry_options=types.HttpRetryOptions(initial_delay=1, attempts=2),
+            )
+        else:
+            lite_llm_args = {
+                "model": f"{route.provider}/{route.model}",
+                "api_key": route.api_key,
+            }
+            if route.api_base:
+                lite_llm_args["api_base"] = route.api_base
+            primary_model = LiteLlm(**lite_llm_args)
+        _apply_adk_models(boss, primary_model, grounding_model)
+        _boss_agents_by_key[cache_key] = boss
+        logger.info("ADK BossAgent initialized with rotated %s provider credentials", route.provider)
+    return _boss_agents_by_key[cache_key]
 
 
 def get_orchestrator():
     return get_boss_agent()
 
 
+def reset_adk_runner_cache() -> None:
+    """Clear per-key ADK hierarchies after configuration changes or in tests."""
+    global _boss_agent
+    _boss_agent = None
+    _boss_agents_by_key.clear()
+
+
 async def create_runner(user_id: str, conversation_id: str) -> Runner:
     """Create an ADK Runner bound to a user session."""
     await get_or_create_session(user_id, conversation_id)
+    from src.services.llm.adk_model_rotator import adk_model_rotator
+    from src.services.llm.key_rotator import gemini_rotator
+    route = await adk_model_rotator.next_route()
+    grounding_api_key = route.api_key if route.provider == "gemini" else await gemini_rotator.next_api_key()
     return Runner(
-        agent=get_boss_agent(),
+        agent=get_boss_agent(route, grounding_api_key),
         app_name=APP_NAME,
         session_service=SESSION_SERVICE,
         auto_create_session=False,
@@ -299,6 +388,7 @@ def reset_adk_agent_tree() -> None:
     """Reset cached ADK agent tree."""
     global _boss_agent
     _boss_agent = None
+    _boss_agents_by_key.clear()
     from src.adk.agents import reset_adk_agent_tree as _reset_agents
     _reset_agents()
 
@@ -310,12 +400,16 @@ async def process_message(
 ) -> dict:
     """Process a user message through the ADK multi-agent system.
 
-    Uses ADK when Gemini is available. If ADK/Gemini fails (e.g. quota
-    exhausted), falls back to direct LLM via the RotatingProvider which
-    auto-rotates through AIand, Groq, OpenRouter, etc.
+    Uses Google ADK/Gemini only. Live web grounding must never silently switch
+    to a non-ADK model or search provider.
     """
     if not use_adk():
-        return await _fallback_process_message(message, user_id, conversation_id)
+        return {
+            "output": "Google ADK is unavailable. Configure a valid Gemini API key to continue.",
+            "citations": [],
+            "agent_traces": [],
+            "events_count": 0,
+        }
 
     # Try ADK first, fall back to RotatingProvider on failure
     try:
@@ -337,11 +431,17 @@ async def process_message(
                 break
 
         output = ""
+        citations: list[dict[str, str]] = []
+        citation_urls: set[str] = set()
         if final_event:
             output = _get_content_piece(final_event)
 
         agent_traces = []
         for event in events:
+            for citation in _extract_grounding_citations(event):
+                if citation["url"] not in citation_urls:
+                    citation_urls.add(citation["url"])
+                    citations.append(citation)
             node_name = event.node_name if hasattr(event, "node_name") else "unknown"
             event_type = str(type(event).__name__)
             has_content = bool(_get_content_piece(event))
@@ -358,13 +458,18 @@ async def process_message(
 
         return {
             "output": output,
-            "citations": [],
+            "citations": citations,
             "agent_traces": agent_traces,
             "events_count": len(events),
         }
     except Exception as e:
-        logger.warning(f"ADK failed ({e}), falling back to RotatingProvider")
-        return await _fallback_process_message(message, user_id, conversation_id)
+        logger.warning("ADK failed after Gemini key rotation: %s", e)
+        return {
+            "output": "Google ADK could not complete this request with the configured Gemini API keys.",
+            "citations": [],
+            "agent_traces": [],
+            "events_count": 0,
+        }
 
 
 async def _build_conversation_context(conversation_id: str) -> str:
@@ -640,8 +745,9 @@ async def process_message_stream(
     exhausted), falls back to direct LLM via the RotatingProvider.
     """
     if not use_adk():
-        async for event in _fallback_process_message_stream(message, user_id, conversation_id):
-            yield event
+        output = "Google ADK is unavailable. Configure a valid Gemini API key to continue."
+        yield {"event": "error", "data": {"error": output, "conversation_id": conversation_id}}
+        yield {"event": "completed", "data": {"output": output, "conversation_id": conversation_id, "citations": []}}
         return
 
     # Try ADK first, fall back to RotatingProvider on failure
@@ -753,9 +859,10 @@ async def process_message_stream(
             },
         }
     except Exception as e:
-        logger.warning(f"ADK stream failed ({e}), falling back to RotatingProvider")
-        async for event in _fallback_process_message_stream(message, user_id, conversation_id):
-            yield event
+        logger.warning("ADK stream failed after Gemini key rotation: %s", e)
+        output = "Google ADK could not complete this request with the configured Gemini API keys."
+        yield {"event": "error", "data": {"error": output, "conversation_id": conversation_id}}
+        yield {"event": "completed", "data": {"output": output, "conversation_id": conversation_id, "citations": []}}
 
 
 async def process_fast_message_stream(

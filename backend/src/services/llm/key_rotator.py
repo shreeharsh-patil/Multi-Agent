@@ -43,6 +43,21 @@ class GeminiClientRotator:
         logger.info(f"Gemini client rotator initialized with {len(self.clients)} key(s).")
         self._initialized = True
 
+    async def next_api_key(self) -> str:
+        """Return the next configured Gemini key in round-robin order.
+
+        ADK owns its own Gemini client, so it cannot use this class's
+        ``google.genai.Client`` instances directly.  This method lets the ADK
+        runner share the same key pool without mutating process environment
+        variables or exposing a key in logs.
+        """
+        if not self.keys:
+            raise ValueError("GEMINI_API_KEY is not configured in .env.")
+        async with self._lock:
+            key = self.keys[self._current_idx % len(self.keys)]
+            self._current_idx = (self._current_idx + 1) % len(self.keys)
+            return key
+
     async def execute_with_retry(self, func: Callable[..., Any], *args, **kwargs) -> Any:
         """Execute a client operation, rotating keys if a rate limit or API error occurs.
 

@@ -43,6 +43,10 @@ fpdf2>=2.8.0
 
 # LLM Providers
 openai>=1.55.0
+# Official ADK connector for Groq, OpenRouter, Mistral, and other
+# OpenAI-compatible providers.  Versions 1.82.7/1.82.8 are excluded due to
+# the March 2026 supply-chain advisory.
+litellm>=1.82.9,<2.0.0
 
 # Utilities
 python-multipart>=0.0.12
