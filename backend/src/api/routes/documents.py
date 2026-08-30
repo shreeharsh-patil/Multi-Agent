@@ -28,9 +28,16 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 def _safe_filename(filename: str | None) -> str:
-    """Strip path separators and header-injection characters from a client filename."""
-    name = Path(filename or "").name
-    name = "".join(ch for ch in name if ch not in '\r\n"\\')
+    """Return a safe basename for both POSIX and Windows-style client paths.
+
+    Upload filenames originate from clients, so a Linux server must still treat
+    backslashes as path separators. Normalizing them before taking ``Path.name``
+    prevents values such as ``..\\..\\evil.png`` or ``C:\\...\\file.txt`` from
+    retaining traversal components on POSIX hosts.
+    """
+    normalized = (filename or "").replace("\\", "/")
+    name = Path(normalized).name
+    name = "".join(ch for ch in name if ch not in '\r\n"')
     return name.strip() or "unnamed"
 
 
