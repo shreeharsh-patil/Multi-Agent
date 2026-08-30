@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from src.config import settings
+from src.config import settings, split_gemini_api_keys
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,7 @@ class AdkModelRotator:
 
     @staticmethod
     def _keys(value: str) -> list[str]:
-        return [key.strip() for key in (value or "").split(",") if key.strip()]
+        return split_gemini_api_keys(value) if ("AIza" in (value or "") or "AQ." in (value or "")) else [key.strip() for key in (value or "").split(",") if key.strip()]
 
     async def next_route(self) -> AdkModelRoute:
         """Select a provider and one of its API keys round-robin."""

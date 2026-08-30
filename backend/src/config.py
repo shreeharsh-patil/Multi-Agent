@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -14,6 +15,31 @@ def _is_insecure_secret(value: str) -> bool:
     if len(v) < 16:
         return True
     return False
+
+
+def split_gemini_api_keys(value: str) -> list[str]:
+    """Parse normal comma-separated keys and accidentally concatenated AI Studio keys.
+
+    Gemini AI Studio now issues Authentication Keys with an ``AQ.`` prefix;
+    older Traffic Keys begin with ``AIza``.  The UI occasionally receives
+    several pasted back-to-back without commas; split on each subsequent key
+    prefix so the rotator can use them independently. Comma separation remains
+    the preferred and unambiguous configuration format.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return []
+    keys: list[str] = []
+    for chunk in re.split(r"[,\s]+", raw):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        starts = [match.start() for match in re.finditer(r"(?:AIza|AQ\.)", chunk)]
+        if len(starts) > 1:
+            keys.extend(chunk[start:end].strip() for start, end in zip(starts, starts[1:] + [len(chunk)]))
+        else:
+            keys.append(chunk)
+    return keys
 
 
 class Settings(BaseSettings):
@@ -207,7 +233,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 if settings.gemini_api_key:
-    first_key = next((k.strip() for k in settings.gemini_api_key.split(",") if k.strip()), "")
+    first_key = next(iter(split_gemini_api_keys(settings.gemini_api_key)), "")
     if first_key:
         os.environ["GEMINI_API_KEY"] = first_key
         # google-genai prioritizes GOOGLE_API_KEY when both variables exist.

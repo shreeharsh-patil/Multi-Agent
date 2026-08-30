@@ -3,14 +3,14 @@ import os
 from typing import Callable, Any
 from google import genai
 from google.genai import types
-from src.config import settings
+from src.config import settings, split_gemini_api_keys
 from src.utils.logger import logger
 
 class GeminiClientRotator:
     def __init__(self):
         # Split the keys by comma and clean them
         raw_keys = settings.gemini_api_key or ""
-        self.keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+        self.keys = split_gemini_api_keys(raw_keys)
         self.clients = []
         self._current_idx = 0
         self._lock = asyncio.Lock()

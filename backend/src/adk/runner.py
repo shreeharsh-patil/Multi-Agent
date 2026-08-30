@@ -21,26 +21,28 @@ from google import genai
 from google.genai import types
 
 from src.adk.agents import create_boss_agent
-from src.config import settings
+from src.config import settings, split_gemini_api_keys
 from src.utils.logger import logger
 
 SESSION_SERVICE = InMemorySessionService()
 APP_NAME = "agentic"
+MAX_ADK_FAILOVER_ATTEMPTS = 3
 
 
 def _configured_gemini_keys() -> list[str]:
     """Return configured Gemini credentials without empty entries."""
-    return [key.strip() for key in (settings.gemini_api_key or "").split(",") if key.strip()]
+    return split_gemini_api_keys(settings.gemini_api_key)
 
 
 def _looks_like_google_ai_api_key(key: str) -> bool:
     """Reject OAuth/client secrets accidentally pasted into GEMINI_API_KEY.
 
-    Google AI Studio API keys currently use the ``AIza`` prefix. Keeping this
-    check local prevents ADK from repeatedly making doomed requests with an
-    OAuth client secret or access token and then appearing to be initialized.
+    Google AI Studio accepts legacy Traffic Keys (``AIza``) and its newer
+    Authentication Keys (``AQ.``). Keeping this check local prevents ADK from
+    repeatedly making doomed requests with an OAuth client secret or access
+    token and then appearing to be initialized.
     """
-    return bool(re.fullmatch(r"AIza[0-9A-Za-z_-]{30,60}", key))
+    return bool(re.fullmatch(r"(?:AIza[0-9A-Za-z_-]{30,60}|AQ\.[0-9A-Za-z_-]{16,512})", key))
 
 
 def get_adk_status() -> dict[str, object]:
@@ -397,6 +399,7 @@ async def process_message(
     message: str,
     user_id: str = "default",
     conversation_id: str = "default",
+    _failover_attempt: int = 0,
 ) -> dict:
     """Process a user message through the ADK multi-agent system.
 
@@ -463,9 +466,22 @@ async def process_message(
             "events_count": len(events),
         }
     except Exception as e:
-        logger.warning("ADK failed after Gemini key rotation: %s", e)
+        if _failover_attempt < MAX_ADK_FAILOVER_ATTEMPTS - 1:
+            logger.warning(
+                "ADK attempt %s/%s failed; retrying the next provider/key route: %s",
+                _failover_attempt + 1,
+                MAX_ADK_FAILOVER_ATTEMPTS,
+                e,
+            )
+            return await process_message(
+                message,
+                user_id,
+                conversation_id,
+                _failover_attempt=_failover_attempt + 1,
+            )
+        logger.warning("All ADK provider/key failover attempts failed: %s", e)
         return {
-            "output": "Google ADK could not complete this request with the configured Gemini API keys.",
+            "output": "Google ADK could not complete this request after trying the configured provider and API-key routes.",
             "citations": [],
             "agent_traces": [],
             "events_count": 0,
@@ -738,6 +754,7 @@ async def process_message_stream(
     message: str,
     user_id: str = "default",
     conversation_id: str = "default",
+    _failover_attempt: int = 0,
 ):
     """Process a user message and yield SSE events.
 
@@ -750,7 +767,9 @@ async def process_message_stream(
         yield {"event": "completed", "data": {"output": output, "conversation_id": conversation_id, "citations": []}}
         return
 
-    # Try ADK first, fall back to RotatingProvider on failure
+    # Try ADK routes in sequence.  A retry is safe only before answer text has
+    # reached the client; otherwise re-running could duplicate a partial reply.
+    emitted_answer_text = False
     try:
         runner = await create_runner(user_id, conversation_id)
         content = _to_content(message)
@@ -824,6 +843,7 @@ async def process_message_stream(
             # (and accumulate) the partial chunks to avoid duplicating output.
             if content_piece and is_partial:
                 accumulated_content += content_piece
+                emitted_answer_text = True
                 yield {"event": "chunk", "data": {"text": content_piece}}
 
             trace_info = _format_agent_trace(agent_id, event_type, bool(content_piece))
@@ -839,6 +859,7 @@ async def process_message_stream(
                 # If nothing was streamed as partial, emit the full text now
                 # so the client still renders a response.
                 if not accumulated_content and final_output:
+                    emitted_answer_text = True
                     yield {"event": "chunk", "data": {"text": final_output}}
                 yield {
                     "event": "completed",
@@ -859,8 +880,25 @@ async def process_message_stream(
             },
         }
     except Exception as e:
-        logger.warning("ADK stream failed after Gemini key rotation: %s", e)
-        output = "Google ADK could not complete this request with the configured Gemini API keys."
+        if not emitted_answer_text and _failover_attempt < MAX_ADK_FAILOVER_ATTEMPTS - 1:
+            logger.warning(
+                "ADK stream attempt %s/%s failed before output; retrying next provider/key route: %s",
+                _failover_attempt + 1,
+                MAX_ADK_FAILOVER_ATTEMPTS,
+                e,
+            )
+            async for retry_event in process_message_stream(
+                message,
+                user_id,
+                conversation_id,
+                _failover_attempt=_failover_attempt + 1,
+            ):
+                # The caller already received the initial start event.
+                if retry_event["event"] != "start":
+                    yield retry_event
+            return
+        logger.warning("All ADK stream provider/key failover attempts failed: %s", e)
+        output = "Google ADK could not complete this request after trying the configured provider and API-key routes."
         yield {"event": "error", "data": {"error": output, "conversation_id": conversation_id}}
         yield {"event": "completed", "data": {"output": output, "conversation_id": conversation_id, "citations": []}}
 
