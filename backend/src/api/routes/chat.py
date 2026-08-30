@@ -1122,7 +1122,11 @@ async def chat_stream(
                 if await http_request.is_disconnected():
                     break
 
-                event_type = sse_event["event"]
+                # ADK runner historically emits ``completed`` while the chat
+                # SSE contract (and frontend) uses ``complete``. Normalize at
+                # the API boundary so a valid ADK response cannot be mistaken
+                # for a stream that closed without completion.
+                event_type = "complete" if sse_event["event"] == "completed" else sse_event["event"]
                 data = sse_event["data"]
                 if event_type in {"agent", "trace", "complete", "error"}:
                     _chat_log(request_id, f"stream_{event_type}", "complete", request_started_at, agent_id=data.get("agent_id"))
