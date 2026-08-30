@@ -26,7 +26,9 @@ from src.utils.logger import logger
 
 SESSION_SERVICE = InMemorySessionService()
 APP_NAME = "agentic"
-MAX_ADK_FAILOVER_ATTEMPTS = 3
+# Try enough distinct provider/key routes to reach a healthy Gemini key even
+# when the first pasted or legacy credential is invalid.
+MAX_ADK_FAILOVER_ATTEMPTS = 5
 
 
 def _configured_gemini_keys() -> list[str]:
@@ -214,7 +216,7 @@ def reset_adk_runner_cache() -> None:
     _boss_agents_by_key.clear()
 
 
-async def create_runner(user_id: str, conversation_id: str) -> Runner:
+async def create_runner(user_id: str, conversation_id: str) -> tuple[Runner, object]:
     """Create an ADK Runner bound to a user session."""
     await get_or_create_session(user_id, conversation_id)
     from src.services.llm.adk_model_rotator import adk_model_rotator
@@ -226,7 +228,7 @@ async def create_runner(user_id: str, conversation_id: str) -> Runner:
         app_name=APP_NAME,
         session_service=SESSION_SERVICE,
         auto_create_session=False,
-    )
+    ), route
 
 
 def _get_content_piece(event) -> str:
@@ -420,8 +422,9 @@ async def process_message(
         }
 
     # Try ADK first, fall back to RotatingProvider on failure
+    route = None
     try:
-        runner = await create_runner(user_id, conversation_id)
+        runner, route = await create_runner(user_id, conversation_id)
         content = _to_content(message)
 
         events = []
@@ -443,8 +446,7 @@ async def process_message(
                     break
 
         # Some SDK/model combinations do not emit a distinct Boss event. Keep
-        # a non-empty result available rather than returning nothing, while the
-        # streaming path still waits for BossAgent when that event is present.
+        # the last valid specialist final rather than returning an empty reply.
         final_event = final_event or fallback_final_event
 
         output = ""
@@ -476,6 +478,8 @@ async def process_message(
             },
         )
 
+        from src.services.llm.adk_model_rotator import adk_model_rotator
+        await adk_model_rotator.record_success(route)
         return {
             "output": output,
             "citations": citations,
@@ -483,6 +487,9 @@ async def process_message(
             "events_count": len(events),
         }
     except Exception as e:
+        if route is not None:
+            from src.services.llm.adk_model_rotator import adk_model_rotator
+            await adk_model_rotator.record_failure(route, e)
         if _failover_attempt < MAX_ADK_FAILOVER_ATTEMPTS - 1:
             logger.warning(
                 "ADK attempt %s/%s failed; retrying the next provider/key route: %s",
@@ -787,8 +794,9 @@ async def process_message_stream(
     # Try ADK routes in sequence.  A retry is safe only before answer text has
     # reached the client; otherwise re-running could duplicate a partial reply.
     emitted_answer_text = False
+    route = None
     try:
-        runner = await create_runner(user_id, conversation_id)
+        runner, route = await create_runner(user_id, conversation_id)
         content = _to_content(message)
 
         accumulated_content = ""
@@ -891,6 +899,8 @@ async def process_message_stream(
                         "citations": citations,
                     },
                 }
+                from src.services.llm.adk_model_rotator import adk_model_rotator
+                await adk_model_rotator.record_success(route)
                 return
 
         if not accumulated_content.strip():
@@ -904,7 +914,12 @@ async def process_message_stream(
                 "citations": citations,
             },
         }
+        from src.services.llm.adk_model_rotator import adk_model_rotator
+        await adk_model_rotator.record_success(route)
     except Exception as e:
+        if route is not None:
+            from src.services.llm.adk_model_rotator import adk_model_rotator
+            await adk_model_rotator.record_failure(route, e)
         if not emitted_answer_text and _failover_attempt < MAX_ADK_FAILOVER_ATTEMPTS - 1:
             logger.warning(
                 "ADK stream attempt %s/%s failed before output; retrying next provider/key route: %s",
