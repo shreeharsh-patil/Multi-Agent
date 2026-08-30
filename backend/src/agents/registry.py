@@ -485,6 +485,12 @@ class AgentRegistry:
                 cls.register(da, metadata=meta)
         except Exception as err:
             logger.warning(f"Domain agents initialization notice: {err}")
+            # The ADK hierarchy can still create the built-in Knowledge Agent
+            # from metadata. Keep it present when an unrelated optional legacy
+            # agent import fails, without registering a non-ADK execution path.
+            if "knowledge" not in cls._metadata:
+                cls._metadata["knowledge"] = domain_metadata_specs["knowledge"]
+                logger.info("Registered built-in Knowledge Agent metadata for ADK")
 
         # Register all specialized catalog agents
         for meta in AGENT_CATALOG_DATA:

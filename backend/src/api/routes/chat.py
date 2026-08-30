@@ -31,6 +31,26 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 MAX_ATTACHMENT_CONTEXT_CHARS = 30000
 MAX_ATTACHMENT_CHARS = 15000
+# These agents are implemented in the ADK graph even when an optional legacy
+# registry import fails.  They must remain selectable from the chat UI.
+ADK_BUILTIN_AGENT_IDS = {"knowledge"}
+
+
+def _adk_routing_preamble(agent_id: str | None, team_agents: list[str]) -> str:
+    """Preserve UI routing choices while keeping execution inside Google ADK."""
+    if team_agents:
+        return (
+            "SYSTEM ROUTING: Coordinate the requested ADK specialists: "
+            f"{', '.join(team_agents)}. Verify any current or external claim with "
+            "native Google Search grounding; do not invent facts.\n\n"
+        )
+    if agent_id and agent_id not in {"auto", "image"}:
+        return (
+            f"SYSTEM ROUTING: Delegate this request to the ADK {agent_id} specialist. "
+            "For unverified named entities, locations, acronyms, or current facts, "
+            "use native Google Search grounding and cite sources; do not guess.\n\n"
+        )
+    return ""
 
 
 def _chat_log(request_id: str, stage: str, status: str, started_at: float | None = None, **fields):
@@ -657,6 +677,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
 
         history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
         augmented_message = history_prefix + memory_context + attachment_context + body.message
+        augmented_message = _adk_routing_preamble(body.agent_id, body.team_agents) + augmented_message
 
         routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
         automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
@@ -671,6 +692,12 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
         custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
+        if custom_config:
+            augmented_message = (
+                "CUSTOM ADK AGENT INSTRUCTION:\n"
+                f"{custom_config.system_instruction}\n\n"
+                + augmented_message
+            )
 
         now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
         google_agent_context = {
@@ -686,7 +713,12 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
 
         explicit_agent_id = body.agent_id if (body.agent_id and body.agent_id not in ("auto", "image") and not body.agent_id.startswith("custom_")) else None
         registry_agent = get_boss_agent().registry.get_agent(explicit_agent_id) if explicit_agent_id else None
-        if body.agent_id not in (None, "auto", "image") and not body.agent_id.startswith("custom_") and not registry_agent:
+        if (
+            body.agent_id not in (None, "auto", "image")
+            and not body.agent_id.startswith("custom_")
+            and body.agent_id not in ADK_BUILTIN_AGENT_IDS
+            and not registry_agent
+        ):
             raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
         if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
             raise HTTPException(status_code=422, detail="Unknown or disabled custom agent")
@@ -702,58 +734,6 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
                 drive_access_token=drive_token, drive_refresh_token=drive_refresh
             )
             result = {"output": output, "citations": [], "agent_traces": [{"agent_id": "image", "event_type": "ImageGeneration", "has_content": True}], "events_count": 1}
-        elif use_dynamic_orchestration:
-            result = await get_boss_agent().process_dynamic(
-                augmented_message,
-                user_id,
-                automatic_plan,
-                conv_id,
-                context=google_agent_context,
-            )
-        elif body.team_agents:
-            result = await get_boss_agent().process_team(
-                augmented_message,
-                user_id,
-                body.team_agents,
-                conv_id,
-                context={"google_access_token": google_access_token, "google_refresh_token": google_refresh_token, "conversation_history": history_snippet},
-            )
-        elif custom_config:
-            custom_agent = CustomAgent(custom_config)
-            get_boss_agent().registry.register(custom_agent)
-            agent_result = await asyncio.wait_for(
-                custom_agent.execute(augmented_message, {"user_id": user_id, "conversation_history": history_snippet, "request_id": request_id}),
-                timeout=settings.agentic_agent_timeout_seconds,
-            )
-            result = {"output": agent_result.output, "citations": [], "agent_traces": [{"agent_id": custom_config.agent_id, "event_type": "CustomAgent", "has_content": bool(agent_result.output)}], "events_count": 1}
-        elif registry_agent:
-            agent_result = await asyncio.wait_for(
-                registry_agent.execute(augmented_message, google_agent_context),
-                timeout=settings.agentic_agent_timeout_seconds,
-            )
-            if not agent_result.success or not (agent_result.output or "").strip():
-                raise RuntimeError(agent_result.error or "Selected agent returned an empty response")
-            result = {
-                "output": agent_result.output,
-                "citations": getattr(agent_result, "citations", []),
-                "agent_traces": [{"agent_id": explicit_agent_id, "event_type": f"{explicit_agent_id.title()}Action", "has_content": bool(agent_result.output)}],
-                "events_count": 1,
-            }
-        elif body.workspace_id:
-            knowledge_agent = get_boss_agent().registry.get_agent("knowledge")
-            if knowledge_agent:
-                agent_result = await knowledge_agent.execute(
-                    augmented_message, {"user_id": user_id, "conversation_id": conv_id, "workspace_id": body.workspace_id, "conversation_history": history_snippet}
-                )
-                result = {"output": agent_result.output, "citations": agent_result.citations, "agent_traces": [{"agent_id": "knowledge", "event_type": "WorkspaceQuery", "has_content": True}], "events_count": 1}
-            else:
-                result = await get_boss_agent().process_dynamic(
-                    augmented_message,
-                    user_id,
-                    plan_dynamic(body.message, bool(body.attachments), bool(body.workspace_id)),
-                    conv_id,
-                    context=google_agent_context,
-                )
         else:
             result = await process_message(message=augmented_message, user_id=user_id, conversation_id=conv_id)
 
@@ -857,7 +837,12 @@ async def chat_stream(
     _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=effective_agent_id, automatic=automatic_mode, supervisor=use_dynamic_orchestration)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
     explicit_registry_agent = get_boss_agent().registry.get_agent(effective_agent_id) if effective_agent_id else None
-    if body.agent_id not in (None, "auto", "image") and not body.agent_id.startswith("custom_") and not explicit_registry_agent:
+    if (
+        body.agent_id not in (None, "auto", "image")
+        and not body.agent_id.startswith("custom_")
+        and body.agent_id not in ADK_BUILTIN_AGENT_IDS
+        and not explicit_registry_agent
+    ):
         raise HTTPException(status_code=422, detail=f"Unknown or disabled agent: {body.agent_id}")
     if body.agent_id and body.agent_id.startswith("custom_") and not custom_config:
         raise HTTPException(status_code=422, detail="Unknown or disabled custom agent")
@@ -892,6 +877,13 @@ async def chat_stream(
             _chat_log(request_id, "context", "complete", context_started_at, history_chars=len(history_snippet or ""), attachment_chars=len(attachment_context or ""))
             history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
             augmented_message = history_prefix + memory_context + attachment_context + body.message
+            augmented_message = _adk_routing_preamble(body.agent_id, body.team_agents) + augmented_message
+            if custom_config:
+                augmented_message = (
+                    "CUSTOM ADK AGENT INSTRUCTION:\n"
+                    f"{custom_config.system_instruction}\n\n"
+                    + augmented_message
+                )
 
             now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
             stream_google_context = {
@@ -933,6 +925,34 @@ async def chat_stream(
                 )
                 yield f"event: complete\ndata: {json.dumps({'output': accumulated_output, 'conversation_id': conv_id})}\n\n"
                 return
+
+            # All conversational specialist, team, and workspace requests run
+            # through the same ADK hierarchy.  This prevents selected agents
+            # from bypassing Google grounding and provider/key failover via the
+            # legacy llm_service execution paths below.
+            async for sse_event in process_message_stream(
+                message=augmented_message, user_id=user_id, conversation_id=conv_id,
+            ):
+                if await http_request.is_disconnected():
+                    return
+                event_type = "complete" if sse_event["event"] == "completed" else sse_event["event"]
+                data = sse_event["data"]
+                if event_type == "start":
+                    continue
+                if event_type == "chunk":
+                    accumulated_output += data.get("text", "")
+                if event_type == "complete":
+                    attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                    await _save_messages(
+                        conv_id=conv_id, user_id=user_id, user_message=body.message,
+                        agent_message=data.get("output", accumulated_output),
+                        agent_id=effective_agent_id or body.agent_id, is_new=is_new,
+                        attachments=attachments_data, workspace_id=body.workspace_id,
+                        citations=data.get("citations"), request_id=request_id,
+                    )
+                yield f"event: {event_type}\n"
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            return
 
             if use_dynamic_orchestration and routed_agent_id != "image":
                 _chat_log(request_id, "orchestration", "start", plan_agents=[step.get("agent_id") for step in dynamic_plan.get("steps", [])])

@@ -207,11 +207,17 @@ def create_knowledge_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
             "You are the Knowledge Agent. Your role is to answer questions using "
             "retrieved documents from the knowledge base. "
             "Use the knowledge_search tool to find relevant information. "
+            "For a named organisation, acronym, address, campus, location, or any "
+            "fact that is not present in retrieved documents, you MUST use native "
+            "Google Search grounding before answering. Never expand an unfamiliar "
+            "acronym from guesswork and never invent a campus, city, address, or "
+            "institution name. Prefer the organisation's official site or a government "
+            "source; if the identity cannot be verified, explicitly say so. "
             "Always cite sources by file name and page number when available. "
             "If documents are found, summarize the information with proper citations. "
             "If no documents are found, say so and offer to help with general knowledge."
         ),
-        tools=[knowledge_search_tool],
+        tools=[knowledge_search_tool, google_search],
         description="Answers questions using the document knowledge base with citations (RAG).",
     )
 
