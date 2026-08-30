@@ -801,10 +801,14 @@ async def _fallback_process_message_stream(
     from datetime import datetime, timezone
     now_utc = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M:%S UTC")
 
-    # Live API capability check for stream fallback
+    # Live API capability check for the non-ADK fallback.  Web research itself
+    # is intentionally not handled here: Google ADK's native google_search is
+    # the sole web-grounding provider for this application.
     from src.tools.api_tool import api_tool
+    from src.services.freshness_analyzer import freshness_analyzer
     msg_lower = message.lower()
     capability_detected = None
+    freshness = freshness_analyzer.analyze(message)
     if any(w in msg_lower for w in ["weather", "forecast", "temperature", "climate", "rain in", "is it raining"]):
         capability_detected = "current_weather"
     elif any(c in msg_lower for c in ["bitcoin", "btc", "crypto", "ethereum", "solana"]) and any(w in msg_lower for w in ["price", "cost", "right now", "rate", "value", "worth"]):
@@ -816,6 +820,11 @@ async def _fallback_process_message_stream(
     elif "usd to inr" in msg_lower or "exchange rate" in msg_lower or "forex" in msg_lower or "currency rate" in msg_lower:
         capability_detected = "exchange_rate"
     elif any(s in msg_lower for s in ["search", "google", "latest", "recent", "who won", "news about", "lookup", "find online", "current info", "what happened"]):
+        capability_detected = "web_search"
+
+    # Mark explicit current/recent requests so we can fail closed when Google
+    # ADK grounding is unavailable, rather than using a non-ADK web provider.
+    if not capability_detected and freshness["research_required"] and "Default safety assumption" not in freshness["reason"]:
         capability_detected = "web_search"
 
     if capability_detected:
@@ -954,26 +963,15 @@ async def _fallback_process_message_stream(
             logger.warning(f"Fallback live API execution error in stream: {e}")
 
     if capability_detected == "web_search":
-        from src.adk.tools import web_search
-        yield {"event": "search_started", "data": {"query": message, "message": "Searching the web..."}}
-        yield {"event": "searching", "data": {"message": "Searching authoritative sources..."}}
-        try:
-            search_results = await web_search(message, max_items=5)
-            if search_results and len(search_results.strip()) > 30:
-                yield {"event": "sources_found", "data": {"message": "Found candidate sources"}}
-                yield {"event": "reading_sources", "data": {"message": "Reading sources..."}}
-                yield {"event": "fact_check_started", "data": {"message": "Checking information..."}}
-                prompt_with_context = (
-                    f"{prompt_with_context}\n\n"
-                    f"LIVE REAL-TIME WEB SEARCH RESULTS:\n"
-                    f"{search_results}\n\n"
-                    "GROUNDING RULES: Treat these results as the only evidence for time-sensitive facts. "
-                    "Do not invent a date, price, availability, quote, or source that is not supported by a result. "
-                    "If the results conflict or do not answer the question, say so plainly. "
-                    "Cite every material current claim with its exact clickable Markdown link [Source Name](url)."
-                )
-        except Exception as e:
-            logger.warning(f"Fallback live web search execution failed in stream: {e}")
+        message_text = (
+            "Live web verification requires Google ADK Google Search grounding, "
+            "but ADK is currently unavailable or not configured. Configure a Gemini 2 "
+            "API key and enable ADK to answer this time-sensitive request with sources."
+        )
+        yield {"event": "grounding_unavailable", "data": {"message": message_text}}
+        yield {"event": "chunk", "data": {"text": message_text}}
+        yield {"event": "completed", "data": {"output": message_text, "conversation_id": conversation_id, "citations": []}}
+        return
 
     yield {"event": "synthesizing", "data": {"message": "Preparing answer..."}}
     yield {"event": "answer_started", "data": {"message": "Preparing answer..."}}
