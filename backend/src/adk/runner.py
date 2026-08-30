@@ -858,7 +858,7 @@ async def process_message_stream(
             # In SSE mode ADK emits incremental partial events followed by a
             # final aggregated event that repeats the full text. Only stream
             # (and accumulate) the partial chunks to avoid duplicating output.
-            if content_piece and is_partial and _is_boss_agent(agent_id):
+            if content_piece and is_partial:
                 accumulated_content += content_piece
                 emitted_answer_text = True
                 yield {"event": "chunk", "data": {"text": content_piece}}
@@ -870,10 +870,6 @@ async def process_message_stream(
             }
 
             if is_final:
-                # Worker finals are internal reports.  Let the root manager
-                # consume them and emit the only user-facing answer.
-                if not _is_boss_agent(agent_id):
-                    continue
                 # Prefer the aggregated final text; fall back to accumulated
                 # partials if the final event carried no content.
                 final_output = content_piece if content_piece else accumulated_content
