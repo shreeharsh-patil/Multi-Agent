@@ -439,6 +439,9 @@ async def process_message(
         if final_event:
             output = _get_content_piece(final_event)
 
+        if not output.strip():
+            raise RuntimeError("ADK returned an empty final response")
+
         agent_traces = []
         for event in events:
             for citation in _extract_grounding_citations(event):
@@ -856,6 +859,11 @@ async def process_message_stream(
                 # Prefer the aggregated final text; fall back to accumulated
                 # partials if the final event carried no content.
                 final_output = content_piece if content_piece else accumulated_content
+                if not final_output.strip():
+                    # Raise before emitting a completion event. The outer
+                    # ADK-only failover will select the next provider/key
+                    # route, preventing the UI from receiving an empty bubble.
+                    raise RuntimeError("ADK returned an empty final response")
                 # If nothing was streamed as partial, emit the full text now
                 # so the client still renders a response.
                 if not accumulated_content and final_output:
@@ -870,6 +878,9 @@ async def process_message_stream(
                     },
                 }
                 return
+
+        if not accumulated_content.strip():
+            raise RuntimeError("ADK stream ended without a final response")
 
         yield {
             "event": "completed",
