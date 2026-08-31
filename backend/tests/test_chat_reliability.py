@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from src.agents.knowledge.agent import KnowledgeAgent
-from src.api.routes.chat import _iterate_with_heartbeats
+from src.api.routes.chat import ChatRequest, _iterate_with_heartbeats, _use_compact_adk_boss
 from src.services.llm.base import BaseLLMProvider
 from src.services.llm.rotator import RotatingProvider
 
@@ -113,3 +113,19 @@ async def test_adk_iterator_emits_heartbeats_without_switching_tasks():
     assert (False, None) in results
     assert [value for has_event, value in results if has_event] == ["first", "second"]
     assert len(producer_tasks) == 1
+
+
+def test_explicit_boss_greeting_uses_compact_adk_in_existing_chat():
+    body = ChatRequest(
+        message="hi",
+        agent_id="boss_agent",
+        conversation_id="existing-conversation",
+    )
+
+    assert _use_compact_adk_boss(body, dynamic_plan=None, automatic_mode=False) is True
+
+
+def test_current_information_never_uses_compact_adk():
+    body = ChatRequest(message="What is the latest AI news?", agent_id="auto")
+
+    assert _use_compact_adk_boss(body, dynamic_plan=None, automatic_mode=True) is False

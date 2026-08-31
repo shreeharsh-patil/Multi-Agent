@@ -76,6 +76,29 @@ async def _word_chunks(text: str):
         await asyncio.sleep(0)
 
 
+def _use_compact_adk_boss(body: "ChatRequest", dynamic_plan: dict | None, automatic_mode: bool) -> bool:
+    """Use the low-latency ADK Boss when no tools or delegation are needed."""
+    simple_greeting = bool(re.fullmatch(
+        r"(?i)\s*(?:hi|hello|hey|hiya|howdy|good\s+(?:morning|afternoon|evening)|namaste)[!?.\s]*",
+        body.message,
+    ))
+    direct_boss_mode = body.agent_id in (None, "auto", "boss_agent") and not body.team_agents
+    return bool(
+        direct_boss_mode
+        and not body.attachments
+        and not body.workspace_id
+        and (
+            simple_greeting
+            or (
+                automatic_mode
+                and not body.conversation_id
+                and len((dynamic_plan or {}).get("steps", [])) <= 1
+                and not re.search(r"(?i)\b(research|latest|current|search|calculate|calendar|drive|file|pdf|web)\b", body.message)
+            )
+        )
+    )
+
+
 async def _await_with_heartbeats(awaitable, http_request: Request, timeout_seconds: float):
     """Await non-streaming work while keeping SSE alive and cancellable."""
     task = asyncio.create_task(awaitable)
@@ -888,14 +911,7 @@ async def chat_stream(
     planned_agent_id = (dynamic_plan or {}).get("steps", [{}])[0].get("agent_id") if dynamic_plan else None
     effective_agent_id = routed_agent_id if routed_agent_id != "auto" else planned_agent_id
     use_dynamic_orchestration = bool(automatic_mode and len((dynamic_plan or {}).get("steps", [])) > 1)
-    fast_path = bool(
-        automatic_mode
-        and not body.attachments
-        and not body.workspace_id
-        and not body.conversation_id
-        and len((dynamic_plan or {}).get("steps", [])) <= 1
-        and not re.search(r"(?i)\b(research|latest|current|search|calculate|calendar|drive|file|pdf|web)\b", body.message)
-    )
+    fast_path = _use_compact_adk_boss(body, dynamic_plan, automatic_mode)
     _chat_log(request_id, "routing", "complete", request_started_at, routed_agent=effective_agent_id, automatic=automatic_mode, supervisor=use_dynamic_orchestration)
     custom_config = await AgentConfig.find_one(AgentConfig.agent_id == body.agent_id, AgentConfig.user_id == user_id, AgentConfig.custom == True) if body.agent_id and body.agent_id.startswith("custom_") else None
     explicit_registry_agent = get_boss_agent().registry.get_metadata(effective_agent_id) if effective_agent_id else None
