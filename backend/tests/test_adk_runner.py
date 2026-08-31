@@ -6,6 +6,7 @@ from google.adk.tools import google_search
 
 from src.adk import runner
 from src.adk.tools import web_search_tool
+from src.config import Settings
 
 
 @pytest.mark.asyncio
@@ -71,3 +72,14 @@ def test_adk_remains_enabled_with_only_litellm_fallback(monkeypatch):
 
     assert runner.use_adk() is True
     assert runner.get_adk_status()["status"] == "configured_fallback"
+
+
+def test_retired_render_gemini_model_is_migrated():
+    configured = Settings(
+        _env_file=None,
+        debug=True,
+        secret_key="diagnostic-secret-key",
+        gemini_model="gemini-2.0-flash",
+    )
+
+    assert configured.gemini_model == "gemini-3.7-flash"

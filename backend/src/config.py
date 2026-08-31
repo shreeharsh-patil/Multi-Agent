@@ -158,6 +158,26 @@ class Settings(BaseSettings):
                 return False
         return value
 
+    @field_validator("gemini_model", mode="before")
+    @classmethod
+    def migrate_retired_gemini_model(cls, value):
+        """Prevent stale hosting variables from selecting retired models.
+
+        Render still had ``GEMINI_MODEL=gemini-2.0-flash`` after that model
+        was shut down. Environment variables override field defaults, so a
+        newer default alone cannot repair an existing deployment.
+        """
+        model = str(value or "").strip()
+        retired_models = {
+            "gemini-1.0-pro",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-pro",
+        }
+        return "gemini-3.7-flash" if model.lower() in retired_models else model
+
     @model_validator(mode="after")
     def _reject_insecure_secret(self):
         """Refuse to start with a weak/known JWT signing key outside debug mode.
