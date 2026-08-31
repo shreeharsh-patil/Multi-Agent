@@ -993,9 +993,16 @@ async def chat_stream(
             # through the same ADK hierarchy.  This prevents selected agents
             # from bypassing Google grounding and provider/key failover via the
             # legacy llm_service execution paths below.
-            adk_stream = process_message_stream(
-                message=augmented_message, user_id=user_id, conversation_id=conv_id, workspace_id=body.workspace_id,
-            )
+            if fast_path:
+                adk_stream = process_fast_message_stream(
+                    message=augmented_message,
+                    user_id=user_id,
+                    conversation_id=conv_id,
+                )
+            else:
+                adk_stream = process_message_stream(
+                    message=augmented_message, user_id=user_id, conversation_id=conv_id, workspace_id=body.workspace_id,
+                )
             async for has_event, sse_event in _iterate_with_heartbeats(
                 adk_stream,
                 http_request,

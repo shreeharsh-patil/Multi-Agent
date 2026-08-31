@@ -7,6 +7,7 @@ from google.adk.tools import google_search
 from src.adk import runner
 from src.adk.tools import web_search_tool
 from src.config import Settings
+from src.services.llm.adk_model_rotator import AdkModelRoute
 
 
 @pytest.mark.asyncio
@@ -83,3 +84,16 @@ def test_retired_render_gemini_model_is_migrated():
     )
 
     assert configured.gemini_model == "gemini-3.7-flash"
+
+
+def test_fast_adk_boss_has_no_specialist_tree():
+    route = AdkModelRoute(
+        provider="gemini",
+        model="gemini-3.7-flash",
+        api_key="AQ." + "a" * 40,
+    )
+
+    agent = runner.get_fast_boss_agent(route)
+
+    assert agent.name == "boss_agent"
+    assert list(agent.sub_agents) == []

@@ -13,6 +13,7 @@ import re
 from typing import Optional
 
 from google.adk import Runner
+from google.adk.agents import LlmAgent
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.models import Gemini
 from google.adk.models.lite_llm import LiteLlm
@@ -138,6 +139,7 @@ def _to_content(message: str) -> types.Content:
 
 _boss_agent = None
 _boss_agents_by_key: dict[str, object] = {}
+_fast_boss_agents_by_key: dict[str, object] = {}
 
 
 def _is_native_google_search_tool(tool) -> bool:
@@ -249,6 +251,41 @@ def get_boss_agent(route=None, grounding_api_key: Optional[str] = None):
     return _boss_agents_by_key[cache_key]
 
 
+def get_fast_boss_agent(route):
+    """Return a compact ADK Boss for greetings and ordinary conversation."""
+    import hashlib
+
+    fingerprint = hashlib.sha256(route.api_key.encode("utf-8")).hexdigest()[:16]
+    cache_key = f"{route.provider}:{route.model}:{route.api_base or ''}:{fingerprint}"
+    if cache_key not in _fast_boss_agents_by_key:
+        if route.provider == "gemini":
+            model = Gemini(
+                model=route.model,
+                client=genai.Client(api_key=route.api_key),
+                retry_options=types.HttpRetryOptions(initial_delay=1, attempts=2),
+            )
+        else:
+            lite_llm_args = {
+                "model": f"{route.provider}/{route.model}",
+                "api_key": route.api_key,
+            }
+            if route.api_base:
+                lite_llm_args["api_base"] = route.api_base
+            model = LiteLlm(**lite_llm_args)
+        _fast_boss_agents_by_key[cache_key] = LlmAgent(
+            name="boss_agent",
+            model=model,
+            description="Google ADK Boss Agent for low-latency ordinary conversation.",
+            instruction=(
+                "You are Boss Agent. Answer greetings and ordinary conversational questions "
+                "directly, accurately, and concisely. Do not claim to have searched the web. "
+                "This compact route is used only when no tools, documents, current information, "
+                "or specialist delegation are required."
+            ),
+        )
+    return _fast_boss_agents_by_key[cache_key]
+
+
 def get_orchestrator():
     return get_boss_agent()
 
@@ -258,15 +295,28 @@ def reset_adk_runner_cache() -> None:
     global _boss_agent
     _boss_agent = None
     _boss_agents_by_key.clear()
+    _fast_boss_agents_by_key.clear()
     from src.services.llm.adk_model_rotator import adk_model_rotator
     adk_model_rotator.reset_health()
 
 
-async def create_runner(user_id: str, conversation_id: str, workspace_id: str | None = None) -> tuple[Runner, object, object | None]:
+async def create_runner(
+    user_id: str,
+    conversation_id: str,
+    workspace_id: str | None = None,
+    fast_path: bool = False,
+) -> tuple[Runner, object, object | None]:
     """Create an ADK Runner bound to a user session."""
     await get_or_create_session(user_id, conversation_id, workspace_id)
     from src.services.llm.adk_model_rotator import adk_model_rotator
     route = await adk_model_rotator.next_route()
+    if fast_path:
+        return Runner(
+            agent=get_fast_boss_agent(route),
+            app_name=APP_NAME,
+            session_service=SESSION_SERVICE,
+            auto_create_session=False,
+        ), route, None
     if route.provider == "gemini":
         grounding_route = route
     else:
@@ -450,6 +500,7 @@ def reset_adk_agent_tree() -> None:
     global _boss_agent
     _boss_agent = None
     _boss_agents_by_key.clear()
+    _fast_boss_agents_by_key.clear()
     from src.services.llm.adk_model_rotator import adk_model_rotator
     adk_model_rotator.reset_health()
     from src.adk.agents import reset_adk_agent_tree as _reset_agents
@@ -850,6 +901,7 @@ async def process_message_stream(
     user_id: str = "default",
     conversation_id: str = "default",
     workspace_id: str | None = None,
+    fast_path: bool = False,
     _failover_attempt: int = 0,
 ):
     """Process a user message and yield SSE events.
@@ -870,7 +922,7 @@ async def process_message_stream(
     grounding_route = None
     try:
         run_session_id = conversation_id if _failover_attempt == 0 else f"{conversation_id}-retry-{_failover_attempt}"
-        runner, route, grounding_route = await create_runner(user_id, run_session_id, workspace_id)
+        runner, route, grounding_route = await create_runner(user_id, run_session_id, workspace_id, fast_path=fast_path)
         content = _to_content(message)
 
         accumulated_content = ""
@@ -1002,6 +1054,7 @@ async def process_message_stream(
                 user_id,
                 conversation_id,
                 workspace_id,
+                fast_path,
                 _failover_attempt=_failover_attempt + 1,
             ):
                 # The caller already received the initial start event.
@@ -1019,13 +1072,13 @@ async def process_fast_message_stream(
     user_id: str = "default",
     conversation_id: str = "default",
 ):
-    """Low-latency stream for ordinary chat with no tool or document needs.
-
-    This intentionally bypasses ADK planning overhead. Requests that need
-    tools, retrieval, attachments, or specialist collaboration use the full
-    orchestrated path instead.
-    """
-    async for event in _fallback_process_message_stream(message, user_id, conversation_id):
+    """Low-latency Google ADK Boss stream for ordinary conversation."""
+    async for event in process_message_stream(
+        message,
+        user_id,
+        conversation_id,
+        fast_path=True,
+    ):
         yield event
 
 
