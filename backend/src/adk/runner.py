@@ -50,17 +50,27 @@ def _looks_like_google_ai_api_key(key: str) -> bool:
 def get_adk_status() -> dict[str, object]:
     """Return a secret-free ADK configuration status for logs and health checks."""
     keys = _configured_gemini_keys()
+    fallback_configured = any((
+        settings.groq_api_key,
+        settings.openrouter_api_key,
+        settings.mistral_api_key,
+        settings.aiand_api_key,
+        settings.nararouter_api_key,
+        settings.kimi_api_key,
+    ))
     if not settings.adk_enabled:
         status = "disabled"
-    elif not keys:
-        status = "missing_key"
-    elif not any(_looks_like_google_ai_api_key(key) for key in keys):
+    elif any(_looks_like_google_ai_api_key(key) for key in keys):
+        status = "configured"
+    elif fallback_configured:
+        status = "configured_fallback"
+    elif keys:
         status = "invalid_key_format"
     else:
-        status = "configured"
+        status = "missing_key"
 
     base_status: dict[str, object] = {
-        "enabled": status == "configured",
+        "enabled": status in {"configured", "configured_fallback"},
         "status": status,
         "model": settings.gemini_model,
     }
@@ -88,7 +98,7 @@ def get_adk_status() -> dict[str, object]:
 
 
 def use_adk() -> bool:
-    """Use ADK only when it is enabled and has an AI Studio API key."""
+    """Use ADK when Gemini or an ADK LiteLLM provider is configured."""
     return bool(get_adk_status()["enabled"])
 
 
@@ -130,16 +140,17 @@ _boss_agent = None
 _boss_agents_by_key: dict[str, object] = {}
 
 
-def _uses_native_google_search(agent) -> bool:
+def _is_native_google_search_tool(tool) -> bool:
     """Detect native Google Search regardless of ADK wrapper/version shape."""
     from google.adk.tools import google_search
 
-    for tool in getattr(agent, "tools", []) or []:
-        tool_name = str(getattr(tool, "name", "")).lower()
-        class_name = type(tool).__name__.lower()
-        if tool is google_search or tool_name in {"google_search", "google-search"} or "googlesearchtool" in class_name:
-            return True
-    return False
+    tool_name = str(getattr(tool, "name", "")).lower()
+    class_name = type(tool).__name__.lower()
+    return tool is google_search or tool_name in {"google_search", "google-search"} or "googlesearchtool" in class_name
+
+
+def _uses_native_google_search(agent) -> bool:
+    return any(_is_native_google_search_tool(tool) for tool in (getattr(agent, "tools", []) or []))
 
 
 def _requires_gemini_leadership(agent) -> bool:
@@ -165,13 +176,28 @@ def _requires_gemini_leadership(agent) -> bool:
     )
 
 
-def _apply_adk_models(agent, primary_model, grounding_model: Gemini, visited: Optional[set[int]] = None) -> None:
-    """Apply provider workers while preserving Gemini as the ADK control plane."""
+def _apply_adk_models(agent, primary_model, grounding_model: Optional[Gemini], visited: Optional[set[int]] = None) -> None:
+    """Apply provider models and keep the entire execution inside ADK.
+
+    If no usable Gemini route exists, native Google Search tools are replaced
+    with the ADK FunctionTool web-search implementation. This keeps Boss and
+    every specialist operational on Groq/OpenRouter instead of making those
+    fallbacks depend on the failed Gemini credential.
+    """
     visited = visited if visited is not None else set()
     if id(agent) in visited:
         return
     visited.add(id(agent))
-    agent.model = grounding_model if _requires_gemini_leadership(agent) else primary_model
+    if grounding_model is None and _uses_native_google_search(agent):
+        from src.adk.tools import web_search_tool
+        replaced_tools = []
+        for tool in getattr(agent, "tools", []) or []:
+            if tool is not web_search_tool and _is_native_google_search_tool(tool):
+                tool = web_search_tool
+            if tool not in replaced_tools:
+                replaced_tools.append(tool)
+        agent.tools = replaced_tools
+    agent.model = grounding_model if grounding_model is not None and _requires_gemini_leadership(agent) else primary_model
     for sub_agent in getattr(agent, "sub_agents", []) or []:
         _apply_adk_models(sub_agent, primary_model, grounding_model, visited)
 
@@ -192,16 +218,17 @@ def get_boss_agent(route=None, grounding_api_key: Optional[str] = None):
 
     import hashlib
     route_fingerprint = hashlib.sha256(route.api_key.encode("utf-8")).hexdigest()[:16]
-    grounding_fingerprint = hashlib.sha256((grounding_api_key or route.api_key).encode("utf-8")).hexdigest()[:16]
+    grounding_fingerprint = hashlib.sha256(grounding_api_key.encode("utf-8")).hexdigest()[:16] if grounding_api_key else "web-fallback"
     cache_key = f"{route.provider}:{route.model}:{route.api_base or ''}:{route_fingerprint}:{grounding_fingerprint}"
     if cache_key not in _boss_agents_by_key:
         boss = create_boss_agent()
-        gemini_key = grounding_api_key or route.api_key
-        grounding_model = Gemini(
-            model=settings.gemini_model,
-            client=genai.Client(api_key=gemini_key),
-            retry_options=types.HttpRetryOptions(initial_delay=1, attempts=2),
-        )
+        grounding_model = None
+        if grounding_api_key:
+            grounding_model = Gemini(
+                model=settings.gemini_model,
+                client=genai.Client(api_key=grounding_api_key),
+                retry_options=types.HttpRetryOptions(initial_delay=1, attempts=2),
+            )
         if route.provider == "gemini":
             primary_model = Gemini(
                 model=route.model,
@@ -235,13 +262,19 @@ def reset_adk_runner_cache() -> None:
     adk_model_rotator.reset_health()
 
 
-async def create_runner(user_id: str, conversation_id: str, workspace_id: str | None = None) -> tuple[Runner, object, object]:
+async def create_runner(user_id: str, conversation_id: str, workspace_id: str | None = None) -> tuple[Runner, object, object | None]:
     """Create an ADK Runner bound to a user session."""
     await get_or_create_session(user_id, conversation_id, workspace_id)
     from src.services.llm.adk_model_rotator import adk_model_rotator
     route = await adk_model_rotator.next_route()
-    grounding_route = route if route.provider == "gemini" else await adk_model_rotator.next_gemini_route()
-    grounding_api_key = grounding_route.api_key
+    if route.provider == "gemini":
+        grounding_route = route
+    else:
+        try:
+            grounding_route = await adk_model_rotator.next_gemini_route()
+        except ValueError:
+            grounding_route = None
+    grounding_api_key = grounding_route.api_key if grounding_route else None
     return Runner(
         agent=get_boss_agent(route, grounding_api_key),
         app_name=APP_NAME,
@@ -504,7 +537,8 @@ async def process_message(
 
         from src.services.llm.adk_model_rotator import adk_model_rotator
         await adk_model_rotator.record_success(route)
-        await adk_model_rotator.record_success(grounding_route)
+        if grounding_route is not None:
+            await adk_model_rotator.record_success(grounding_route)
         return {
             "output": output,
             "citations": citations,
@@ -844,6 +878,7 @@ async def process_message_stream(
         citation_urls: set[str] = set()
         current_agent = "orchestrator"
         emitted_stages: set[str] = set()
+        final_response_output = ""
 
         yield {"event": "start", "data": {"conversation_id": conversation_id}}
 
@@ -918,46 +953,33 @@ async def process_message_stream(
             }
 
             if is_final:
-                # Prefer the aggregated final text; fall back to accumulated
-                # partials if the final event carried no content.
-                final_output = content_piece if content_piece else accumulated_content
-                if not final_output.strip():
-                    # Raise before emitting a completion event. The outer
-                    # ADK-only failover will select the next provider/key
-                    # route, preventing the UI from receiving an empty bubble.
-                    raise RuntimeError("ADK returned an empty final response")
-                # If nothing was streamed as partial, emit the full text now
-                # so the client still renders a response.
-                if not accumulated_content and final_output:
-                    emitted_answer_text = True
-                    yield {"event": "chunk", "data": {"text": final_output}}
-                yield {
-                    "event": "completed",
-                    "data": {
-                        "output": final_output,
-                        "conversation_id": conversation_id,
-                        "citations": citations,
-                    },
-                }
-                from src.services.llm.adk_model_rotator import adk_model_rotator
-                await adk_model_rotator.record_success(route)
-                await adk_model_rotator.record_success(grounding_route)
-                return
+                # Keep the latest aggregated final response but allow ADK's
+                # generator to finish naturally. Returning here cancelled the
+                # Runner task and leaked its OpenTelemetry context.
+                if content_piece.strip():
+                    final_response_output = content_piece
 
-        if not accumulated_content.strip():
+        final_output = final_response_output or accumulated_content
+        if not final_output.strip():
             raise RuntimeError("ADK stream ended without a final response")
+
+        # Some providers emit only an aggregated final event and no partials.
+        if not accumulated_content and final_output:
+            emitted_answer_text = True
+            yield {"event": "chunk", "data": {"text": final_output}}
 
         yield {
             "event": "completed",
             "data": {
-                "output": accumulated_content,
+                "output": final_output,
                 "conversation_id": conversation_id,
                 "citations": citations,
             },
         }
         from src.services.llm.adk_model_rotator import adk_model_rotator
         await adk_model_rotator.record_success(route)
-        await adk_model_rotator.record_success(grounding_route)
+        if grounding_route is not None:
+            await adk_model_rotator.record_success(grounding_route)
     except Exception as e:
         if route is not None:
             from src.services.llm.adk_model_rotator import adk_model_rotator

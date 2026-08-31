@@ -12,6 +12,8 @@ import hashlib
 import re
 from dataclasses import dataclass
 
+import httpx
+
 from src.config import settings, split_gemini_api_keys
 
 
@@ -29,6 +31,8 @@ class AdkModelRotator:
         self._key_indices: dict[str, int] = {}
         self._blocked_keys: set[str] = set()
         self._lock = asyncio.Lock()
+        self._probe_lock = asyncio.Lock()
+        self._credentials_probed = False
 
     @staticmethod
     def _keys(value: str, provider: str) -> list[str]:
@@ -52,6 +56,7 @@ class AdkModelRotator:
 
     async def next_route(self) -> AdkModelRoute:
         """Select a provider and one of its API keys round-robin."""
+        await self.probe_credentials()
         providers = [
             # Gemini runs the ADK control plane and native Google Search. Try
             # it first; external providers remain ADK worker fallbacks.
@@ -87,6 +92,7 @@ class AdkModelRotator:
 
     async def next_gemini_route(self) -> AdkModelRoute:
         """Select a healthy Gemini key for ADK control and Google grounding."""
+        await self.probe_credentials()
         provider = "gemini"
         model = settings.gemini_model
         keys = [
@@ -102,6 +108,51 @@ class AdkModelRotator:
             key = keys[key_index % len(keys)]
             self._key_indices[identity] = (key_index + 1) % len(keys)
             return AdkModelRoute(provider=provider, model=model, api_key=key)
+
+    async def probe_credentials(self) -> None:
+        """Quarantine explicitly rejected credentials once per process.
+
+        Serverless cold starts previously spent most of the chat timeout
+        constructing agent trees and attempting keys that were already invalid.
+        These lightweight model-list requests reject bad authentication before
+        a Runner is built. Network errors and rate limits remain retryable.
+        """
+        if self._credentials_probed:
+            return
+        async with self._probe_lock:
+            if self._credentials_probed:
+                return
+            providers = [
+                ("gemini", settings.gemini_model, settings.gemini_api_key, None),
+                ("groq", settings.groq_model, settings.groq_api_key, "https://api.groq.com/openai/v1"),
+                ("openrouter", settings.openrouter_model, settings.openrouter_api_key, settings.openrouter_base_url),
+                ("mistral", settings.mistral_model, settings.mistral_api_key, settings.mistral_base_url),
+                ("openai", settings.aiand_model, settings.aiand_api_key, settings.aiand_base_url),
+                ("openai", settings.nararouter_model, settings.nararouter_api_key, settings.nararouter_base_url),
+                ("openai", settings.kimi_model, settings.kimi_api_key, settings.kimi_base_url),
+            ]
+
+            async def probe(provider: str, model: str, raw_keys: str, base: str | None) -> None:
+                for key in self._keys(raw_keys, provider):
+                    try:
+                        if provider == "gemini":
+                            url = "https://generativelanguage.googleapis.com/v1beta/models"
+                            headers = {"x-goog-api-key": key}
+                        else:
+                            url = f"{(base or '').rstrip('/')}/models"
+                            headers = {"Authorization": f"Bearer {key}"}
+                        response = await client.get(url, headers=headers)
+                        if response.status_code in {401, 403}:
+                            self._blocked_keys.add(self._key_identity(provider, model, base, key))
+                    except (httpx.HTTPError, ValueError):
+                        # A probe is an optimization, never a reason to disable
+                        # an otherwise retryable provider route.
+                        continue
+
+            timeout = httpx.Timeout(6.0, connect=3.0)
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                await asyncio.gather(*(probe(*provider) for provider in providers))
+            self._credentials_probed = True
 
     @staticmethod
     def _key_identity(provider: str, model: str, api_base: str | None, api_key: str) -> str:
@@ -128,6 +179,7 @@ class AdkModelRotator:
     def reset_health(self) -> None:
         """Clear in-memory quarantine after configuration or deployment changes."""
         self._blocked_keys.clear()
+        self._credentials_probed = False
 
 
 adk_model_rotator = AdkModelRotator()

@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     llm_provider: str = "aiand"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.6-flash"
+    gemini_model: str = "gemini-3.7-flash"
     embedding_model: str = "text-embedding-004"
     adk_enabled: bool = True
 
@@ -92,7 +92,10 @@ class Settings(BaseSettings):
     # Optional Obscura CDP endpoint for managed or self-hosted browser scraping.
     obscura_cdp_url: str = ""
     obscura_timeout_seconds: int = 30
-    chat_stream_timeout_seconds: int = 45
+    # Complex ADK transfers and one provider failover can legitimately exceed
+    # 45 seconds on a cold start. Keep the connection alive long enough for a
+    # healthy secondary route to finish instead of closing a valid stream.
+    chat_stream_timeout_seconds: int = 90
     chat_context_timeout_seconds: int = 3
     oauth_verification_timeout_seconds: int = 8
     deepgram_api_key: str = ""
