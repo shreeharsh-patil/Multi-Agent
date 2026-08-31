@@ -105,6 +105,65 @@ async def _await_with_heartbeats(awaitable, http_request: Request, timeout_secon
             task.cancel()
 
 
+async def _iterate_with_heartbeats(
+    async_iterable,
+    http_request: Request,
+    timeout_seconds: float,
+    heartbeat_seconds: float = 10.0,
+):
+    """Consume an async iterator on one task while yielding SSE heartbeats.
+
+    ADK and OpenTelemetry attach context to the task advancing the Runner
+    generator. A single producer task preserves that context; the request task
+    can independently emit keepalives so browser and proxy inactivity timers
+    do not close a healthy, slow model stream.
+    """
+    queue: asyncio.Queue[tuple[str, object]] = asyncio.Queue()
+
+    async def produce() -> None:
+        try:
+            async for item in async_iterable:
+                await queue.put(("item", item))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await queue.put(("error", exc))
+        finally:
+            await queue.put(("done", None))
+
+    producer = asyncio.create_task(produce())
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    try:
+        while True:
+            if await http_request.is_disconnected():
+                raise asyncio.CancelledError
+
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise TimeoutError("ADK stream timed out")
+
+            try:
+                kind, value = await asyncio.wait_for(
+                    queue.get(),
+                    timeout=min(heartbeat_seconds, remaining),
+                )
+            except TimeoutError:
+                yield False, None
+                continue
+
+            if kind == "item":
+                yield True, value
+            elif kind == "error":
+                raise value
+            else:
+                return
+    finally:
+        if not producer.done():
+            producer.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await producer
+
+
 async def _load_attachment_text(doc: Document) -> str:
     """Load content for one exact attachment without relying on RAG similarity."""
     chunks = await DocumentChunk.find({"document_id": str(doc.id)}).sort("chunk_index").to_list()
@@ -934,11 +993,17 @@ async def chat_stream(
             # through the same ADK hierarchy.  This prevents selected agents
             # from bypassing Google grounding and provider/key failover via the
             # legacy llm_service execution paths below.
-            async for sse_event in process_message_stream(
+            adk_stream = process_message_stream(
                 message=augmented_message, user_id=user_id, conversation_id=conv_id, workspace_id=body.workspace_id,
+            )
+            async for has_event, sse_event in _iterate_with_heartbeats(
+                adk_stream,
+                http_request,
+                settings.chat_stream_timeout_seconds,
             ):
-                if await http_request.is_disconnected():
-                    return
+                if not has_event:
+                    yield ": heartbeat\n\n"
+                    continue
                 event_type = "complete" if sse_event["event"] == "completed" else sse_event["event"]
                 data = sse_event["data"]
                 if event_type == "start":
