@@ -7,7 +7,7 @@ from google.adk.tools import google_search
 from src.adk import runner
 from src.adk.tools import web_search_tool
 from src.config import Settings
-from src.services.llm.adk_model_rotator import AdkModelRoute
+from src.services.llm.adk_model_rotator import AdkModelRoute, AdkModelRotator
 
 
 @pytest.mark.asyncio
@@ -97,3 +97,51 @@ def test_fast_adk_boss_has_no_specialist_tree():
 
     assert agent.name == "boss_agent"
     assert list(agent.sub_agents) == []
+
+
+def test_stale_provider_models_are_migrated():
+    configured = Settings(
+        _env_file=None,
+        debug=True,
+        secret_key="diagnostic-secret-key",
+        openrouter_model="google/gemini-2.0-flash-exp:free",
+        groq_model="openai/gpt-oss-20b",
+        aiand_model="qwen/qwen-2.5-72b-instruct",
+    )
+
+    assert configured.openrouter_model == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert configured.groq_model == "qwen/qwen3.6-27b"
+    assert configured.aiand_model == "qwen/qwen3.6-27b"
+
+
+@pytest.mark.asyncio
+async def test_fast_rotator_prefers_groq_and_quarantines_timeout(monkeypatch):
+    rotator = AdkModelRotator()
+    rotator._credentials_probed = True
+    monkeypatch.setattr(runner.settings, "groq_api_key", "gsk_working")
+    monkeypatch.setattr(runner.settings, "gemini_api_key", "AQ." + "a" * 40)
+    for name in ("openrouter_api_key", "mistral_api_key", "aiand_api_key", "nararouter_api_key", "kimi_api_key"):
+        monkeypatch.setattr(runner.settings, name, "")
+
+    first = await rotator.next_fast_route()
+    assert first.provider == "groq"
+
+    await rotator.record_failure(first, TimeoutError())
+    health = rotator.health_summary()
+    assert health["groq"]["status"] == "unavailable"
+    assert health["groq"]["ready_keys"] == 0
+    second = await rotator.next_fast_route()
+    assert second.provider == "gemini"
+
+
+def test_fast_groq_boss_hides_reasoning():
+    route = AdkModelRoute(
+        provider="groq",
+        model="qwen/qwen3.6-27b",
+        api_key="gsk_diagnostic",
+        api_base="https://api.groq.com/openai/v1",
+    )
+
+    agent = runner.get_fast_boss_agent(route)
+
+    assert agent.model._additional_args["reasoning_format"] == "hidden"

@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     mistral_base_url: str = "https://api.mistral.ai/v1"
 
     groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-20b"
+    groq_model: str = "qwen/qwen3.6-27b"
 
     aiand_api_key: str = ""
     aiand_model: str = "qwen/qwen3.6-27b"
@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     # 45 seconds on a cold start. Keep the connection alive long enough for a
     # healthy secondary route to finish instead of closing a valid stream.
     chat_stream_timeout_seconds: int = 90
+    adk_fast_route_timeout_seconds: int = 20
+    adk_route_timeout_seconds: int = 60
     chat_context_timeout_seconds: int = 3
     oauth_verification_timeout_seconds: int = 8
     deepgram_api_key: str = ""
@@ -177,6 +179,35 @@ class Settings(BaseSettings):
             "gemini-pro",
         }
         return "gemini-3.7-flash" if model.lower() in retired_models else model
+
+    @field_validator("openrouter_model", mode="before")
+    @classmethod
+    def migrate_retired_openrouter_model(cls, value):
+        model = str(value or "").strip()
+        retired_models = {
+            "google/gemini-2.0-flash-exp:free",
+            "google/gemini-2.0-flash-001",
+        }
+        return "nvidia/nemotron-3-ultra-550b-a55b:free" if model.lower() in retired_models else model
+
+    @field_validator("aiand_model", mode="before")
+    @classmethod
+    def migrate_retired_aiand_model(cls, value):
+        model = str(value or "").strip()
+        retired_models = {
+            "qwen/qwen-2.5-72b-instruct",
+            "qwen/qwen2.5-72b-instruct",
+        }
+        return "qwen/qwen3.6-27b" if model.lower() in retired_models else model
+
+    @field_validator("groq_model", mode="before")
+    @classmethod
+    def migrate_reasoning_groq_model(cls, value):
+        model = str(value or "").strip()
+        # GPT-OSS exposes reasoning tokens as ordinary streamed content through
+        # the ADK LiteLLM adapter. Use Groq's production Qwen chat model for a
+        # clean user-facing answer while preserving GPT-OSS for other systems.
+        return "qwen/qwen3.6-27b" if model.lower() == "openai/gpt-oss-20b" else model
 
     @model_validator(mode="after")
     def _reject_insecure_secret(self):

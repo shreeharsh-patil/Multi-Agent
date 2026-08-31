@@ -32,6 +32,13 @@ APP_NAME = "agentic"
 MAX_ADK_FAILOVER_ATTEMPTS = 5
 
 
+async def _events_with_timeout(events, timeout_seconds: float):
+    """Advance one ADK route on the current task with a hard deadline."""
+    async with asyncio.timeout(timeout_seconds):
+        async for event in events:
+            yield event
+
+
 def _configured_gemini_keys() -> list[str]:
     """Return configured Gemini credentials without empty entries."""
     return split_gemini_api_keys(settings.gemini_api_key)
@@ -244,6 +251,8 @@ def get_boss_agent(route=None, grounding_api_key: Optional[str] = None):
             }
             if route.api_base:
                 lite_llm_args["api_base"] = route.api_base
+            if route.provider == "groq":
+                lite_llm_args["reasoning_format"] = "hidden"
             primary_model = LiteLlm(**lite_llm_args)
         _apply_adk_models(boss, primary_model, grounding_model)
         _boss_agents_by_key[cache_key] = boss
@@ -271,6 +280,8 @@ def get_fast_boss_agent(route):
             }
             if route.api_base:
                 lite_llm_args["api_base"] = route.api_base
+            if route.provider == "groq":
+                lite_llm_args["reasoning_format"] = "hidden"
             model = LiteLlm(**lite_llm_args)
         _fast_boss_agents_by_key[cache_key] = LlmAgent(
             name="boss_agent",
@@ -309,7 +320,7 @@ async def create_runner(
     """Create an ADK Runner bound to a user session."""
     await get_or_create_session(user_id, conversation_id, workspace_id)
     from src.services.llm.adk_model_rotator import adk_model_rotator
-    route = await adk_model_rotator.next_route()
+    route = await (adk_model_rotator.next_fast_route() if fast_path else adk_model_rotator.next_route())
     if fast_path:
         return Runner(
             agent=get_fast_boss_agent(route),
@@ -536,10 +547,13 @@ async def process_message(
         content = _to_content(message)
 
         events = []
-        async for event in runner.run_async(
-            session_id=run_session_id,
-            user_id=user_id,
-            new_message=content,
+        async for event in _events_with_timeout(
+            runner.run_async(
+                session_id=run_session_id,
+                user_id=user_id,
+                new_message=content,
+            ),
+            settings.adk_route_timeout_seconds,
         ):
             events.append(event)
 
@@ -934,11 +948,15 @@ async def process_message_stream(
 
         yield {"event": "start", "data": {"conversation_id": conversation_id}}
 
-        async for event in runner.run_async(
-            session_id=run_session_id,
-            user_id=user_id,
-            new_message=content,
-            run_config=RunConfig(streaming_mode=StreamingMode.SSE),
+        route_timeout = settings.adk_fast_route_timeout_seconds if fast_path else settings.adk_route_timeout_seconds
+        async for event in _events_with_timeout(
+            runner.run_async(
+                session_id=run_session_id,
+                user_id=user_id,
+                new_message=content,
+                run_config=RunConfig(streaming_mode=StreamingMode.SSE),
+            ),
+            route_timeout,
         ):
             event_type = type(event).__name__
             agent_id = event.node_name if hasattr(event, "node_name") else "unknown"

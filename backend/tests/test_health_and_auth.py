@@ -28,4 +28,7 @@ def test_health_check(client: TestClient):
     assert "app" in data
     assert "version" in data
     assert "adk" in data
-    assert data["adk"]["status"] in {"configured", "disabled", "missing_key", "invalid_key_format"}
+    assert data["adk"]["status"] in {"configured", "configured_fallback", "disabled", "missing_key", "invalid_key_format"}
+    assert "provider_routes" in data
+    assert "gemini" in data["provider_routes"]
+    assert "groq" in data["provider_routes"]
