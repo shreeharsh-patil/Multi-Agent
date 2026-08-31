@@ -31,6 +31,7 @@ class AdkModelRotator:
         self._fast_route_index = 0
         self._key_indices: dict[str, int] = {}
         self._blocked_keys: set[str] = set()
+        self._blocked_reasons: dict[str, str] = {}
         self._lock = asyncio.Lock()
         self._probe_lock = asyncio.Lock()
         self._credentials_probed = False
@@ -129,13 +130,53 @@ class AdkModelRotator:
             self._key_indices[identity] = (key_index + 1) % len(keys)
             return AdkModelRoute(provider=provider, model=model, api_key=key)
 
-    async def probe_credentials(self) -> None:
-        """Quarantine explicitly rejected credentials once per process.
+    @staticmethod
+    def _failure_category(status_code: int | None = None, *, empty: bool = False) -> str:
+        if empty:
+            return "empty_response"
+        if status_code in {401, 403}:
+            return "authentication"
+        if status_code == 402:
+            return "credits"
+        if status_code == 404:
+            return "model_or_endpoint"
+        if status_code == 429:
+            return "rate_limited"
+        if status_code is not None and status_code >= 500:
+            return "provider_unavailable"
+        if status_code in {400, 405, 409, 422}:
+            return "request_or_model"
+        if status_code is not None:
+            return "provider_error"
+        return "timeout_or_network"
 
-        Serverless cold starts previously spent most of the chat timeout
-        constructing agent trees and attempting keys that were already invalid.
-        These lightweight model-list requests reject bad authentication before
-        a Runner is built. Network errors and rate limits remain retryable.
+    @staticmethod
+    def _has_generated_content(provider: str, payload: object) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        if provider == "gemini":
+            candidates = payload.get("candidates") or []
+            return any(
+                isinstance(part, dict) and bool(str(part.get("text") or "").strip())
+                for candidate in candidates if isinstance(candidate, dict)
+                for part in ((candidate.get("content") or {}).get("parts") or [])
+                if isinstance(candidate.get("content"), dict)
+            )
+        choices = payload.get("choices") or []
+        return any(
+            isinstance(choice, dict)
+            and isinstance(choice.get("message"), dict)
+            and bool(str(choice["message"].get("content") or "").strip())
+            for choice in choices
+        )
+
+    async def probe_credentials(self) -> None:
+        """Admit only credentials that complete a real minimal generation.
+
+        Model-list checks produced false positives: a key could list a model but
+        still fail chat because of quota, endpoint, timeout, or empty-output
+        errors. Every configured key is now tested concurrently against the same
+        generation endpoint the ADK adapter ultimately uses.
         """
         if self._credentials_probed:
             return
@@ -144,37 +185,63 @@ class AdkModelRotator:
                 return
             providers = self._providers()
 
-            async def probe(provider: str, model: str, raw_keys: str, base: str | None) -> None:
-                for key in self._keys(raw_keys, provider):
-                    try:
-                        if provider == "gemini":
-                            url = "https://generativelanguage.googleapis.com/v1beta/models"
-                            headers = {"x-goog-api-key": key}
-                        else:
-                            url = f"{(base or '').rstrip('/')}/models"
-                            headers = {"Authorization": f"Bearer {key}"}
-                        response = await client.get(url, headers=headers)
-                        rejected = response.status_code in {401, 402, 403, 404}
-                        if response.status_code == 200:
-                            payload = response.json()
-                            items = payload.get("models") or payload.get("data") or []
-                            available_models = {
-                                str(item.get("id") or item.get("name") or "").removeprefix("models/")
-                                for item in items
-                                if isinstance(item, dict)
-                            }
-                            if available_models and model not in available_models:
-                                rejected = True
-                        if rejected:
-                            self._blocked_keys.add(self._key_identity(provider, model, base, key))
-                    except (httpx.HTTPError, ValueError):
-                        # A probe is an optimization, never a reason to disable
-                        # an otherwise retryable provider route.
-                        continue
+            async def probe_one(provider: str, model: str, key: str, base: str | None) -> None:
+                identity = self._key_identity(provider, model, base, key)
+                try:
+                    if provider == "gemini":
+                        url = (
+                            "https://generativelanguage.googleapis.com/v1beta/"
+                            f"models/{model}:generateContent"
+                        )
+                        headers = {"x-goog-api-key": key}
+                        body = {
+                            "contents": [{"role": "user", "parts": [{"text": "Reply only OK"}]}],
+                            "generationConfig": {"maxOutputTokens": 64, "temperature": 0},
+                        }
+                    else:
+                        url = f"{(base or '').rstrip('/')}/chat/completions"
+                        headers = {"Authorization": f"Bearer {key}"}
+                        body = {
+                            "model": model,
+                            "messages": [{"role": "user", "content": "Reply only OK"}],
+                            # Reasoning models can consume a small token budget
+                            # before producing assistant-visible content.
+                            "max_tokens": 128 if provider == "groq" else 32,
+                            "temperature": 0,
+                            "stream": False,
+                        }
+                        if provider == "groq":
+                            body["reasoning_format"] = "hidden"
+                    response = await client.post(url, headers=headers, json=body)
+                    category = None
+                    if response.status_code < 200 or response.status_code >= 300:
+                        category = self._failure_category(response.status_code)
+                    else:
+                        try:
+                            generated = self._has_generated_content(provider, response.json())
+                        except ValueError:
+                            generated = False
+                        if not generated:
+                            category = self._failure_category(empty=True)
+                    if category:
+                        self._blocked_keys.add(identity)
+                        self._blocked_reasons[identity] = category
+                    else:
+                        self._blocked_keys.discard(identity)
+                        self._blocked_reasons.pop(identity, None)
+                except (httpx.HTTPError, asyncio.TimeoutError):
+                    self._blocked_keys.add(identity)
+                    self._blocked_reasons[identity] = self._failure_category()
 
-            timeout = httpx.Timeout(6.0, connect=3.0)
+            probes = [
+                probe_one(provider, model, key, base)
+                for provider, model, raw_keys, base in providers
+                for key in self._keys(raw_keys, provider)
+            ]
+            probe_seconds = max(3, settings.adk_provider_probe_timeout_seconds)
+            timeout = httpx.Timeout(float(probe_seconds), connect=min(5.0, float(probe_seconds)))
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                await asyncio.gather(*(probe(*provider) for provider in providers))
+                await asyncio.gather(*probes)
             self._credentials_probed = True
 
     @staticmethod
@@ -195,13 +262,17 @@ class AdkModelRotator:
         if not any(marker in message for marker in permanent_markers):
             return
         async with self._lock:
-            self._blocked_keys.add(self._key_identity(route.provider, route.model, route.api_base, route.api_key))
+            identity = self._key_identity(route.provider, route.model, route.api_base, route.api_key)
+            self._blocked_keys.add(identity)
+            self._blocked_reasons[identity] = "runtime_failure"
 
     async def record_success(self, route: AdkModelRoute) -> None:
         async with self._lock:
-            self._blocked_keys.discard(self._key_identity(route.provider, route.model, route.api_base, route.api_key))
+            identity = self._key_identity(route.provider, route.model, route.api_base, route.api_key)
+            self._blocked_keys.discard(identity)
+            self._blocked_reasons.pop(identity, None)
 
-    def health_summary(self) -> dict[str, dict[str, int | str]]:
+    def health_summary(self) -> dict[str, dict[str, object]]:
         """Return secret-free configured and currently usable route counts."""
         summary: dict[str, dict[str, int | str]] = {}
         for provider, model, raw_keys, base in self._providers():
@@ -221,16 +292,25 @@ class AdkModelRotator:
                 self._key_identity(provider, model, base, key) not in self._blocked_keys
                 for key in keys
             )
+            route_identities = [self._key_identity(provider, model, base, key) for key in keys]
+            failure_categories: dict[str, int] = {}
+            for identity in route_identities:
+                reason = self._blocked_reasons.get(identity)
+                if reason:
+                    failure_categories[reason] = failure_categories.get(reason, 0) + 1
             summary[label] = {
                 "status": "ready" if ready else ("unavailable" if keys else "not_configured"),
                 "configured_keys": len(keys),
                 "ready_keys": ready,
+                "validation": "generation" if self._credentials_probed else "pending",
+                "failures": failure_categories,
             }
         return summary
 
     def reset_health(self) -> None:
         """Clear in-memory quarantine after configuration or deployment changes."""
         self._blocked_keys.clear()
+        self._blocked_reasons.clear()
         self._credentials_probed = False
 
 

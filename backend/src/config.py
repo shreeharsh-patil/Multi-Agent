@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     chat_stream_timeout_seconds: int = 90
     adk_fast_route_timeout_seconds: int = 20
     adk_route_timeout_seconds: int = 60
+    # A route is admitted into the ADK rotator only after a real, minimal
+    # generation succeeds. Probes run concurrently, so this is a per-key cap.
+    adk_provider_probe_timeout_seconds: int = 40
     chat_context_timeout_seconds: int = 3
     oauth_verification_timeout_seconds: int = 8
     deepgram_api_key: str = ""

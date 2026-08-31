@@ -145,3 +145,33 @@ def test_fast_groq_boss_hides_reasoning():
     agent = runner.get_fast_boss_agent(route)
 
     assert agent.model._additional_args["reasoning_format"] == "hidden"
+
+
+def test_generation_probe_requires_nonempty_assistant_content():
+    assert AdkModelRotator._has_generated_content(
+        "gemini",
+        {"candidates": [{"content": {"parts": [{"text": "OK"}]}}]},
+    ) is True
+    assert AdkModelRotator._has_generated_content(
+        "gemini",
+        {"candidates": [{"content": {"parts": []}}]},
+    ) is False
+    assert AdkModelRotator._has_generated_content(
+        "groq",
+        {"choices": [{"message": {"content": "OK"}}]},
+    ) is True
+    assert AdkModelRotator._has_generated_content(
+        "openrouter",
+        {"choices": [{"message": {"content": ""}}]},
+    ) is False
+
+
+def test_generation_probe_failure_categories_are_secret_free():
+    assert AdkModelRotator._failure_category(401) == "authentication"
+    assert AdkModelRotator._failure_category(402) == "credits"
+    assert AdkModelRotator._failure_category(404) == "model_or_endpoint"
+    assert AdkModelRotator._failure_category(429) == "rate_limited"
+    assert AdkModelRotator._failure_category(503) == "provider_unavailable"
+    assert AdkModelRotator._failure_category(422) == "request_or_model"
+    assert AdkModelRotator._failure_category(empty=True) == "empty_response"
+    assert AdkModelRotator._failure_category() == "timeout_or_network"
