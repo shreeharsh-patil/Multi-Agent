@@ -22,7 +22,9 @@ jobs:
           python-version: '3.12'
 
       - name: Apply targeted quality fixes
-        run: python .github/scripts/apply_chat_quality_patch.py
+        run: |
+          python .github/scripts/apply_chat_quality_patch.py
+          python .github/scripts/apply_memory_quality_patch.py
 
       - name: Validate Python syntax and patch cleanliness
         run: |
@@ -37,6 +39,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/src/api/routes/chat.py backend/src/adk/runner.py backend/src/adk/agents.py
-          git commit -m "fix: preserve chat context and improve response quality"
+          git add backend/src/api/routes/chat.py backend/src/adk/runner.py backend/src/adk/agents.py backend/src/services/memory/service.py
+          git commit -m "fix: preserve chat context and restore memory"
           git push origin HEAD:${GITHUB_REF_NAME}
