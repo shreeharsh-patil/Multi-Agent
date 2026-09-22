@@ -144,6 +144,36 @@ def _to_content(message: str) -> types.Content:
     return types.Content(role="user", parts=[types.Part(text=message)])
 
 
+def _strip_persisted_history(message: str) -> str:
+    """Remove the MongoDB history block when ADK already owns the session.
+
+    The API hydrates prompts from persistent conversation history so a chat can
+    recover after a process restart. On a warm process ADK already retains the
+    same turns in its session; injecting the block again duplicates context and
+    causes needless token growth. Other prompt prefixes (time, memory, files,
+    routing hints) are intentionally preserved.
+    """
+    start_marker = "=== PREVIOUS CONVERSATION HISTORY ===\n"
+    end_marker = "====================================\n\n"
+    start = message.find(start_marker)
+    if start < 0:
+        return message
+    end = message.find(end_marker, start + len(start_marker))
+    if end < 0:
+        return message
+    return message[:start] + message[end + len(end_marker):]
+
+
+async def _session_exists(user_id: str, session_id: str) -> bool:
+    """Return whether this worker already has an ADK session for the chat."""
+    session = await SESSION_SERVICE.get_session(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    return session is not None
+
+
 _boss_agent = None
 _boss_agents_by_key: dict[str, object] = {}
 _fast_boss_agents_by_key: dict[str, object] = {}
@@ -547,8 +577,10 @@ async def process_message(
     grounding_route = None
     try:
         run_session_id = conversation_id if _failover_attempt == 0 else f"{conversation_id}-retry-{_failover_attempt}"
+        session_existed = await _session_exists(user_id, run_session_id)
         runner, route, grounding_route = await create_runner(user_id, run_session_id, workspace_id)
-        content = _to_content(message)
+        effective_message = _strip_persisted_history(message) if session_existed else message
+        content = _to_content(effective_message)
 
         events = []
         async for event in _events_with_timeout(
@@ -940,8 +972,10 @@ async def process_message_stream(
     grounding_route = None
     try:
         run_session_id = conversation_id if _failover_attempt == 0 else f"{conversation_id}-retry-{_failover_attempt}"
+        session_existed = await _session_exists(user_id, run_session_id)
         runner, route, grounding_route = await create_runner(user_id, run_session_id, workspace_id, fast_path=fast_path)
-        content = _to_content(message)
+        effective_message = _strip_persisted_history(message) if session_existed else message
+        content = _to_content(effective_message)
 
         accumulated_content = ""
         citations: list[dict[str, str]] = []
