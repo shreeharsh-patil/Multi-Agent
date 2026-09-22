@@ -115,14 +115,20 @@ async def test_adk_iterator_emits_heartbeats_without_switching_tasks():
     assert len(producer_tasks) == 1
 
 
-def test_explicit_boss_greeting_uses_compact_adk_in_existing_chat():
+def test_new_boss_greeting_can_use_compact_adk():
+    body = ChatRequest(message="hi", agent_id="boss_agent")
+
+    assert _use_compact_adk_boss(body, dynamic_plan=None, automatic_mode=False) is True
+
+
+def test_existing_chat_never_uses_stateless_compact_adk():
     body = ChatRequest(
         message="hi",
         agent_id="boss_agent",
         conversation_id="existing-conversation",
     )
 
-    assert _use_compact_adk_boss(body, dynamic_plan=None, automatic_mode=False) is True
+    assert _use_compact_adk_boss(body, dynamic_plan=None, automatic_mode=False) is False
 
 
 def test_current_information_never_uses_compact_adk():
