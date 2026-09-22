@@ -87,11 +87,14 @@ def _use_compact_adk_boss(body: "ChatRequest", dynamic_plan: dict | None, automa
         direct_boss_mode
         and not body.attachments
         and not body.workspace_id
+        # Existing conversations must keep their stored history and memory.
+        # The compact route is intentionally stateless, so using it for a
+        # follow-up makes the assistant appear to forget earlier turns.
+        and not body.conversation_id
         and (
             simple_greeting
             or (
                 automatic_mode
-                and not body.conversation_id
                 and len((dynamic_plan or {}).get("steps", [])) <= 1
                 and not re.search(r"(?i)\b(research|latest|current|search|calculate|calendar|drive|file|pdf|web)\b", body.message)
             )
@@ -748,16 +751,28 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
                 raise HTTPException(status_code=404, detail="Workspace not found")
 
         from src.services.memory.service import memory_service
-        try:
-            async with asyncio.timeout(settings.chat_context_timeout_seconds):
-                memory_context, attachment_context, history_snippet = await asyncio.gather(
-                    memory_service.build_context(user_id, body.message),
-                    _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
-                    _build_full_conversation_history(body.conversation_id),
-                )
-        except TimeoutError:
-            _chat_log(request_id, "context", "error", request_started_at, error="context timeout")
-            memory_context, attachment_context, history_snippet = "", "", ""
+        # Resolve context pieces independently. A slow memory lookup or file
+        # parser must never erase already available conversation history.
+        memory_result, attachment_result, history_result = await asyncio.gather(
+            asyncio.wait_for(
+                memory_service.build_context(user_id, body.message),
+                timeout=settings.chat_context_timeout_seconds,
+            ),
+            asyncio.wait_for(
+                _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
+                timeout=settings.chat_context_timeout_seconds,
+            ),
+            asyncio.wait_for(
+                _build_full_conversation_history(body.conversation_id),
+                timeout=settings.chat_context_timeout_seconds,
+            ),
+            return_exceptions=True,
+        )
+        memory_context = "" if isinstance(memory_result, Exception) else memory_result
+        attachment_context = "" if isinstance(attachment_result, Exception) else attachment_result
+        history_snippet = "" if isinstance(history_result, Exception) else history_result
+        if any(isinstance(item, Exception) for item in (memory_result, attachment_result, history_result)):
+            _chat_log(request_id, "context", "partial", request_started_at, error="one or more context sources timed out or failed")
 
         history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
         augmented_message = history_prefix + memory_context + attachment_context + body.message
@@ -940,18 +955,29 @@ async def chat_stream(
             context_started_at = time.perf_counter()
             _chat_log(request_id, "context", "start", fast_path=fast_path)
             if fast_path:
+                # Fast path is allowed only for brand-new conversations.
                 memory_context, attachment_context, history_snippet = "", "", ""
             else:
-                try:
-                    async with asyncio.timeout(settings.chat_context_timeout_seconds):
-                        memory_context, attachment_context, history_snippet = await asyncio.gather(
-                            memory_service.build_context(user_id, body.message),
-                            _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
-                            _build_full_conversation_history(body.conversation_id),
-                        )
-                except TimeoutError:
-                    _chat_log(request_id, "context", "error", context_started_at, error="context timeout")
-                    memory_context, attachment_context, history_snippet = "", "", ""
+                memory_result, attachment_result, history_result = await asyncio.gather(
+                    asyncio.wait_for(
+                        memory_service.build_context(user_id, body.message),
+                        timeout=settings.chat_context_timeout_seconds,
+                    ),
+                    asyncio.wait_for(
+                        _build_attachment_context(body.attachments, user_id, body.message, conv_id=body.conversation_id),
+                        timeout=settings.chat_context_timeout_seconds,
+                    ),
+                    asyncio.wait_for(
+                        _build_full_conversation_history(body.conversation_id),
+                        timeout=settings.chat_context_timeout_seconds,
+                    ),
+                    return_exceptions=True,
+                )
+                memory_context = "" if isinstance(memory_result, Exception) else memory_result
+                attachment_context = "" if isinstance(attachment_result, Exception) else attachment_result
+                history_snippet = "" if isinstance(history_result, Exception) else history_result
+                if any(isinstance(item, Exception) for item in (memory_result, attachment_result, history_result)):
+                    _chat_log(request_id, "context", "partial", context_started_at, error="one or more context sources timed out or failed")
             _chat_log(request_id, "context", "complete", context_started_at, history_chars=len(history_snippet or ""), attachment_chars=len(attachment_context or ""))
             history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
             augmented_message = history_prefix + memory_context + attachment_context + body.message
