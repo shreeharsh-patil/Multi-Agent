@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
 
+from src.adk.runner import _strip_persisted_history
 from src.agents.knowledge.agent import KnowledgeAgent
 from src.api.routes.chat import ChatRequest, _iterate_with_heartbeats, _use_compact_adk_boss
 from src.services.llm.base import BaseLLMProvider
@@ -135,3 +136,31 @@ def test_current_information_never_uses_compact_adk():
     body = ChatRequest(message="What is the latest AI news?", agent_id="auto")
 
     assert _use_compact_adk_boss(body, dynamic_plan=None, automatic_mode=True) is False
+
+
+def test_warm_adk_session_strips_only_persisted_history_block():
+    message = (
+        "SYSTEM TIME CONTEXT: now\n\n"
+        "ROUTING HINT: use coding tools when needed\n\n"
+        "=== PREVIOUS CONVERSATION HISTORY ===\n"
+        "User: earlier question\n"
+        "Assistant: earlier answer\n"
+        "====================================\n\n"
+        "User memory context (untrusted): likes examples\n\n"
+        "Current question"
+    )
+
+    stripped = _strip_persisted_history(message)
+
+    assert "earlier question" not in stripped
+    assert "earlier answer" not in stripped
+    assert "SYSTEM TIME CONTEXT: now" in stripped
+    assert "ROUTING HINT" in stripped
+    assert "likes examples" in stripped
+    assert stripped.endswith("Current question")
+
+
+def test_history_strip_is_noop_without_complete_history_markers():
+    message = "=== PREVIOUS CONVERSATION HISTORY ===\nUser: incomplete block"
+
+    assert _strip_persisted_history(message) == message
