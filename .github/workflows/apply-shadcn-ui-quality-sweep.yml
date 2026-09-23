@@ -32,6 +32,9 @@ jobs:
       - name: Apply shared UI fixes
         run: python .github/scripts/apply_shadcn_ui_quality_sweep.py
 
+      - name: Restore Tailwind v3 compatibility tokens
+        run: python .github/scripts/apply_tailwind_compat_tokens.py
+
       - name: Remove transient npm lockfile
         run: rm -f frontend/package-lock.json
 
@@ -64,6 +67,7 @@ jobs:
           git add \
             frontend/package.json \
             frontend/components.json \
+            frontend/tailwind.config.ts \
             frontend/src/components/ui/sheet.tsx \
             frontend/src/components/ui/dialog.tsx \
             frontend/src/components/ui/tooltip.tsx \
