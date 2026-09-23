@@ -14,7 +14,10 @@ def test_quality_helpers_fail_closed_for_live_queries():
     assert quality._is_user_facing("coding_manager") is False
     assert quality._is_adk_failure("Google ADK could not complete this request after trying routes.") is True
     assert quality._requires_live_verification("What is the latest AI news today?") is True
+    assert quality._requires_live_verification("Where is PCCE Goa?") is True
     assert quality._requires_live_verification("Explain binary search with an example") is False
+    assert quality._has_external_evidence("Verified: https://pccegoa.edu.in/contact-us/", []) is True
+    assert quality._has_external_evidence("Unverified memory answer", []) is False
 
 
 def test_injected_current_time_does_not_make_ordinary_chat_live():
@@ -174,7 +177,7 @@ asyncio.run(main())
 
 
 
-def test_fast_path_streams_directly_without_waiting_for_adk():
+def test_fast_path_stays_inside_adk_and_streams_progressively():
     result = _run_isolated(
         r'''
 import asyncio
@@ -184,16 +187,21 @@ import src.adk.runner as runner
 import src.services.llm as llm_module
 
 runner.use_adk = lambda: True
-called = {"adk": 0}
+called = {"adk": 0, "direct": 0}
 
-async def fake_adk_stream(*args, **kwargs):
+async def fake_adk_stream(message, user_id="default", conversation_id="default", workspace_id=None, fast_path=False, _failover_attempt=0):
     called["adk"] += 1
-    yield {"event": "completed", "data": {"output": "slow adk", "conversation_id": "internal", "citations": []}}
+    yield {"event": "start", "data": {"conversation_id": conversation_id}}
+    yield {"event": "agent", "data": {"agent_id": "boss_agent"}}
+    yield {"event": "chunk", "data": {"text": "Fast "}}
+    yield {"event": "chunk", "data": {"text": "ADK "}}
+    yield {"event": "chunk", "data": {"text": "answer"}}
+    yield {"event": "completed", "data": {"output": "Fast ADK answer", "conversation_id": conversation_id, "citations": []}}
 
 async def fake_direct_stream(*args, **kwargs):
-    yield "Fast "
-    yield "streaming "
-    yield "answer"
+    called["direct"] += 1
+    raise RuntimeError("direct model path must not be used for healthy fast ADK")
+    yield "never"
 
 runner.process_message_stream = fake_adk_stream
 llm_module.llm_service.generate_stream = fake_direct_stream
@@ -210,12 +218,18 @@ async def main():
         events.append(event)
     chunks = [e["data"]["text"] for e in events if e["event"] == "chunk"]
     completed = [e for e in events if e["event"] == "completed"][-1]
-    print(json.dumps({"chunks": chunks, "completed": completed["data"], "adk_calls": called["adk"]}))
+    print(json.dumps({
+        "chunks": chunks,
+        "completed": completed["data"],
+        "adk_calls": called["adk"],
+        "direct_calls": called["direct"],
+    }))
 
 asyncio.run(main())
 '''
     )
 
-    assert result["chunks"] == ["Fast ", "streaming ", "answer"]
-    assert result["completed"]["output"] == "Fast streaming answer"
-    assert result["adk_calls"] == 0
+    assert result["chunks"] == ["Fast ", "ADK ", "answer"]
+    assert result["completed"]["output"] == "Fast ADK answer"
+    assert result["adk_calls"] == 1
+    assert result["direct_calls"] == 0

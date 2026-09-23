@@ -37,20 +37,31 @@ ADK_BUILTIN_AGENT_IDS = {"knowledge"}
 
 
 def _adk_routing_preamble(agent_id: str | None, team_agents: list[str]) -> str:
-    """Pass UI choices to BossAgent as hints, never as a forced workflow."""
+    """Give BossAgent a truthful routing requirement selected by the API."""
     if team_agents:
         return (
-            "SYSTEM ROUTING HINT: The user suggested these specialists: "
+            "SYSTEM ROUTING HINT: The request may use these specialists: "
             f"{', '.join(team_agents)}. BossAgent must independently select the "
-            "smallest suitable workflow and may use different specialists. Verify "
-            "current or external claims with native Google Search grounding.\n\n"
+            "smallest suitable ADK workflow. For any external, current, named-entity, "
+            "location, or address claim, use web grounding before answering.\n\n"
+        )
+    if agent_id == "research":
+        return (
+            "SYSTEM ROUTING REQUIREMENT: This request requires external factual verification. "
+            "Use the ADK Internet Intelligence / Google Search workflow before answering. "
+            "Search the user's exact entity or acronym together with all location qualifiers; "
+            "do not silently substitute a similarly named organisation, person, campus, or place. "
+            "Prefer official organisation domains, government sources, and other primary sources. "
+            "Return the verified answer with the tool-provided citations/URLs. If live search is "
+            "unavailable or the identity remains ambiguous, say that verification failed instead "
+            "of guessing.\n\n"
         )
     if agent_id and agent_id not in {"auto", "image"}:
         return (
-            f"SYSTEM ROUTING HINT: The user selected `{agent_id}`. BossAgent decides "
-            "whether that specialist is needed and selects the workflow. For unverified "
-            "named entities, locations, acronyms, or current facts, use native Google "
-            "Search grounding and cite sources; do not guess.\n\n"
+            f"SYSTEM ROUTING HINT: The routing layer selected `{agent_id}`. BossAgent still "
+            "controls the ADK workflow and may delegate as needed. For unverified named entities, "
+            "locations, acronyms, or current facts, use the ADK web-grounding workflow and cite "
+            "the returned sources; never guess.\n\n"
         )
     return ""
 
@@ -88,9 +99,10 @@ def _use_compact_adk_boss(body: "ChatRequest", dynamic_plan: dict | None, automa
     general_turn = planned_agent in (None, "knowledge")
     needs_full_runtime = bool(re.search(
         r"(?ix)(?:"
-        r"\b(?:research|latest|current|calculate|calendar|drive|file|pdf|web|"
+        r"\b(?:research|latest|newest|recent|current|currently|calculate|calendar|drive|file|pdf|web|"
         r"image|weather|news|price|stock|crypto|email|gmail|contact|task|schedule|"
-        r"code|debug|python|javascript|typescript|medical|health|finance)\b|"
+        r"code|debug|python|javascript|typescript|medical|health|finance|address|location|headquarters|campus)\b|"
+        r"\bwhere\s+(?:is|are)\b|\bwhere's\b|\bhow\s+to\s+reach\b|\bdirections?\s+to\b|"
         r"\bsearch\s+(?:the\s+)?(?:web|internet|google)\b|"
         r"\bweb\s+search\b|\blook\s+up\b|\bfind\s+online\b"
         r")",
@@ -388,10 +400,9 @@ async def _generate_image_message(
         drive_access_token=drive_access_token,
         drive_refresh_token=drive_refresh_token,
     )
-    content = f"![Generated image]({image.download_url})"
-    if image.revised_prompt and image.revised_prompt != prompt:
-        content += f"\n\n*Prompt used: {image.revised_prompt}*"
-    return content
+    # The visual is the user-facing result. Keep enhanced/revised prompts in
+    # provider metadata rather than turning an image request into prose.
+    return f"![Generated image]({image.download_url})"
 
 
 def _friendly_chat_error(error: Exception) -> str:
@@ -773,7 +784,6 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
 
         history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
         augmented_message = history_prefix + memory_context + attachment_context + body.message
-        augmented_message = _adk_routing_preamble(body.agent_id, body.team_agents) + augmented_message
 
         routed_agent_id = AgentRouter().route_smart(body.message, body.agent_id)
         automatic_mode = body.agent_id in (None, "auto") and not body.team_agents
@@ -784,6 +794,7 @@ async def chat(http_request: Request, body: ChatRequest, response: Response) -> 
         planned_agent_id = (automatic_plan or {}).get("steps", [{}])[0].get("agent_id") if automatic_plan else None
         effective_agent_id = routed_agent_id if routed_agent_id != "auto" else planned_agent_id
         use_dynamic_orchestration = bool(automatic_mode and len((automatic_plan or {}).get("steps", [])) > 1)
+        augmented_message = _adk_routing_preamble(effective_agent_id or body.agent_id, body.team_agents) + augmented_message
 
         google_access_token = http_request.headers.get("X-Google-Access-Token", "")
         google_refresh_token = http_request.headers.get("X-Google-Refresh-Token", "")
@@ -976,7 +987,7 @@ async def chat_stream(
             _chat_log(request_id, "context", "complete", context_started_at, history_chars=len(history_snippet or ""), attachment_chars=len(attachment_context or ""))
             history_prefix = f"=== PREVIOUS CONVERSATION HISTORY ===\n{history_snippet}\n====================================\n\n" if history_snippet else ""
             augmented_message = history_prefix + memory_context + attachment_context + body.message
-            augmented_message = _adk_routing_preamble(body.agent_id, body.team_agents) + augmented_message
+            augmented_message = _adk_routing_preamble(effective_agent_id or body.agent_id, body.team_agents) + augmented_message
             if custom_config:
                 augmented_message = (
                     "CUSTOM ADK AGENT INSTRUCTION:\n"
