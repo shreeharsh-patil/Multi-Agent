@@ -1,0 +1,91 @@
+name: Refine entity grounding evidence
+
+on:
+  push:
+    branches:
+      - fix/entity-grounding-resolution-20260923
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply per-source entity filter
+        run: python .github/scripts/refine_entity_grounding_filter.py
+      - name: Check syntax and whitespace
+        run: |
+          python -m py_compile backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
+          git diff --check
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Run focused grounding tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+          MONGODB_URL: mongodb://localhost:27017
+          MONGODB_DB: multi_agent_test
+        run: pytest -q tests/test_entity_grounding_resolution.py tests/test_grounding_search_reliability.py tests/test_entity_alias_grounding.py tests/test_chat_quality_runtime.py
+      - name: Live PCCE source filtering smoke
+        working-directory: backend
+        env:
+          SECRET_KEY: github-actions-live-search-validation-key-20260923
+        run: |
+          python - <<'PY'
+          import asyncio
+          from src.adk.tools import web_search
+          from src.api.routes._chat_quality import _filter_entity_evidence
+
+          async def main():
+              raw = await web_search('"PCCE" Goa official site', for_research=True, max_items=8)
+              filtered = _filter_entity_evidence('Where is PCCE Goa?', raw)
+              print('RAW:\n', raw[:6000])
+              print('\nFILTERED:\n', filtered[:6000])
+              low = filtered.lower()
+              assert 'https://pccegoa.edu.in' in low, 'Official PCCE source was not retained'
+              assert 'verna' in low and 'goa' in low, 'Location evidence missing after filtering'
+              assert 'myshilingstar' not in low, 'Unrelated game PCCE result leaked through'
+              assert 'paralegal' not in low, 'Unrelated certification PCCE result leaked through'
+              assert 'guangzhou' not in low, 'Unrelated conference PCCE result leaked through'
+
+          asyncio.run(main())
+          PY
+      - name: Run full backend tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+          MONGODB_URL: mongodb://localhost:27017
+          MONGODB_DB: multi_agent_test
+        run: pytest -q
+      - name: Commit validated source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
+          git commit -m "fix: filter acronym grounding evidence per source"
+          git push
