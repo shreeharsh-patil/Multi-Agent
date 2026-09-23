@@ -41,7 +41,10 @@ jobs:
 
       - name: Production build
         working-directory: frontend
-        run: npm run build || (echo "Retrying transient Next.js/font build once" && npm run build)
+        run: |
+          export NEXTAUTH_SECRET="$(openssl rand -hex 32)"
+          export NEXTAUTH_URL="http://localhost:3000"
+          npm run build || (echo "Retrying transient Next.js/font build once" && npm run build)
 
       - name: Commit source fix
         run: |
