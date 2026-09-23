@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -37,6 +37,11 @@ import {
   X,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { toast } from 'sonner'
 import { openCommandPalette } from '@/components/command-palette'
 
 // Map existing functional routes to standard names from prompt style
@@ -72,12 +77,13 @@ export function Sidebar() {
   const { data: session } = useSession()
   const { isCollapsed, toggle, mobileMenuOpen, setMobileMenuOpen } = useSidebar()
   const collapsed = isCollapsed && !mobileMenuOpen
-  const mobileDrawerRef = useRef<HTMLElement>(null)
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [conversationSearch, setConversationSearch] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<SidebarConversation | null>(null)
+  const [deletingConversation, setDeletingConversation] = useState(false)
   const [activeWorkspace, setActiveWorkspace] = useState('all')
 
   const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/')
@@ -158,25 +164,6 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggle])
 
-  useEffect(() => {
-    if (!mobileMenuOpen) return
-
-    const previousOverflow = document.body.style.overflow
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
-    mobileDrawerRef.current?.focus()
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileMenuOpen(false)
-    }
-    window.addEventListener('keydown', handleEscape)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleEscape)
-      previouslyFocused?.focus()
-    }
-  }, [mobileMenuOpen, setMobileMenuOpen])
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -233,19 +220,32 @@ export function Sidebar() {
     setMobileMenuOpen(false)
   }
 
-  const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteConversation = (conversation: SidebarConversation, e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
-    if (confirm('Delete this conversation?')) {
+    setPendingDelete(conversation)
+  }
+
+  const confirmDeleteConversation = async () => {
+    if (!pendingDelete || deletingConversation) return
+    setDeletingConversation(true)
+    const id = pendingDelete.id
+    try {
       const res = await api.chat.deleteConversation(id)
-      if (res.success) {
-        setConversations(prev => prev.filter(c => c.id !== id))
-        if (pathname === `/chat` || pathname.startsWith(`/chat/`)) {
-          router.push('/chat')
-        }
-      } else {
-        console.error('Failed to delete conversation:', res.error)
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to delete conversation')
       }
+      setConversations(prev => prev.filter(c => c.id !== id))
+      setPendingDelete(null)
+      if (pathname === '/chat' || pathname.startsWith('/chat/')) {
+        router.push('/chat')
+      }
+      toast.success('Conversation deleted')
+    } catch (error) {
+      console.error('Failed to delete conversation:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to delete conversation')
+    } finally {
+      setDeletingConversation(false)
     }
   }
 
@@ -299,8 +299,7 @@ export function Sidebar() {
                 )}
               >
                 {isRenaming ? (
-                  <input
-                    type="text"
+                  <Input
                     value={renameText}
                     autoFocus
                     onClick={(e) => e.stopPropagation()}
@@ -310,7 +309,8 @@ export function Sidebar() {
                       if (e.key === 'Enter') { e.preventDefault(); saveRename(conv.id) }
                       else if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
                     }}
-                    className="w-full bg-background border border-border rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="h-8 w-full text-xs"
+                    aria-label={`Rename ${conv.title}`}
                   />
                 ) : (
                   <>
@@ -329,7 +329,7 @@ export function Sidebar() {
                         <Pencil className="h-3 w-3 stroke-[1.5]" />
                       </button>
                       <button
-                        onClick={(e) => handleDeleteConversation(conv.id, e)}
+                        onClick={(e) => handleDeleteConversation(conv, e)}
                         className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground cursor-pointer"
                         title="Delete"
                         aria-label={`Delete ${conv.title}`}
@@ -366,7 +366,7 @@ export function Sidebar() {
                 <div className="h-9 w-9 rounded-[8px] border border-border bg-card flex items-center justify-center transition-all group-hover:scale-105 duration-200 shadow-xs shrink-0">
                   <Image src="/logo.png" alt="Agentic Logo" width={24} height={24} className="h-6 w-6 object-contain" />
                 </div>
-                <span className="font-sans font-normal text-lg tracking-[-0.03em] text-[#26251e]">
+                <span className="font-sans font-normal text-lg tracking-[-0.03em] text-foreground">
                   Agentic
                 </span>
               </Link>
@@ -479,8 +479,10 @@ export function Sidebar() {
             
             <div className="px-1 max-h-[220px] overflow-y-auto scrollbar-thin">
               {loadingDocuments ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <div className="space-y-2 px-2 py-2" aria-label="Loading documents">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-4/5" />
+                  <Skeleton className="h-8 w-11/12" />
                 </div>
               ) : documents.length === 0 ? (
                 <div className="text-center py-6 text-[10px] text-muted-foreground px-2">
@@ -522,12 +524,12 @@ export function Sidebar() {
             <>
               <div className="relative mb-2">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <input
-                  type="text"
+                <Input
                   value={conversationSearch}
                   onChange={(e) => setConversationSearch(e.target.value)}
                   placeholder="Search chats..."
-                  className="w-full h-8 pl-8 pr-2 rounded-[8px] bg-card border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="h-8 bg-card pl-8 text-xs"
+                  aria-label="Search conversations"
                 />
               </div>
               {renderHistorySection("Today", today)}
@@ -555,7 +557,7 @@ export function Sidebar() {
             <div className="flex-1 flex items-center justify-between transition-all duration-300 ease-in-out min-w-0">
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[13px] font-semibold text-[#26251e] truncate leading-tight">
+                  <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
                     {session?.user?.name}
                   </span>
                   <span className="px-1.5 py-0.5 rounded-[4px] bg-primary text-primary-foreground text-[9px] font-bold tracking-wider uppercase select-none shrink-0">
@@ -584,26 +586,18 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile Drawer (Fixed Overlay — Never affects or shrinks background layout) */}
-      {mobileMenuOpen && (
-        <>
-          <div 
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-hidden="true"
-          />
-          <aside
-            ref={mobileDrawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation menu"
-            tabIndex={-1}
-            className="fixed inset-y-0 left-0 z-50 flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh w-[min(85vw,280px)] flex-col overflow-hidden border-r border-border bg-secondary pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-2xl outline-none animate-in slide-in-from-left duration-200 lg:hidden"
-          >
-            {renderSidebarContent(true)}
-          </aside>
-        </>
-      )}
+      {/* Accessible mobile navigation powered by the shadcn Sheet pattern. */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent
+          side="left"
+          showCloseButton={false}
+          className="flex h-[100dvh] w-[min(88vw,300px)] max-w-[300px] flex-col overflow-hidden border-r border-border bg-secondary p-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] lg:hidden"
+        >
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+          <SheetDescription className="sr-only">Navigate Agentic, search conversations, and open workspace tools.</SheetDescription>
+          {renderSidebarContent(true)}
+        </SheetContent>
+      </Sheet>
 
       {/* Desktop Sidebar (In-flow flex layout item strictly for lg+ screens) */}
       <aside 
@@ -614,6 +608,17 @@ export function Sidebar() {
       >
         {renderSidebarContent(false)}
       </aside>
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => { if (!open && !deletingConversation) setPendingDelete(null) }}
+        title="Delete conversation?"
+        description={pendingDelete ? `This will permanently delete “${pendingDelete.title}”. This action cannot be undone.` : 'This action cannot be undone.'}
+        confirmLabel="Delete"
+        destructive
+        loading={deletingConversation}
+        onConfirm={confirmDeleteConversation}
+      />
     </>
   )
 }
