@@ -21,11 +21,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Validate patch script
-        run: python -m py_compile .github/scripts/apply_adk_grounding_reliability.py
+      - name: Validate patch scripts
+        run: |
+          python -m py_compile .github/scripts/apply_adk_grounding_reliability.py
+          python -m py_compile .github/scripts/update_google_search_division_test.py
 
       - name: Apply reliability patch
-        run: python .github/scripts/apply_adk_grounding_reliability.py
+        run: |
+          python .github/scripts/apply_adk_grounding_reliability.py
+          python .github/scripts/update_google_search_division_test.py
 
       - name: Validate source syntax and whitespace
         run: |
@@ -34,7 +38,8 @@ jobs:
             backend/src/orchestrator/router.py \
             backend/src/orchestrator/dynamic.py \
             backend/src/api/routes/_chat_quality.py \
-            backend/tests/test_adk_grounded_tools_reliability.py
+            backend/tests/test_adk_grounded_tools_reliability.py \
+            backend/tests/test_google_search_division.py
           git diff --check
 
       - name: Install backend dependencies
@@ -58,6 +63,7 @@ jobs:
             backend/src/adk/agents.py \
             backend/src/orchestrator/router.py \
             backend/src/orchestrator/dynamic.py \
-            backend/src/api/routes/_chat_quality.py
+            backend/src/api/routes/_chat_quality.py \
+            backend/tests/test_google_search_division.py
           git commit -m "fix: ground external facts through ADK search" || exit 0
           git push origin HEAD:${GITHUB_REF_NAME}
