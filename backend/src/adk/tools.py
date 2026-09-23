@@ -413,6 +413,82 @@ async def _ddg_html_search(query: str, max_items: int = 8) -> List[Dict[str, str
     return results
 
 
+async def _firecrawl_search_items(query: str, max_items: int = 8) -> List[Dict[str, str]]:
+    """Use Firecrawl Search when configured, with key rotation and scraped snippets.
+
+    Firecrawl is substantially more reliable on cloud hosts than scraping public
+    search-result HTML.  The parser intentionally accepts both current and older
+    response envelopes so an API response-shape change cannot silently disable
+    grounding.
+    """
+    if not firecrawl_rotator.get_keys():
+        return []
+
+    try:
+        response = await firecrawl_rotator.execute_request(
+            "POST",
+            "/search",
+            json={
+                "query": query,
+                "limit": max(1, min(int(max_items), 10)),
+                "sources": [{"type": "web"}],
+                "scrapeOptions": {"formats": ["markdown"]},
+            },
+        )
+    except Exception as exc:
+        logger.warning(f"Firecrawl search failed for '{query}': {exc}")
+        return []
+
+    payload: Any = response
+    if isinstance(payload, dict) and "data" in payload:
+        payload = payload.get("data")
+
+    candidates: Any = payload
+    if isinstance(payload, dict):
+        candidates = (
+            payload.get("web")
+            or payload.get("results")
+            or payload.get("data")
+            or []
+        )
+    if not isinstance(candidates, list):
+        return []
+
+    results: List[Dict[str, str]] = []
+    for item in candidates[:max_items]:
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        title = str(
+            item.get("title")
+            or metadata.get("title")
+            or "Untitled"
+        ).strip()
+        url = str(
+            item.get("url")
+            or item.get("link")
+            or metadata.get("sourceURL")
+            or metadata.get("url")
+            or ""
+        ).strip()
+        snippet = str(
+            item.get("description")
+            or item.get("snippet")
+            or item.get("content")
+            or item.get("markdown")
+            or metadata.get("description")
+            or ""
+        ).strip()
+        if title and url and snippet and _validate_outbound_url(url):
+            results.append({
+                "title": title,
+                "url": url,
+                "snippet": snippet[:1600],
+                "source": "Firecrawl Search",
+            })
+    return results
+
+
 async def _bing_html_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
     """Independent Bing HTML fallback for hosts where DDG/Jina are blocked."""
     import urllib.parse
@@ -538,8 +614,8 @@ async def web_search(
 ) -> str:
     """Search the internet for current live information across multiple web engines.
 
-    Aggregates up to-the-minute news, live web pages, and authoritative articles
-    from Google News RSS, DuckDuckGo, Jina AI, SearXNG, and academic databases.
+    Aggregates up-to-the-minute web evidence from configured Firecrawl Search,
+    DuckDuckGo, Jina AI, Bing, SearXNG, Google News, and encyclopedic fallbacks.
     """
     clean_query = " ".join((query or "").split())
     if not clean_query:
@@ -570,6 +646,10 @@ async def web_search(
         _jina_search_items(clean_query, max_items=min(result_limit, 6)),
         _bing_html_search(clean_query, max_items=min(result_limit, 8)),
     ]
+    # Research/current/entity lookups should prefer the configured search API
+    # over brittle HTML scraping.  Ordinary tool calls stay free by default.
+    if for_research and firecrawl_rotator.get_keys():
+        tasks.insert(0, _firecrawl_search_items(clean_query, max_items=min(result_limit, 8)))
     if needs_news:
         tasks.append(_google_news_search(clean_query, max_items=min(result_limit, 6)))
     engine_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -578,75 +658,94 @@ async def web_search(
         if isinstance(res, list):
             raw_items.extend(res)
 
-    # SearXNG is a final fallback only.  The primary providers already ran in
-    # parallel, which is faster and less likely to return a stale mirror.
-    if len(raw_items) < 4:
-        searx_items = await _searxng_search_items(clean_query, max_items=min(result_limit, 6))
-        raw_items.extend(searx_items)
+    def _dedupe_search_results(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        # Keep a larger discovery pool than the final answer limit so fallback
+        # providers are not pushed out by an early batch of irrelevant results.
+        discovery_limit = max(result_limit * 4, 24)
+        seen_urls: set[str] = set()
+        seen_titles: set[str] = set()
+        unique: List[Dict[str, str]] = []
+        for item in items:
+            title = str(item.get("title", "")).strip()
+            url = str(item.get("url", "")).strip()
+            snippet = str(item.get("snippet", "")).strip()
+            if not title or not snippet:
+                continue
+            norm_url = url.split("#")[0].rstrip("/") if url else ""
+            norm_title = title.casefold()
+            if norm_url and norm_url in seen_urls:
+                continue
+            if norm_title in seen_titles:
+                continue
+            if norm_url:
+                seen_urls.add(norm_url)
+            seen_titles.add(norm_title)
+            unique.append(item)
+            if len(unique) >= discovery_limit:
+                break
+        return unique
 
-    # 4. Academic/Encyclopedic fallback. Primary engines can return malformed
-    # placeholders, so count usable items rather than raw responses.
-    usable_before_fallback = [
-        item for item in raw_items
-        if str(item.get("title", "")).strip() and str(item.get("snippet", "")).strip()
-    ]
-    if len(usable_before_fallback) < 3:
+    def _rank_search_results(items: List[Dict[str, str]]) -> tuple[List[Dict[str, str]], bool]:
+        if not items:
+            return [], True
         try:
-            wiki_res = await _wikipedia_search(clean_query)
-            if wiki_res and len(wiki_res.strip()) > 30:
-                raw_items.append({"title": "Wikipedia Reference", "url": "", "snippet": wiki_res, "source": "Wikipedia"})
-        except Exception:
-            pass
+            from src.adk.search_ranker import SearchResultRanker
 
-    # Deduplicate results by URL and title
-    seen_urls = set()
-    seen_titles = set()
-    unique_results: List[Dict[str, str]] = []
+            ranking = SearchResultRanker.rank_sources(
+                clean_query, items, max_selected=result_limit
+            )
+            by_url = {
+                str(item.get("url", "")).split("#")[0].rstrip("/"): item
+                for item in items
+                if str(item.get("url", "")).strip()
+            }
+            selected_urls = [
+                str(source.get("url", "")).split("#")[0].rstrip("/")
+                for source in ranking.selected_sources
+                if str(source.get("url", "")).strip()
+            ]
+            selected = [by_url[url] for url in selected_urls if url in by_url]
+            # A successful ranker decision that rejects everything is meaningful:
+            # never return the rejected inputs merely because selected == [].
+            return selected, True
+        except Exception as exc:
+            logger.warning("Search ranking failed for '%s': %s", clean_query, exc)
+            return items[:result_limit], False
 
-    for item in raw_items:
-        title = item.get("title", "").strip()
-        url = item.get("url", "").strip()
-        snippet = item.get("snippet", "").strip()
+    unique_results = _dedupe_search_results(raw_items)
+    ranked_results, ranking_succeeded = _rank_search_results(unique_results)
 
-        if not title or not snippet:
-            continue
+    if ranking_succeeded and not ranked_results:
+        # Primary engines can occasionally return a full page of unrelated
+        # results.  Retry independent fallback paths only after relevance
+        # ranking proves the first pool unusable.
+        fallback_sets = await asyncio.gather(
+            _searxng_search_items(clean_query, max_items=min(result_limit, 8)),
+            _ddg_html_search(clean_query, max_items=min(result_limit, 8)),
+            return_exceptions=True,
+        )
+        fallback_items: List[Dict[str, str]] = []
+        for fallback in fallback_sets:
+            if isinstance(fallback, list):
+                fallback_items.extend(fallback)
 
-        norm_url = url.split("#")[0].rstrip("/") if url else ""
-        norm_title = title.lower()
+        if fallback_items:
+            unique_results = _dedupe_search_results(raw_items + fallback_items)
+            ranked_results, ranking_succeeded = _rank_search_results(unique_results)
 
-        if norm_url and norm_url in seen_urls:
-            continue
-        if norm_title in seen_titles:
-            continue
-
-        if norm_url:
-            seen_urls.add(norm_url)
-        seen_titles.add(norm_title)
-        unique_results.append(item)
-
-        if len(unique_results) >= result_limit:
-            break
+    if ranking_succeeded:
+        unique_results = ranked_results
+    else:
+        unique_results = ranked_results[:result_limit]
 
     if not unique_results:
-        return f"No live search results found for '{clean_query}'."
-
-    # Prefer primary documentation and diversify domains before handing the
-    # evidence to the model.  Search snippets are leads, not facts; the
-    # explicit source URLs let the agent cite and, when needed, read the page.
-    try:
-        from src.adk.search_ranker import SearchResultRanker
-
-        ranking = SearchResultRanker.rank_sources(
-            clean_query, unique_results, max_selected=result_limit
-        )
-        by_url = {item.get("url", "").split("#")[0].rstrip("/"): item for item in unique_results}
-        selected_urls = [source["url"].split("#")[0].rstrip("/") for source in ranking.selected_sources]
-        ranked_results = [by_url[url] for url in selected_urls if url in by_url]
-        if ranked_results:
-            unique_results = ranked_results
-    except Exception as exc:
-        # Ranking improves quality but must never make live search unavailable.
-        logger.warning("Search ranking failed for '%s': %s", clean_query, exc)
+        output = f"No live search results found for '{clean_query}'."
+        if len(_web_search_cache) >= _WEB_SEARCH_CACHE_MAX_ENTRIES:
+            oldest_key = min(_web_search_cache, key=lambda key: _web_search_cache[key][0])
+            _web_search_cache.pop(oldest_key, None)
+        _web_search_cache[cache_key] = (now, output)
+        logger.info("No relevant ranked search results for: '%s'", clean_query)
+        return output
 
     formatted = []
     for idx, item in enumerate(unique_results, 1):
