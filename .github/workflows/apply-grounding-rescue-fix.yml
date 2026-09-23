@@ -23,6 +23,21 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - name: Repair temporary patch script quoting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/scripts/apply_grounding_rescue_fix.py')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace("test_path.write_text(r'''", 'test_path.write_text(r"""', 1)
+          marker = "''', encoding=\"utf-8\")\nprint(\"wrote backend/tests/test_grounding_recovery.py\")"
+          replacement = '""", encoding="utf-8")\nprint("wrote backend/tests/test_grounding_recovery.py")'
+          if marker not in text:
+              raise SystemExit('closing test delimiter marker not found')
+          text = text.replace(marker, replacement, 1)
+          p.write_text(text, encoding='utf-8')
+          PY
+
       - name: Apply grounding recovery patch
         run: python .github/scripts/apply_grounding_rescue_fix.py
 
