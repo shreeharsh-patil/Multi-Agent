@@ -94,8 +94,9 @@ class AgentRouter:
         # 3. If requested_agent_id is provided, validate it against the prompt nature
         if requested_agent_id and requested_agent_id != "auto":
             if requested_agent_id == "image":
-                # Image agent should only execute when user explicitly requests image generation
-                return "auto"
+                # Selecting the Image agent is itself explicit generation intent.
+                # Do not silently downgrade a deliberate UI choice to auto.
+                return "image"
             if requested_agent_id == "coding":
                 coding_keywords = ["code", "script", "python", "javascript", "typescript", "html", "css", "sql", "java", "c++", "c#", "rust", "go", "function", "class", "algorithm", "debug", "error", "exception", "bug", "program", "api", "refactor", "syntax"]
                 if not any(k in input_lower for k in coding_keywords):

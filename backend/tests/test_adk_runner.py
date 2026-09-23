@@ -110,7 +110,7 @@ def test_stale_provider_models_are_migrated():
     )
 
     assert configured.openrouter_model == "nvidia/nemotron-3-ultra-550b-a55b:free"
-    assert configured.groq_model == "qwen/qwen3.6-27b"
+    assert configured.groq_model == "qwen/qwen3.8-27b"
     assert configured.aiand_model == "qwen/qwen3.6-27b"
 
 
@@ -137,7 +137,7 @@ async def test_fast_rotator_prefers_groq_and_quarantines_timeout(monkeypatch):
 def test_fast_groq_boss_hides_reasoning():
     route = AdkModelRoute(
         provider="groq",
-        model="qwen/qwen3.6-27b",
+        model="qwen/qwen3.8-27b",
         api_key="gsk_diagnostic",
         api_base="https://api.groq.com/openai/v1",
     )
