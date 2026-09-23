@@ -41,7 +41,7 @@ jobs:
 
       - name: Production build
         working-directory: frontend
-        run: npm run build
+        run: npm run build || (echo "Retrying transient Next.js/font build once" && npm run build)
 
       - name: Commit source fix
         run: |
