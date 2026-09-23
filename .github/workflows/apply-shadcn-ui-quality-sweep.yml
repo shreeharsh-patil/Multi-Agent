@@ -1,0 +1,81 @@
+name: Apply shadcn UI quality sweep
+
+on:
+  push:
+    branches:
+      - fix/shadcn-ui-quality-sweep-20260923
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Add current shadcn primitives
+        working-directory: frontend
+        run: npx --yes shadcn@latest add sheet dialog tooltip skeleton alert --yes --overwrite
+
+      - name: Apply shared UI fixes
+        run: python .github/scripts/apply_shadcn_ui_quality_sweep.py
+
+      - name: Remove transient npm lockfile
+        run: rm -f frontend/package-lock.json
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Production build
+        working-directory: frontend
+        run: |
+          export NEXTAUTH_SECRET="$(openssl rand -hex 32)"
+          export NEXTAUTH_URL="http://localhost:3000"
+          npm run build
+
+      - name: Commit validated source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            frontend/package.json \
+            frontend/components.json \
+            frontend/src/components/ui/sheet.tsx \
+            frontend/src/components/ui/dialog.tsx \
+            frontend/src/components/ui/tooltip.tsx \
+            frontend/src/components/ui/skeleton.tsx \
+            frontend/src/components/ui/alert.tsx \
+            'frontend/src/components/sidebar.tsx' \
+            'frontend/src/components/dashboard-content.tsx' \
+            'frontend/src/app/layout.tsx' \
+            'frontend/src/app/(dashboard)/layout.tsx' \
+            'frontend/src/app/(dashboard)/dashboard/page.tsx' \
+            'frontend/src/app/error.tsx' \
+            'frontend/src/app/(dashboard)/loading.tsx' \
+            frontend/tests/ui-shell-quality.test.ts
+          git commit -m "fix: modernize shared UI with shadcn primitives" || exit 0
+          git push origin HEAD:${GITHUB_REF_NAME}
