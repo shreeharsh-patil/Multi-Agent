@@ -436,6 +436,65 @@ def _chat_error_status(error: Exception) -> int:
     return 503
 
 
+async def _recover_stream_response(
+    message: str,
+    user_id: str,
+    conversation_id: str,
+    workspace_id: str | None,
+    request_id: str,
+) -> dict | None:
+    """Best-effort recovery when SSE execution fails before producing text.
+
+    The non-streaming path uses the same production ADK quality boundary and
+    provider failover, but is independent of SSE/runner streaming mechanics.
+    Keeping this recovery at the HTTP boundary prevents a transient streaming
+    failure from becoming an empty generic retry response.
+    """
+    recovery_started_at = time.perf_counter()
+    try:
+        timeout_seconds = min(float(settings.chat_stream_timeout_seconds), 45.0)
+        async with asyncio.timeout(timeout_seconds):
+            result = await process_message(
+                message=message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                workspace_id=workspace_id,
+            )
+    except Exception as recovery_error:
+        _chat_log(
+            request_id,
+            "stream_recovery",
+            "error",
+            recovery_started_at,
+            error=str(recovery_error)[:500],
+        )
+        logger.warning(
+            "chat_stream_recovery_failed",
+            extra={"request_id": request_id, "error": str(recovery_error)[:500]},
+        )
+        return None
+
+    output = str((result or {}).get("output", "") or "").strip()
+    if not output:
+        _chat_log(
+            request_id,
+            "stream_recovery",
+            "error",
+            recovery_started_at,
+            error="empty recovery output",
+        )
+        return None
+
+    _chat_log(
+        request_id,
+        "stream_recovery",
+        "complete",
+        recovery_started_at,
+        output_chars=len(output),
+    )
+    return result
+
+
 class AttachmentInfo(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     size: int = Field(ge=0, le=50 * 1024 * 1024)
@@ -955,6 +1014,7 @@ async def chat_stream(
 
     async def event_generator():
         nonlocal accumulated_output
+        recovery_message = body.message
         try:
             # Open the response immediately, then prepare optional context while
             # the client is already showing the active assistant state.
@@ -997,6 +1057,7 @@ async def chat_stream(
 
             now_str = datetime.now(timezone.utc).strftime("%A, %d %B %Y %H:%M UTC")
             augmented_message = f"SYSTEM TIME CONTEXT: Current server time is {now_str}.\n\n" + augmented_message
+            recovery_message = augmented_message
             stream_google_context = {
                 "user_id": user_id,
                 "workspace_id": body.workspace_id,
@@ -1307,7 +1368,45 @@ async def chat_stream(
             friendly_error = _friendly_chat_error(e)
             logger.error(f"Stream error: {e}", exc_info=True)
             _chat_log(request_id, "request", "error", request_started_at, error=str(e)[:500], output_chars=len(accumulated_output))
-            # Still try to save what we have
+
+            # If SSE/ADK streaming itself failed before any answer text became
+            # visible, try the hardened non-streaming ADK path once. The same
+            # request ID is persisted idempotently, so this cannot create a
+            # duplicate conversation turn.
+            if not accumulated_output and routed_agent_id != "image":
+                recovery = await _recover_stream_response(
+                    recovery_message,
+                    user_id,
+                    conv_id,
+                    body.workspace_id,
+                    request_id,
+                )
+                if recovery:
+                    recovered_output = str(recovery.get("output", "") or "").strip()
+                    recovered_citations = list(recovery.get("citations", []) or [])
+                    accumulated_output = recovered_output
+                    yield f"event: agent\ndata: {json.dumps({'agent_id': 'stream_recovery'})}\n\n"
+                    async for word in _word_chunks(recovered_output):
+                        yield f"event: chunk\ndata: {json.dumps({'text': word}, ensure_ascii=False)}\n\n"
+                    attachments_data = [a.model_dump() for a in body.attachments] if body.attachments else None
+                    await _save_messages(
+                        conv_id=conv_id,
+                        user_id=user_id,
+                        user_message=body.message,
+                        agent_message=recovered_output,
+                        agent_id=effective_agent_id or body.agent_id,
+                        is_new=is_new,
+                        attachments=attachments_data,
+                        workspace_id=body.workspace_id,
+                        citations=recovered_citations,
+                        request_id=request_id,
+                    )
+                    yield f"event: complete\ndata: {json.dumps({'output': recovered_output, 'conversation_id': conv_id, 'citations': recovered_citations, 'recovered': True}, ensure_ascii=False)}\n\n"
+                    return
+
+            # If answer text already escaped before the exception, never replay
+            # the model and risk mixing two generations. Persist the partial and
+            # let the client preserve a non-empty completed payload.
             if accumulated_output:
                 await _save_messages(
                     conv_id=conv_id,
