@@ -413,6 +413,82 @@ async def _ddg_html_search(query: str, max_items: int = 8) -> List[Dict[str, str
     return results
 
 
+async def _firecrawl_search_items(query: str, max_items: int = 8) -> List[Dict[str, str]]:
+    """Use Firecrawl Search when configured, with key rotation and scraped snippets.
+
+    Firecrawl is substantially more reliable on cloud hosts than scraping public
+    search-result HTML.  The parser intentionally accepts both current and older
+    response envelopes so an API response-shape change cannot silently disable
+    grounding.
+    """
+    if not firecrawl_rotator.get_keys():
+        return []
+
+    try:
+        response = await firecrawl_rotator.execute_request(
+            "POST",
+            "/search",
+            json={
+                "query": query,
+                "limit": max(1, min(int(max_items), 10)),
+                "sources": [{"type": "web"}],
+                "scrapeOptions": {"formats": ["markdown"]},
+            },
+        )
+    except Exception as exc:
+        logger.warning(f"Firecrawl search failed for '{query}': {exc}")
+        return []
+
+    payload: Any = response
+    if isinstance(payload, dict) and "data" in payload:
+        payload = payload.get("data")
+
+    candidates: Any = payload
+    if isinstance(payload, dict):
+        candidates = (
+            payload.get("web")
+            or payload.get("results")
+            or payload.get("data")
+            or []
+        )
+    if not isinstance(candidates, list):
+        return []
+
+    results: List[Dict[str, str]] = []
+    for item in candidates[:max_items]:
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        title = str(
+            item.get("title")
+            or metadata.get("title")
+            or "Untitled"
+        ).strip()
+        url = str(
+            item.get("url")
+            or item.get("link")
+            or metadata.get("sourceURL")
+            or metadata.get("url")
+            or ""
+        ).strip()
+        snippet = str(
+            item.get("description")
+            or item.get("snippet")
+            or item.get("content")
+            or item.get("markdown")
+            or metadata.get("description")
+            or ""
+        ).strip()
+        if title and url and snippet and _validate_outbound_url(url):
+            results.append({
+                "title": title,
+                "url": url,
+                "snippet": snippet[:1600],
+                "source": "Firecrawl Search",
+            })
+    return results
+
+
 async def _bing_html_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
     """Independent Bing HTML fallback for hosts where DDG/Jina are blocked."""
     import urllib.parse
@@ -538,8 +614,8 @@ async def web_search(
 ) -> str:
     """Search the internet for current live information across multiple web engines.
 
-    Aggregates up to-the-minute news, live web pages, and authoritative articles
-    from Google News RSS, DuckDuckGo, Jina AI, SearXNG, and academic databases.
+    Aggregates up-to-the-minute web evidence from configured Firecrawl Search,
+    DuckDuckGo, Jina AI, Bing, SearXNG, Google News, and encyclopedic fallbacks.
     """
     clean_query = " ".join((query or "").split())
     if not clean_query:
@@ -570,6 +646,10 @@ async def web_search(
         _jina_search_items(clean_query, max_items=min(result_limit, 6)),
         _bing_html_search(clean_query, max_items=min(result_limit, 8)),
     ]
+    # Research/current/entity lookups should prefer the configured search API
+    # over brittle HTML scraping.  Ordinary tool calls stay free by default.
+    if for_research and firecrawl_rotator.get_keys():
+        tasks.insert(0, _firecrawl_search_items(clean_query, max_items=min(result_limit, 8)))
     if needs_news:
         tasks.append(_google_news_search(clean_query, max_items=min(result_limit, 6)))
     engine_results = await asyncio.gather(*tasks, return_exceptions=True)
