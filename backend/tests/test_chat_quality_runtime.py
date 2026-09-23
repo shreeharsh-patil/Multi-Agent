@@ -111,7 +111,7 @@ asyncio.run(main())
 '''
     )
 
-    assert result["chunks"] == ["Clean final answer"]
+    assert result["chunks"] == ["Clean ", "final ", "answer"]
     assert result["completed"]["output"] == "Clean final answer"
     assert result["completed"]["conversation_id"] == "conversation-123"
     assert result["internal_session"] != "conversation-123"
@@ -132,7 +132,13 @@ runner.use_adk = lambda: True
 async def fake_generate(*args, **kwargs):
     return "Polished user-facing answer"
 
+async def fake_generate_stream(*args, **kwargs):
+    yield "Polished "
+    yield "user-facing "
+    yield "answer"
+
 llm_module.llm_service.generate = fake_generate
+llm_module.llm_service.generate_stream = fake_generate_stream
 
 async def fake_stream(message, user_id="default", conversation_id="default", workspace_id=None, fast_path=False, _failover_attempt=0):
     yield {"event": "start", "data": {"conversation_id": conversation_id}}
@@ -161,7 +167,55 @@ asyncio.run(main())
 '''
     )
 
-    assert result["chunks"] == ["Polished user-facing answer"]
+    assert result["chunks"] == ["Polished ", "user-facing ", "answer"]
     assert "final_synthesizer" in result["agents"]
     assert result["completed"]["output"] == "Polished user-facing answer"
     assert result["completed"]["conversation_id"] == "conversation-456"
+
+
+
+def test_fast_path_streams_directly_without_waiting_for_adk():
+    result = _run_isolated(
+        r'''
+import asyncio
+import json
+
+import src.adk.runner as runner
+import src.services.llm as llm_module
+
+runner.use_adk = lambda: True
+called = {"adk": 0}
+
+async def fake_adk_stream(*args, **kwargs):
+    called["adk"] += 1
+    yield {"event": "completed", "data": {"output": "slow adk", "conversation_id": "internal", "citations": []}}
+
+async def fake_direct_stream(*args, **kwargs):
+    yield "Fast "
+    yield "streaming "
+    yield "answer"
+
+runner.process_message_stream = fake_adk_stream
+llm_module.llm_service.generate_stream = fake_direct_stream
+
+import src.api.routes
+
+async def main():
+    events = []
+    async for event in runner.process_fast_message_stream(
+        "Explain this simply",
+        user_id="u1",
+        conversation_id="conversation-fast",
+    ):
+        events.append(event)
+    chunks = [e["data"]["text"] for e in events if e["event"] == "chunk"]
+    completed = [e for e in events if e["event"] == "completed"][-1]
+    print(json.dumps({"chunks": chunks, "completed": completed["data"], "adk_calls": called["adk"]}))
+
+asyncio.run(main())
+'''
+    )
+
+    assert result["chunks"] == ["Fast ", "streaming ", "answer"]
+    assert result["completed"]["output"] == "Fast streaming answer"
+    assert result["adk_calls"] == 0
