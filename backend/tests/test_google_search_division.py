@@ -115,9 +115,14 @@ def test_research_manager_contains_internet_manager_and_other_research_agents():
     assert "weather_news" in sub_names
     assert "youtube" in sub_names
 
-    # Verify existing research agent retains web_search_tool and scrape_page_tool
+    # Canonical research now uses native Google Search grounding. The runner
+    # transparently replaces it with the FunctionTool web-search fallback only
+    # when a Gemini grounding route is unavailable.
     research_agent = next(s for s in research_mgr.sub_agents if s.name == "research")
-    assert len(research_agent.tools) >= 2
+    assert any(
+        tool is google_search or "GoogleSearchTool" in type(tool).__name__
+        for tool in research_agent.tools
+    )
 
 
 def test_boss_agent_reaches_google_search_division():

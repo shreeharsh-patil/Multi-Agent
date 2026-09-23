@@ -6,7 +6,7 @@ from src.utils.logger import logger
 class AgentRouter:
     def __init__(self):
         self.routing_rules = [
-            (r"(?i)\b(generate|create|draw|make|design|render|paint|show|produce|visualize|visualise|illustrate)\b.*\b(images?|pictures?|photos?|photographs?|illustrations?|drawings?|artworks?|posters?|logos?|icons?|graphics?|banners?|vectors?|avatars?)\b", "image"),
+            (r"(?i)\b(generate|create|draw|make|design|render|paint|show|produce|visualize|visualise|illustrate)\b.*\b(images?|pictures?|photos?|photographs?|illustrations?|drawings?|artworks?|posters?|logos?|icons?|graphics?|banners?|vectors?|avatars?|wallpapers?|thumbnails?|covers?|mockups?|concept\s+art)\b", "image"),
             (r"(?i)\b(images?|pictures?|photos?|drawings?|illustrations?)\b\s+(of|for|with|showing|featuring)\b", "image"),
             (r"(?i)\b(logos?|icons?|avatars?)\b\s+(for|of|with|showing|featuring)\b", "image"),
             # External entity/location facts must be verified on the web instead
@@ -107,7 +107,18 @@ class AgentRouter:
                     return "knowledge"
             return requested_agent_id
 
-        # 4. For general explanations, questions, or concepts, default to knowledge agent
+        # 4. Unknown acronyms/proper external entities need web verification, not model memory.
+        external_entity_question = bool(
+            re.search(r"(?i)\b(?:what\s+is|who\s+is|tell\s+me\s+about|information\s+about|details\s+about|where\s+is|where's)\b", user_input)
+            and (
+                re.search(r"\b[A-Z][A-Z0-9&.-]{2,}\b", user_input)
+                or re.search(r"(?i)\b(?:college|university|institute|company|organisation|organization|campus|hospital|school)\b", user_input)
+            )
+        )
+        if external_entity_question:
+            return "research"
+
+        # 5. For general explanations, questions, or concepts, default to knowledge agent
         explanation_keywords = ["explain", "what is", "define", "how does", "why", "tell me about", "concept", "meaning", "overview", "difference between"]
         if any(k in input_lower for k in explanation_keywords):
             return "knowledge"

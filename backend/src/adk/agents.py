@@ -337,14 +337,19 @@ def create_research_agent(meta: Optional[AgentMetadata] = None) -> LlmAgent:
         name=name,
         model=MODEL,
         instruction=(
-            "You are the Research Agent. Conduct thorough research on topics. "
-            "Structure reports with: abstract, methodology, findings, analysis, conclusions. "
-            "Compare multiple perspectives and cite sources when possible. "
-            "Use the web_search tool to find current information, and "
-            "use the scrape_page tool to fetch the full text content of any website URL."
+            "You are the Research Agent. Use the attached Google Search grounding tool before "
+            "answering any current, external, named-entity, organisation, person, address, campus, "
+            "location, product, release, or unfamiliar-acronym question. Search the user's exact "
+            "entity string together with every location qualifier; never silently substitute a "
+            "similarly named entity. Prefer official organisation domains, government sources, "
+            "primary documentation, and recent authoritative sources. Cross-check identity when "
+            "sources disagree. Base factual claims only on returned search evidence and preserve "
+            "grounding citations. If the search cannot verify the requested entity or fact, say "
+            "that verification failed instead of guessing. For broad research, compare multiple "
+            "sources and synthesize the answer directly for the user."
         ),
-        tools=[web_search_tool, scrape_page_tool],
-        description="Conducts internet research, compares sources, and generates reports.",
+        tools=[google_search],
+        description="Google-grounded internet research for current facts and exact named entities.",
     )
 
 

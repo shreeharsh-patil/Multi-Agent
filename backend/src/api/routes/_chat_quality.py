@@ -46,6 +46,10 @@ USER-FACING RESPONSE QUALITY STANDARD (MANDATORY):
   Intelligence workflow before asserting the answer. Search the exact entity
   string and preserve qualifiers such as city/state/country. Never silently
   answer about a similarly named entity. Prefer official/primary sources.
+- For an unfamiliar acronym or named entity, never infer its expansion, identity,
+  city, campus, address, or affiliation from model memory. Search the exact user phrase
+  first, verify that at least one returned source refers to the same entity, and only
+  then answer. A source about a different entity with a similar acronym is not evidence.
 - If evidence is incomplete, state the specific uncertainty briefly and give
   the most useful answer supported by the available context.
 """.strip()
@@ -118,6 +122,12 @@ _EXTERNAL_FACT_RE = re.compile(
 _RECENCY_RE = re.compile(
     r"(?ix)\b(?:newest|most\s+recent|recent(?:ly)?|currently|as\s+of\s+(?:today|now|20\d{2}))\b"
 )
+_EXTERNAL_ENTITY_QUESTION_RE = re.compile(
+    r"(?ix)\b(?:what\s+is|who\s+is|tell\s+me\s+about|information\s+about|details\s+about|where\s+is|where's)\b"
+)
+_EXTERNAL_ENTITY_SIGNAL_RE = re.compile(
+    r"(?i)(?:\b[A-Z][A-Z0-9&.-]{2,}\b|\b(?:college|university|institute|company|organisation|organization|campus|hospital|school)\b)"
+)
 _URL_RE = re.compile(r"https?://", re.I)
 
 
@@ -177,6 +187,10 @@ def _requires_live_verification(message: str) -> bool:
         or _RELATIVE_EVENT_RE.search(request_text)
         or _EXTERNAL_FACT_RE.search(request_text)
         or _RECENCY_RE.search(request_text)
+        or (
+            _EXTERNAL_ENTITY_QUESTION_RE.search(request_text)
+            and _EXTERNAL_ENTITY_SIGNAL_RE.search(request_text)
+        )
     )
 
 
