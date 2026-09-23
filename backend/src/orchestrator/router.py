@@ -6,9 +6,13 @@ from src.utils.logger import logger
 class AgentRouter:
     def __init__(self):
         self.routing_rules = [
-            (r"(?i)\b(generate|create|draw|make|design|render|paint|show|produce)\b.*\b(image|picture|photo|photograph|illustration|drawing|artwork|poster|logo|icon|graphic|banner|vector|avatar)\b", "image"),
-            (r"(?i)\b(image|picture|photo|drawing|illustration)\b\s+(of|for|with|showing|featuring)\b", "image"),
-            (r"(?i)\b(logo|icon|avatar)\b\s+(for|of|with|showing|featuring)\b", "image"),
+            (r"(?i)\b(generate|create|draw|make|design|render|paint|show|produce|visualize|visualise|illustrate)\b.*\b(images?|pictures?|photos?|photographs?|illustrations?|drawings?|artworks?|posters?|logos?|icons?|graphics?|banners?|vectors?|avatars?)\b", "image"),
+            (r"(?i)\b(images?|pictures?|photos?|drawings?|illustrations?)\b\s+(of|for|with|showing|featuring)\b", "image"),
+            (r"(?i)\b(logos?|icons?|avatars?)\b\s+(for|of|with|showing|featuring)\b", "image"),
+            # External entity/location facts must be verified on the web instead
+            # of being answered from model memory. This catches queries such as
+            # "Where is PCCE Goa?" without hard-coding any institution.
+            (r"(?i)\b(where\s+is|where's|where\s+are|location\s+of|address\s+of|located\s+(?:in|at)|headquarters\s+of|campus\s+of|how\s+to\s+reach|directions?\s+to)\b", "research"),
             # Contacts: catch explicit contact/phone/email lookups before calendar
             (r"(?i)\b(contact|contacts|contacs|contct|phone\s*book|address\s*book|phone\s*number|cell\s*number|mobile\s*number|email\s*address|mail\s*address|who\s+is\s+in\s+my\s+contacts|find\s+contact|get\s+number|contact\s+info|contact\s+details|lookup\s+contact|search\s+contacts?)\b", "contacts"),
             (r"(?i)\b(number\s+of|phone\s+of|mobile\s+of|email\s+of|contact\s+details|number\s+for|phone\s+for|call\s+details|text\s+details)\b", "contacts"),

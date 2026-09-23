@@ -41,6 +41,11 @@ USER-FACING RESPONSE QUALITY STANDARD (MANDATORY):
   action happened unless the runtime actually returned evidence that it did.
 - Preserve verified citations supplied by research tools. Never invent a URL,
   citation, source, measurement, price, date, or tool result.
+- For current facts, external facts, named organisations/people, addresses,
+  campuses, locations, or unfamiliar acronyms, use the ADK web-search/Internet
+  Intelligence workflow before asserting the answer. Search the exact entity
+  string and preserve qualifiers such as city/state/country. Never silently
+  answer about a similarly named entity. Prefer official/primary sources.
 - If evidence is incomplete, state the specific uncertainty briefly and give
   the most useful answer supported by the available context.
 """.strip()
@@ -105,6 +110,15 @@ _RELATIVE_EVENT_RE = re.compile(
     r"weather|news|match|game|score|market|price|event|result|release|flight"
     r")\b"
 )
+_EXTERNAL_FACT_RE = re.compile(
+    r"(?ix)\b(?:where\s+(?:is|are)|where's|location\s+of|address\s+of|"
+    r"located\s+(?:in|at)|headquarters\s+of|campus\s+of|how\s+to\s+reach|"
+    r"directions?\s+to)\b"
+)
+_RECENCY_RE = re.compile(
+    r"(?ix)\b(?:newest|most\s+recent|recent(?:ly)?|currently|as\s+of\s+(?:today|now|20\d{2}))\b"
+)
+_URL_RE = re.compile(r"https?://", re.I)
 
 
 def _compact_prompt(text: str, limit: int = 32_000) -> str:
@@ -155,13 +169,20 @@ def _is_adk_failure(output: str) -> bool:
 
 
 def _requires_live_verification(message: str) -> bool:
-    """Fail closed only when the latest request genuinely needs fresh evidence."""
+    """Return True when the latest request needs external or fresh evidence."""
     request_text = _latest_request_view(message)
     return bool(
         _LIVE_OR_EXTERNAL_RE.search(request_text)
         or _CURRENT_SUBJECT_RE.search(request_text)
         or _RELATIVE_EVENT_RE.search(request_text)
+        or _EXTERNAL_FACT_RE.search(request_text)
+        or _RECENCY_RE.search(request_text)
     )
+
+
+def _has_external_evidence(output: str, citations: Any) -> bool:
+    """Require a tool-derived citation or URL before exposing external facts."""
+    return bool(citations or _URL_RE.search(str(output or "")))
 
 
 def _internal_session_id(conversation_id: str) -> str:
@@ -275,8 +296,9 @@ async def _synthesize_draft_stream(message: str, draft: str) -> AsyncIterator[st
 
 def _grounding_unavailable_message() -> str:
     return (
-        "I couldn't reliably verify the live/current information needed for this request because "
-        "the research provider is temporarily unavailable. Please retry."
+        "I couldn't reliably verify the external/current information needed for this request. "
+        "The ADK web-grounding workflow did not return verifiable source evidence, so I won't guess. "
+        "Please retry."
     )
 
 
@@ -355,6 +377,16 @@ def install_chat_quality_runtime() -> None:
                 result["events_count"] = int(result.get("events_count", 0) or 0) + 1
                 return result
 
+            if _requires_live_verification(message) and not _has_external_evidence(
+                output, result.get("citations")
+            ):
+                result["output"] = _grounding_unavailable_message()
+                result.setdefault("agent_traces", []).append(
+                    {"agent_id": "grounding_guard", "event_type": "MissingExternalEvidence", "has_content": False}
+                )
+                result["events_count"] = int(result.get("events_count", 0) or 0) + 1
+                return result
+
             traces = result.get("agent_traces") or []
             final_content_agent = next(
                 (
@@ -382,38 +414,6 @@ def install_chat_quality_runtime() -> None:
         fast_path: bool = False,
         _failover_attempt: int = 0,
     ):
-        if fast_path and not _requires_live_verification(message):
-            yield {"event": "start", "data": {"conversation_id": conversation_id}}
-            yield {"event": "agent", "data": {"agent_id": "direct"}}
-            direct_chunks: list[str] = []
-            try:
-                async for chunk in _direct_stream(message):
-                    for piece in _stream_pieces(chunk):
-                        direct_chunks.append(piece)
-                        yield {"event": "chunk", "data": {"text": piece}}
-                output = "".join(direct_chunks).strip()
-                if not output:
-                    raise RuntimeError("Direct fast stream returned an empty response")
-                yield {
-                    "event": "completed",
-                    "data": {"output": output, "conversation_id": conversation_id, "citations": []},
-                }
-            except Exception:
-                output = "".join(direct_chunks).strip()
-                if not output:
-                    output = "Unable to generate a response right now. Please retry."
-                    for piece in _stream_pieces(output):
-                        yield {"event": "chunk", "data": {"text": piece}}
-                yield {
-                    "event": "error",
-                    "data": {"error": "The response stream was interrupted. Please retry.", "conversation_id": conversation_id},
-                }
-                yield {
-                    "event": "completed",
-                    "data": {"output": output, "conversation_id": conversation_id, "citations": []},
-                }
-            return
-
         if not adk_runner.use_adk():
             yield {"event": "start", "data": {"conversation_id": conversation_id}}
             if _requires_live_verification(message):
@@ -450,6 +450,7 @@ def install_chat_quality_runtime() -> None:
         # The underlying runner will not retry after *any* partial text because
         # historically that partial was already user-visible. We hide specialist
         # partials, so one outer retry remains safe when no Boss text was shown.
+        verification_required = _requires_live_verification(message)
         for quality_attempt in range(2):
             session_id = _internal_session_id(conversation_id)
             current_agent = ""
@@ -493,7 +494,10 @@ def install_chat_quality_runtime() -> None:
                                 exposed_answer_text = True
                                 for piece in _stream_pieces(text):
                                     boss_chunks.append(piece)
-                                    yield {"event": "chunk", "data": {"text": piece}}
+                                    # Buffer externally verifiable answers until the
+                                    # final event proves that search evidence exists.
+                                    if not verification_required:
+                                        yield {"event": "chunk", "data": {"text": piece}}
                         continue
 
                     if event_name == "answer_started":
@@ -517,7 +521,23 @@ def install_chat_quality_runtime() -> None:
                 completed_output = str((pending_completed or {}).get("output", "") or "").strip()
                 completed_citations = list((pending_completed or {}).get("citations", []) or [])
 
+                if verification_required:
+                    evidence_output = boss_output or completed_output
+                    if evidence_output and not _has_external_evidence(evidence_output, completed_citations):
+                        output = _grounding_unavailable_message()
+                        for piece in _stream_pieces(output):
+                            yield {"event": "chunk", "data": {"text": piece}}
+                        yield {"event": "error", "data": {"error": output, "conversation_id": conversation_id}}
+                        yield {
+                            "event": "completed",
+                            "data": {"output": output, "conversation_id": conversation_id, "citations": []},
+                        }
+                        return
+
                 if boss_output:
+                    if verification_required:
+                        for piece in boss_chunks:
+                            yield {"event": "chunk", "data": {"text": piece}}
                     if pending_error:
                         yield {
                             "event": "error",
