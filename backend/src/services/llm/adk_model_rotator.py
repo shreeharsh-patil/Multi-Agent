@@ -1,8 +1,13 @@
 """Provider/key rotation for ADK model instances.
 
-Native Google Search grounding remains on Gemini.  Other ADK agents can use
-the official ADK LiteLLM connector against the configured OpenAI-compatible
+Native Google Search grounding remains on Gemini. Other ADK agents can use
+the official ADK LiteLLM connector against configured OpenAI-compatible
 providers without falling out of the ADK runtime.
+
+Routing is deliberately *preference based*, not round-robin. A healthy primary
+route is reused across requests for consistent answer quality. The fallback
+cursor advances only after a real runtime failure and resets after a successful
+response. This prevents adjacent chat turns from silently switching models.
 """
 
 from __future__ import annotations
@@ -27,6 +32,8 @@ class AdkModelRoute:
 
 class AdkModelRotator:
     def __init__(self) -> None:
+        # These are failover cursors, not round-robin request cursors. They
+        # remain at the preferred route until record_failure() advances them.
         self._route_index = 0
         self._fast_route_index = 0
         self._key_indices: dict[str, int] = {}
@@ -75,6 +82,13 @@ class AdkModelRotator:
         return providers
 
     async def _select_route(self, *, fast: bool = False) -> AdkModelRoute:
+        """Select the currently preferred healthy route.
+
+        The cursor is intentionally not advanced here. Merely receiving a new
+        user request is not a reason to change models. ``record_failure`` moves
+        the cursor to a fallback; ``record_success`` moves it back to the best
+        healthy route for the next request.
+        """
         await self.probe_credentials()
         providers = self._providers(fast=fast)
         enabled = [
@@ -92,23 +106,29 @@ class AdkModelRotator:
 
         async with self._lock:
             index = self._fast_route_index if fast else self._route_index
-            provider, model, keys, base = enabled[index % len(enabled)]
-            if fast:
-                self._fast_route_index = (index + 1) % len(enabled)
-            else:
-                self._route_index = (index + 1) % len(enabled)
+            # A provider can disappear after credential quarantine. Clamp the
+            # failover cursor so we never skip the new first healthy provider.
+            if index >= len(enabled):
+                index = 0
+                if fast:
+                    self._fast_route_index = 0
+                else:
+                    self._route_index = 0
+            provider, model, keys, base = enabled[index]
             identity = f"{provider}:{base or 'google'}"
             key_index = self._key_indices.get(identity, 0)
             key = keys[key_index % len(keys)]
+            # Rotate keys within a provider for quota distribution, while
+            # keeping the provider/model itself stable for answer consistency.
             self._key_indices[identity] = (key_index + 1) % len(keys)
             return AdkModelRoute(provider=provider, model=model, api_key=key, api_base=base)
 
     async def next_route(self) -> AdkModelRoute:
-        """Select a Gemini-first route for full ADK orchestration."""
+        """Select the best healthy route for full ADK orchestration."""
         return await self._select_route()
 
     async def next_fast_route(self) -> AdkModelRoute:
-        """Select a low-latency ADK route, preferring a healthy Groq key."""
+        """Select the best healthy low-latency route, preferring Groq."""
         return await self._select_route(fast=True)
 
     async def next_gemini_route(self) -> AdkModelRoute:
@@ -175,7 +195,7 @@ class AdkModelRotator:
 
         Model-list checks produced false positives: a key could list a model but
         still fail chat because of quota, endpoint, timeout, or empty-output
-        errors. Every configured key is now tested concurrently against the same
+        errors. Every configured key is tested concurrently against the same
         generation endpoint the ADK adapter ultimately uses.
         """
         if self._credentials_probed:
@@ -251,7 +271,13 @@ class AdkModelRotator:
         return f"{provider}:{model}:{api_base or ''}:{fingerprint}"
 
     async def record_failure(self, route: AdkModelRoute, error: Exception) -> None:
-        """Quarantine credentials/models that cannot recover by retrying."""
+        """Advance failover after a runtime failure and quarantine bad routes.
+
+        Permanent failures remove the broken credential/model and restart from
+        the first remaining healthy provider. Transient failures advance one
+        provider for the current retry chain without permanently degrading the
+        preferred model for future successful requests.
+        """
         message = f"{type(error).__name__}: {error}".lower()
         permanent_markers = (
             "401", "unauthenticated", "invalid api key", "invalid authentication",
@@ -259,18 +285,30 @@ class AdkModelRotator:
             "no endpoints found", "not supported", "402", "insufficient credits",
             "timeouterror", "timed out",
         )
-        if not any(marker in message for marker in permanent_markers):
-            return
+        permanent = any(marker in message for marker in permanent_markers)
+
         async with self._lock:
-            identity = self._key_identity(route.provider, route.model, route.api_base, route.api_key)
-            self._blocked_keys.add(identity)
-            self._blocked_reasons[identity] = "runtime_failure"
+            if permanent:
+                identity = self._key_identity(route.provider, route.model, route.api_base, route.api_key)
+                self._blocked_keys.add(identity)
+                self._blocked_reasons[identity] = "runtime_failure"
+                self._route_index = 0
+                self._fast_route_index = 0
+            else:
+                # Move to the next healthy provider only because a real call
+                # failed. Both cursors advance so either retry mode can escape
+                # a temporarily unhealthy provider.
+                self._route_index += 1
+                self._fast_route_index += 1
 
     async def record_success(self, route: AdkModelRoute) -> None:
+        """Mark a route healthy and restore primary preference for new turns."""
         async with self._lock:
             identity = self._key_identity(route.provider, route.model, route.api_base, route.api_key)
             self._blocked_keys.discard(identity)
             self._blocked_reasons.pop(identity, None)
+            self._route_index = 0
+            self._fast_route_index = 0
 
     def health_summary(self) -> dict[str, dict[str, object]]:
         """Return secret-free configured and currently usable route counts."""
@@ -311,6 +349,8 @@ class AdkModelRotator:
         """Clear in-memory quarantine after configuration or deployment changes."""
         self._blocked_keys.clear()
         self._blocked_reasons.clear()
+        self._route_index = 0
+        self._fast_route_index = 0
         self._credentials_probed = False
 
 
