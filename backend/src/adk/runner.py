@@ -426,6 +426,71 @@ def _extract_grounding_citations(event) -> list[dict[str, str]]:
     return citations
 
 
+def _flatten_tool_payload(value) -> str:
+    """Convert a FunctionTool response payload into searchable text safely."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return "\n".join(_flatten_tool_payload(v) for v in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return "\n".join(_flatten_tool_payload(v) for v in value)
+    return str(value)
+
+
+def _citations_from_search_text(text: str) -> list[dict[str, str]]:
+    """Extract trustworthy source URLs from the structured web-search tool output."""
+    citations: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    current_title = "Web source"
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        heading = re.match(r"^###\s+Source\s+\d+:\s*(.+)$", line, re.I)
+        if heading:
+            title = heading.group(1).strip()
+            title = re.sub(r"\s+\([^()]+\)\s*$", "", title).strip()
+            current_title = title or "Web source"
+            continue
+        for url in re.findall(r"https?://[^\s)<>]+", line, re.I):
+            clean_url = url.rstrip(".,;:")
+            if clean_url and clean_url not in seen_urls:
+                seen_urls.add(clean_url)
+                citations.append({
+                    "file_name": current_title,
+                    "text": clean_url,
+                    "url": clean_url,
+                })
+    return citations
+
+
+def _extract_function_tool_citations(event) -> list[dict[str, str]]:
+    """Promote URLs returned by ADK web FunctionTools into normal citations.
+
+    Native Gemini Google Search exposes grounding metadata, but the fallback
+    ``web_search`` FunctionTool returns its evidence inside a function response.
+    Without this bridge, a successful search looked ungrounded to the quality
+    guard and was incorrectly replaced with the retry message.
+    """
+    content = _field(event, "content")
+    parts = _field(content, "parts") or []
+    citations: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for part in parts:
+        function_response = _field(part, "function_response") or _field(part, "functionResponse")
+        if not function_response:
+            continue
+        tool_name = str(_field(function_response, "name", "") or "").lower()
+        if not any(marker in tool_name for marker in ("search", "scrape", "reader")):
+            continue
+        payload = _field(function_response, "response")
+        for citation in _citations_from_search_text(_flatten_tool_payload(payload)):
+            if citation["url"] not in seen_urls:
+                seen_urls.add(citation["url"])
+                citations.append(citation)
+    return citations
+
+
 def _format_agent_trace(node_name: str, event_type: str, has_content: bool) -> dict:
     """Format rich telemetry trace for real ADK agent executions."""
     from src.adk.agents import adk_name_to_registry_id
@@ -582,7 +647,7 @@ async def process_message(
 
         agent_traces = []
         for event in events:
-            for citation in _extract_grounding_citations(event):
+            for citation in _extract_grounding_citations(event) + _extract_function_tool_citations(event):
                 if citation["url"] not in citation_urls:
                     citation_urls.add(citation["url"])
                     citations.append(citation)
@@ -962,7 +1027,7 @@ async def process_message_stream(
             agent_id = event.node_name if hasattr(event, "node_name") else "unknown"
 
             content_piece = _get_content_piece(event)
-            for citation in _extract_grounding_citations(event):
+            for citation in _extract_grounding_citations(event) + _extract_function_tool_citations(event):
                 if citation["url"] not in citation_urls:
                     citation_urls.add(citation["url"])
                     citations.append(citation)
