@@ -19,9 +19,9 @@ def test_quality_helpers_fail_closed_for_live_queries():
 
 def test_compact_prompt_keeps_prefix_and_latest_turn():
     text = "SYSTEM PREFIX\n" + ("old context " * 5000) + "\nLATEST USER REQUEST"
-    compacted = quality._compact_prompt(text, limit=1200)
+    compacted = quality._compact_prompt(text, limit=12_000)
 
-    assert len(compacted) <= 1250
+    assert len(compacted) <= 12_100
     assert compacted.startswith("SYSTEM PREFIX")
     assert compacted.endswith("LATEST USER REQUEST")
     assert "Earlier repeated context omitted" in compacted
