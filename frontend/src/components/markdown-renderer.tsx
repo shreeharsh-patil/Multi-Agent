@@ -46,12 +46,12 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
       </tr>
     ),
     th: ({ children }: any) => (
-      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-r border-border/30 last:border-r-0">
+      <th className="whitespace-normal break-words px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-r border-border/30 last:border-r-0 [overflow-wrap:anywhere] sm:px-4">
         {children}
       </th>
     ),
     td: ({ children }: any) => (
-      <td className="px-4 py-3 align-top border-r border-border/20 last:border-r-0 leading-relaxed font-normal">
+      <td className="whitespace-normal break-words px-3 py-3 align-top border-r border-border/20 last:border-r-0 leading-relaxed font-normal [overflow-wrap:anywhere] sm:px-4">
         {children}
       </td>
     ),
@@ -132,7 +132,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({ content, 
   }), []);
 
   return (
-    <div className={`prose min-w-0 max-w-full break-words text-sm leading-relaxed [overflow-wrap:anywhere] dark:prose-invert ${className}`}>
+    <div className={`prose min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&>*]:max-w-full dark:prose-invert ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
         rehypePlugins={[rehypeKatex]}

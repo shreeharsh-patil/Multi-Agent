@@ -154,7 +154,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
             {errorMessage && (
               <p className="text-[11px] text-muted-foreground max-w-xs">{errorMessage}</p>
             )}
-            <div className="flex items-center gap-2 mt-2">
+            <div className="mt-2 flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
               <button
                 type="button"
                 onClick={handleRetry}
@@ -212,7 +212,7 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
           </div>
         )}
         {!hasError && !isLoading && (
-          <div className="flex items-center justify-end gap-2 border-t border-border bg-card p-2 md:hidden">
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-2 border-t border-border bg-card p-2 md:hidden">
             <button
               type="button"
               onClick={() => setIsOpen(true)}

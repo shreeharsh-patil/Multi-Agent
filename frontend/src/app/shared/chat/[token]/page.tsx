@@ -45,10 +45,10 @@ export default function SharedChatPage({ params }: { params: Promise<{ token: st
         <h1 className="mt-3 break-words text-2xl font-bold tracking-tight sm:text-3xl">{chat.title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">Read-only link · updated {formatDate(chat.updatedAt)}</p>
       </div>
-      <Card className="min-w-0 space-y-5 p-3 sm:space-y-6 sm:p-8">
+      <Card className="min-w-0 max-w-full space-y-5 overflow-hidden p-3 sm:space-y-6 sm:p-8">
         {chat.messages.map((message, index) => (
-          <div key={index} className={`flex min-w-0 gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
-            <div className={`min-w-0 max-w-[92%] rounded-xl px-3 py-3 text-sm sm:max-w-[85%] sm:px-4 ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
+          <div key={index} className={`flex w-full max-w-full min-w-0 overflow-hidden gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
+            <div className={`min-w-0 max-w-[92%] overflow-hidden rounded-xl px-3 py-3 text-sm sm:max-w-[85%] sm:px-4 ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider opacity-60">
                 {message.role === 'user' ? 'You' : message.agentId || 'Assistant'}
               </p>

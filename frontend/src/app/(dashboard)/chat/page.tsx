@@ -1666,16 +1666,20 @@ function ChatContent() {
               </div>
             </div>
           ) : (
-            <ScrollArea ref={scrollRef} className="h-full w-full min-w-0 px-2 py-3 sm:px-6 sm:py-6">
-              <div className="mx-auto w-full min-w-0 max-w-none space-y-6">
+            <ScrollArea
+              ref={scrollRef}
+              className="h-full w-full min-w-0 overflow-x-hidden px-2 py-3 sm:px-6 sm:py-6"
+              viewportClassName="overflow-x-hidden [&>div]:!block [&>div]:w-full [&>div]:min-w-0 [&>div]:max-w-full"
+            >
+              <div className="mx-auto w-full min-w-0 max-w-full space-y-6 overflow-x-hidden">
                 {messages.map((msg, idx) => (
-                  <div key={msg.id} className={`flex min-w-0 gap-2 sm:gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                  <div key={msg.id} className={`flex w-full max-w-full min-w-0 overflow-x-hidden gap-2 sm:gap-3.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
                       <div className="h-7 w-7 rounded-full border border-border shrink-0 mt-0.5 shadow-xs overflow-hidden bg-secondary flex items-center justify-center">
                         <Image src="/developer-avatar.png" alt="AI" width={28} height={28} className="h-full w-full object-contain" />
                       </div>
                     )}
-                    <div className={`flex w-full min-w-0 max-w-[calc(100%_-_2.25rem)] flex-col sm:max-w-[92%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`flex w-full min-w-0 max-w-[calc(100%_-_2.25rem)] flex-col overflow-hidden sm:max-w-[92%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.agentId && msg.role === 'assistant' && (
                         <Badge variant="outline" className="mb-1 text-[9px] uppercase tracking-wider font-mono bg-secondary border-border text-muted-foreground">
                           {agents.concat(customAgents).find((a) => a.id === msg.agentId)?.name || msg.agentId}
@@ -1713,7 +1717,7 @@ function ChatContent() {
                         </div>
                       )}
 
-                      <div className="group relative max-w-full min-w-0">
+                      <div className="group relative max-w-full min-w-0 overflow-hidden">
                         {msg.role === 'user' && editingId === msg.id ? (
                           <div className="w-full min-w-0 rounded-[12px] border border-border bg-card p-2 shadow-xs">
                             <textarea
@@ -1796,7 +1800,7 @@ function ChatContent() {
                               </span>
                             )
                           ) : (
-                            <div className="w-full min-w-0 max-w-full break-words text-xs leading-relaxed [overflow-wrap:anywhere] sm:text-sm">
+                            <div className="w-full min-w-0 max-w-full overflow-hidden break-words text-xs leading-relaxed [overflow-wrap:anywhere] [&>*]:max-w-full sm:text-sm">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm, [remarkMath, { singleDollar: true }]]}
                                 rehypePlugins={[rehypeKatex]}
@@ -1842,10 +1846,10 @@ function ChatContent() {
                                     )
                                   },
                                   pre: ({ children }) => <>{children}</>,
-                                  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                                  p: ({ children }) => <p className="mb-2 max-w-full break-words leading-relaxed [overflow-wrap:anywhere] last:mb-0">{children}</p>,
                                   ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
                                   ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
-                                  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                  li: ({ children }) => <li className="max-w-full break-words leading-relaxed [overflow-wrap:anywhere]">{children}</li>,
                                   strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
                                   em: ({ children }) => <em className="italic">{children}</em>,
                                   h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 text-foreground">{children}</h1>,
@@ -1854,7 +1858,7 @@ function ChatContent() {
                                   blockquote: ({ children }) => <blockquote className="border-l-2 border-primary/30 pl-3 py-0.5 mb-2 text-muted-foreground italic">{children}</blockquote>,
                                   hr: () => <hr className="my-3 border-border" />,
                                   table: ({ children }) => (
-                                    <div className="my-4 w-full overflow-x-auto rounded-xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm scrollbar-thin">
+                                    <div className="my-4 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm scrollbar-thin">
                                       <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[480px]">{children}</table>
                                     </div>
                                   ),
@@ -1868,10 +1872,10 @@ function ChatContent() {
                                     <tr className="hover:bg-muted/40 transition-colors duration-150">{children}</tr>
                                   ),
                                   th: ({ children }) => (
-                                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-r border-border/30 last:border-r-0">{children}</th>
+                                    <th className="whitespace-normal break-words px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-r border-border/30 last:border-r-0 [overflow-wrap:anywhere] sm:px-4">{children}</th>
                                   ),
                                   td: ({ children }) => (
-                                    <td className="px-4 py-3 align-top border-r border-border/20 last:border-r-0 leading-relaxed font-normal">{children}</td>
+                                    <td className="whitespace-normal break-words px-3 py-3 align-top border-r border-border/20 last:border-r-0 leading-relaxed font-normal [overflow-wrap:anywhere] sm:px-4">{children}</td>
                                   ),
                                   div: ({ className, children, ...props }) => {
                                     if (className?.includes('math') || className?.includes('katex-display')) {
@@ -1918,10 +1922,10 @@ function ChatContent() {
                                       else if (cit.document_id) window.open(`/documents?doc=${encodeURIComponent(cit.document_id)}`, '_blank', 'noopener,noreferrer')
                                     }}
                                     title={cit.text || undefined}
-                                    className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors max-w-full"
+                                    className="inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[11px] text-primary transition-colors hover:bg-primary/20"
                                   >
                                     <FileText className="h-3 w-3 shrink-0" />
-                                    <span className="truncate">{cit.file_name || 'Document'}</span>
+                                    <span className="min-w-0 truncate">{cit.file_name || 'Document'}</span>
                                     {cit.page_number ? <span className="opacity-70 shrink-0">· p.{cit.page_number}</span> : null}
                                     {typeof cit.score === 'number' ? <span className="opacity-70 shrink-0">· {(cit.score * 100).toFixed(0)}%</span> : null}
                                   </button>
@@ -2086,7 +2090,7 @@ function ChatContent() {
         </div>
 
         {/* Anchored bottom input block */}
-        <div className="shrink-0 border-t border-border bg-background px-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-6 sm:py-4">
+        <div className="shrink-0 max-w-full overflow-x-hidden border-t border-border bg-background px-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-6 sm:py-4">
           <div className="mx-auto w-full min-w-0 max-w-none space-y-1.5 sm:space-y-2">
             {attachments.length > 0 && (
               <div className="flex max-w-full flex-wrap gap-1.5 pb-1 sm:pb-2">
@@ -2109,7 +2113,7 @@ function ChatContent() {
               </div>
             )}
 
-            <div className="relative flex min-h-[56px] w-full min-w-0 items-end rounded-[16px] border border-border bg-card p-1.5 shadow-xs transition-all duration-200 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 sm:items-center sm:p-2">
+            <div className="relative flex min-h-[56px] w-full min-w-0 max-w-full items-end overflow-hidden rounded-[16px] border border-border bg-card p-1.5 shadow-xs transition-all duration-200 focus-within:border-primary/45 focus-within:ring-1 focus-within:ring-primary/10 sm:items-center sm:p-2">
               <input
                 ref={fileInputRef}
                 type="file"
