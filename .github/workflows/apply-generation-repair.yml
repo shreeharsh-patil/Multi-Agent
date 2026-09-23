@@ -1,0 +1,52 @@
+name: Apply generation repair
+
+on:
+  push:
+    branches:
+      - fix/image-text-generation-20260923
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Apply targeted repairs
+        run: python .github/scripts/apply_generation_repair.py
+
+      - name: Validate syntax and whitespace
+        run: |
+          python -m py_compile \
+            backend/src/config.py \
+            backend/src/orchestrator/router.py \
+            backend/src/services/image_generation.py \
+            backend/src/services/llm/factory.py \
+            backend/tests/test_generation_repair.py \
+            backend/tests/test_adk_runner.py
+          git diff --check
+
+      - name: Commit repaired files
+        run: |
+          if git diff --quiet; then
+            echo "No additional patch changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .env.example \
+            backend/src/orchestrator/router.py \
+            backend/src/services/llm/factory.py \
+            backend/tests/test_adk_runner.py
+          git commit -m "fix: restore text and image generation routing"
+          git push origin HEAD:${GITHUB_REF_NAME}
