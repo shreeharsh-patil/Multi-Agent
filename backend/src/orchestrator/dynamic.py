@@ -14,7 +14,23 @@ _routing_history: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(in
 
 
 def _has(text: str, *terms: str) -> bool:
-    return any(term in text for term in terms)
+    """Match intent terms as phrases/tokens instead of arbitrary substrings.
+
+    Raw ``term in text`` caused severe routing collisions: ``plan`` matched
+    *explanation*, ``exam`` matched *example*, ``now`` matched *know*, ``api``
+    matched *capital*, and ``file`` matched *profile*. Those false positives
+    made ordinary chat fan out to unrelated specialist teams.
+    """
+    for term in terms:
+        normalized = term.casefold().strip()
+        if not normalized:
+            continue
+        escaped = re.escape(normalized).replace(r"\ ", r"\s+")
+        left = r"(?<!\w)" if normalized[0].isalnum() else ""
+        right = r"(?!\w)" if normalized[-1].isalnum() else ""
+        if re.search(left + escaped + right, text):
+            return True
+    return False
 
 
 def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool = False) -> dict[str, Any]:
@@ -27,29 +43,66 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
 
     is_shopping = _has(
         text,
-        "mouse", "keyboard", "laptop", "headphones", "earphones", "monitor", "ssd",
-        "phone", "mobile", "buy", "purchase", "price", "cheapest", "best under",
-        "deals", "discounts", "under ₹", "under rs", "under 500", "under 1000", "under 2000", "under 5000", "under 60000"
+        "mouse", "mice", "keyboard", "keyboards", "laptop", "laptops", "headphones", "earphones",
+        "monitor", "monitors", "ssd", "ssds", "phone", "phones", "mobile", "mobiles", "buy",
+        "purchase", "price", "prices", "cheapest", "best under", "deals", "discounts",
+        "under ₹", "under rs", "under 500", "under 1000", "under 2000", "under 5000", "under 60000",
     )
-    is_scraping = _has(text, "scrape", "scraping", "crawler", "extract text", "scrape url", "http://", "https://")
+    is_scraping = _has(
+        text,
+        "scrape", "scrapes", "scraped", "scraping", "crawler", "crawlers", "extract text",
+        "scrape url", "http://", "https://",
+    )
 
+    # Research should be reserved for explicitly requested sourcing or facts
+    # whose freshness materially matters. A timeless "compare X and Y" should
+    # not automatically invoke the full internet-intelligence hierarchy.
     is_research = _has(
         text,
-        "research", "sources", "cite", "citation", "current", "latest", "compare",
-        "news", "today", "yesterday", "now", "recent", "trending", "price",
-        "update", "version", "event", "who is", "what is the current", "when did",
-        "2025", "2026", "score", "winner", "weather",
+        "research", "sources", "source", "cite", "citation", "citations",
+        "current", "currently", "latest", "newest", "news", "today", "yesterday", "now",
+        "recent", "recently", "trending", "price", "prices", "update", "updates", "version",
+        "versions", "current events", "breaking", "who is", "what is the current", "2025", "2026",
+        "score", "scores", "winner", "weather", "forecast",
     ) or is_shopping
-    is_notes = _has(text, "notes", "revision", "study guide", "exam notes", "summarize", "summary")
-    is_quiz = _has(text, "quiz", "mcq", "exam", "practice questions", "flashcards")
-    is_code = _has(text, "code", "program", "function", "debug", "bug", "react", "python", "javascript", "api")
-    is_security = _has(text, "security", "authentication", "authorization", "password", "encrypt", "vulnerability", "owasp")
-    is_document = has_attachments or _has(text, "pdf", "paper", "document", "file", "image", "picture")
-    is_visual = _has(text, "diagram", "flowchart", "mind map", "visual", "illustrate", "show me")
-    is_math = _has(text, "calculate", "solve", "equation", "formula", "math")
-    is_medical = _has(text, "symptom", "disease", "medicine", "drug", "dose", "medical", "health")
-    is_finance = _has(text, "finance", "financial", "stock", "invest", "valuation", "accounting", "tax")
-    is_planning = _has(text, "plan", "schedule", "roadmap", "deadline", "milestone", "tasks")
+    is_notes = _has(
+        text, "note", "notes", "revision", "study guide", "study guides", "exam notes",
+        "summarize", "summarise", "summary", "summaries",
+    )
+    is_quiz = _has(
+        text, "quiz", "quizzes", "mcq", "mcqs", "exam", "exams", "practice question",
+        "practice questions", "flashcard", "flashcards",
+    )
+    is_code = _has(
+        text, "code", "coding", "program", "programs", "programming", "function", "functions",
+        "debug", "debugging", "bug", "bugs", "react", "python", "javascript", "typescript",
+        "api", "apis",
+    )
+    is_security = _has(
+        text, "security", "authentication", "authorization", "password", "passwords", "encrypt",
+        "encryption", "vulnerability", "vulnerabilities", "owasp",
+    )
+    is_document = has_attachments or _has(
+        text, "pdf", "pdfs", "paper", "papers", "document", "documents", "file", "files",
+        "image", "images", "picture", "pictures",
+    )
+    is_visual = _has(
+        text, "diagram", "diagrams", "flowchart", "flowcharts", "mind map", "mind maps",
+        "visual", "visualize", "visualise", "illustrate", "show me",
+    )
+    is_math = _has(text, "calculate", "calculation", "calculations", "solve", "equation", "equations", "formula", "formulas", "math", "mathematics")
+    is_medical = _has(
+        text, "symptom", "symptoms", "disease", "diseases", "medicine", "medicines", "drug", "drugs",
+        "dose", "doses", "medical", "health",
+    )
+    is_finance = _has(
+        text, "finance", "financial", "stock", "stocks", "invest", "investing", "investment",
+        "investments", "valuation", "valuations", "accounting", "tax", "taxes",
+    )
+    is_planning = _has(
+        text, "plan", "plans", "planning", "schedule", "schedules", "scheduling", "roadmap", "roadmaps",
+        "deadline", "deadlines", "milestone", "milestones", "task", "tasks",
+    )
 
     if is_shopping:
         add("product-researcher", "Product Researcher", "Retrieving live product listings, prices in INR, and verified purchase URLs", "real-time product search and hard budget verification")
@@ -72,7 +125,7 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
         add("tool", "Reasoning Agent", "Checking calculations and structured reasoning", "calculation and reasoning")
     elif _has(text, "physics", "torque", "force", "energy", "motion", "mechanics"):
         add("engineer", "Physics Expert", "Explaining the physical principles and relationships", "physics and engineering fundamentals")
-    elif _has(text, "operating system", "binary tree", "algorithm", "data structure", "computer science"):
+    elif _has(text, "operating system", "operating systems", "binary tree", "binary trees", "algorithm", "algorithms", "data structure", "data structures", "computer science"):
         add("coding", "CS Expert", "Explaining the computer-science concept precisely", "computer science concepts and examples")
 
     if is_notes:
@@ -95,14 +148,20 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
         else:
             add("knowledge", "Answer Agent", "Understanding the request and preparing a direct answer", "general answer generation")
 
-    # Keep a team focused. A prompt may match many words, but four specialists
+    # Keep a team focused. A prompt may match many terms, but four specialists
     # is enough to cover it without making the user wait for redundant work.
     steps = steps[:4]
     domain = "general"
-    for key, value in (("code", "software"), ("research", "research"), ("exam", "study"), ("medical", "medical"), ("finance", "finance")):
-        if key in text:
-            domain = value
-            break
+    if is_code:
+        domain = "software"
+    elif is_research:
+        domain = "research"
+    elif is_notes or is_quiz:
+        domain = "study"
+    elif is_medical:
+        domain = "medical"
+    elif is_finance:
+        domain = "finance"
     return {
         "complexity": "complex" if len(steps) >= 3 else ("moderate" if len(steps) == 2 else "simple"),
         "domain": domain,
@@ -114,4 +173,3 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
 def record_routing(domain: str, agent_ids: list[str]) -> None:
     for agent_id in agent_ids:
         _routing_history[domain][agent_id] += 1
-
