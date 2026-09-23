@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     mistral_base_url: str = "https://api.mistral.ai/v1"
 
     groq_api_key: str = ""
-    groq_model: str = "qwen/qwen3.6-27b"
+    groq_model: str = "qwen/qwen3.8-27b"
 
     aiand_api_key: str = ""
     aiand_model: str = "qwen/qwen3.6-27b"
@@ -205,12 +205,24 @@ class Settings(BaseSettings):
 
     @field_validator("groq_model", mode="before")
     @classmethod
-    def migrate_reasoning_groq_model(cls, value):
+    def migrate_retired_groq_model(cls, value):
+        """Keep stale Groq environment values on a currently supported chat model.
+
+        Groq retired Qwen 3.6 on 2026-09-14. Existing hosted environment
+        variables override code defaults, so migrate them at settings load time.
+        GPT-OSS is also normalized to Qwen 3.8 because the ADK LiteLLM path uses
+        ``reasoning_format=hidden``, which Qwen supports consistently.
+        """
         model = str(value or "").strip()
-        # GPT-OSS exposes reasoning tokens as ordinary streamed content through
-        # the ADK LiteLLM adapter. Use Groq's production Qwen chat model for a
-        # clean user-facing answer while preserving GPT-OSS for other systems.
-        return "qwen/qwen3.6-27b" if model.lower() == "openai/gpt-oss-20b" else model
+        stale_models = {
+            "qwen/qwen3.6-27b",
+            "openai/gpt-oss-20b",
+            "mixtral-8x7b-32768",
+            "llama3-8b-8192",
+            "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile",
+        }
+        return "qwen/qwen3.8-27b" if model.lower() in stale_models else model
 
     @model_validator(mode="after")
     def _reject_insecure_secret(self):
