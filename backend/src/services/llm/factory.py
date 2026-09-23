@@ -31,12 +31,19 @@ def _build_providers() -> list[BaseLLMProvider]:
 
     if settings.groq_api_key:
         groq_model = settings.groq_model
-        # Older deployments commonly retained this model after Groq removed
-        # it. Upgrade at runtime so an unchanged Render environment cannot
-        # take down the entire provider chain.
-        if groq_model in {"mixtral-8x7b-32768", "llama3-8b-8192", "llama-3.3-70b-versatile"}:
-            logger.warning("GROQ_MODEL %s is invalid/retired; using openai/gpt-oss-20b instead", groq_model)
-            groq_model = "openai/gpt-oss-20b"
+        # Defense in depth for stale hosted environment values. Qwen 3.6 was
+        # retired by Groq on 2026-09-14; use the supported Qwen 3.8 route that
+        # also works with the ADK reasoning_format=hidden configuration.
+        if groq_model in {
+            "qwen/qwen3.6-27b",
+            "openai/gpt-oss-20b",
+            "mixtral-8x7b-32768",
+            "llama3-8b-8192",
+            "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile",
+        }:
+            logger.warning("GROQ_MODEL %s is stale/incompatible; using qwen/qwen3.8-27b instead", groq_model)
+            groq_model = "qwen/qwen3.8-27b"
         providers.append(OpenAICompatibleProvider(
             name="Groq",
             api_key=settings.groq_api_key,
