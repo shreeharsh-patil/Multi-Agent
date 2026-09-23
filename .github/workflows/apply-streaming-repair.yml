@@ -22,10 +22,12 @@ jobs:
           python-version: '3.11'
 
       - name: Validate repair script
-        run: python -m py_compile .github/scripts/apply_streaming_repair_v3.py
+        run: |
+          python -m py_compile .github/scripts/apply_streaming_repair_v3.py
+          python -m py_compile .github/scripts/apply_streaming_repair_v4.py
 
       - name: Apply streaming repair
-        run: python .github/scripts/apply_streaming_repair_v3.py
+        run: python .github/scripts/apply_streaming_repair_v4.py
 
       - name: Validate changed Python
         run: |
