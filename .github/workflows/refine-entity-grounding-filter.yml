@@ -37,7 +37,6 @@ jobs:
           python-version: '3.11'
       - name: Apply search and entity grounding repair
         run: |
-          # Correct a quoting typo in the temporary patch generator itself.
           python - <<'PY'
           from pathlib import Path
           import re
@@ -54,6 +53,8 @@ jobs:
           p.write_text(text, encoding='utf-8')
           PY
           python .github/scripts/refine_entity_grounding_filter.py
+          echo '--- generated tools.py around validation failure ---'
+          nl -ba backend/src/adk/tools.py | sed -n '645,700p'
       - name: Check syntax and whitespace
         run: |
           python -m py_compile backend/src/adk/tools.py backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
