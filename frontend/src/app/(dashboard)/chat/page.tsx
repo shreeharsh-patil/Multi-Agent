@@ -1065,6 +1065,9 @@ function ChatContent() {
                 loadedIdRef.current = data.conversation_id
                 if (frameId !== null) cancelAnimationFrame(frameId)
                 accumulatedContent = data.output || accumulatedContent
+                // A non-empty completed fallback is authoritative even when an
+                // earlier SSE error marker was emitted during provider failover.
+                if (accumulatedContent.trim()) streamServerError = ''
                 setConversationId(data.conversation_id)
                 if (typeof window !== 'undefined') {
                   const url = new URL(window.location.href)
@@ -1079,16 +1082,12 @@ function ChatContent() {
                   ),
                 )
             } else if (currentEvent === 'error' && data.error) {
+                // The backend may recover and send a valid `complete` event
+                // after an error marker. Keep the diagnostic pending instead
+                // of overwriting the assistant bubble immediately.
                 streamServerError = String(data.error)
                 setChatDebug((current) => current ? { ...current, status: 'error', step: 'server_error', error: data.error } : current)
                 if (frameId !== null) cancelAnimationFrame(frameId)
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantId
-                      ? { ...msg, content: `Error: ${data.error}` }
-                      : msg,
-                  ),
-                )
             }
           } catch (parseError) {
             console.error('[chat] malformed SSE event', { parseError, block })
@@ -1098,14 +1097,11 @@ function ChatContent() {
 
       // A clean network close without a completion event is not a successful
       // response. Treat it as a failure so the assistant bubble never stays blank.
-      if (streamServerError) {
-        throw new Error(streamServerError)
-      }
       if (!streamCompleted) {
-        throw new Error(`Chat stream closed before completion${streamRequestId ? ` (request ${streamRequestId})` : ''}.`)
+        throw new Error(streamServerError || `Chat stream closed before completion${streamRequestId ? ` (request ${streamRequestId})` : ''}.`)
       }
       if (!accumulatedContent.trim()) {
-        throw new Error('The model returned an empty response.')
+        throw new Error(streamServerError || 'The model returned an empty response.')
       }
 
       // Cancel any remaining frame and apply the final state
@@ -1229,7 +1225,7 @@ function ChatContent() {
           msg.id === assistantId
             ? {
                 ...msg,
-                content: accumulatedContent || `Unable to generate a response. Please retry.${streamRequestId ? ` (Request ID: ${streamRequestId})` : ''}`,
+                content: accumulatedContent || `${errorMessage || 'Unable to generate a response. Please retry.'}${streamRequestId ? ` (Request ID: ${streamRequestId})` : ''}`,
                 error: true,
                 requestId: streamRequestId || undefined,
               }
