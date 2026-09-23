@@ -37,24 +37,21 @@ jobs:
           python-version: '3.11'
       - name: Apply search and entity grounding repair
         run: |
+          # Remove the optional temporary Wikipedia parsing block from the patch
+          # generator. The production fallback uses SearXNG + DDG HTML here;
+          # Wikipedia remains available elsewhere in the existing search stack.
           python - <<'PY'
           from pathlib import Path
-          import re
           p = Path('.github/scripts/refine_entity_grounding_filter.py')
           text = p.read_text(encoding='utf-8')
-          text, count = re.subn(
-              r'snippet = [^\n]*?\.join\(current_snippet\)\.strip\(\)',
-              'snippet = \\" \\".join(current_snippet).strip()',
-              text,
-              count=1,
-          )
-          if count != 1:
-              raise SystemExit('temporary generator quote repair did not match')
+          start = text.find('        # Wikipedia is useful for stable named entities')
+          end = text.find('        if fallback_items:', start)
+          if start < 0 or end < 0:
+              raise SystemExit('temporary Wikipedia block bounds missing')
+          text = text[:start] + text[end:]
           p.write_text(text, encoding='utf-8')
           PY
           python .github/scripts/refine_entity_grounding_filter.py
-          echo '--- generated tools.py around validation failure ---'
-          nl -ba backend/src/adk/tools.py | sed -n '645,700p'
       - name: Check syntax and whitespace
         run: |
           python -m py_compile backend/src/adk/tools.py backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
