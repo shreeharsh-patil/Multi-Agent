@@ -41,6 +41,23 @@ jobs:
       - name: Apply grounding recovery patch
         run: python .github/scripts/apply_grounding_rescue_fix.py
 
+      - name: Normalize generated URL extraction regex
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('backend/src/adk/runner.py')
+          lines = p.read_text(encoding='utf-8').splitlines()
+          changed = False
+          for i, line in enumerate(lines):
+              if 'for url in re.findall(' in line and i > 0 and 'continue' in lines[i - 1]:
+                  lines[i] = '        for url in re.findall(r"https?://[^\\s)<>]+", line, re.I):'
+                  changed = True
+                  break
+          if not changed:
+              raise SystemExit('generated URL extraction line not found')
+          p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
       - name: Check syntax and whitespace
         run: |
           python -m py_compile backend/src/adk/runner.py backend/src/api/routes/_chat_quality.py backend/tests/test_grounding_recovery.py
