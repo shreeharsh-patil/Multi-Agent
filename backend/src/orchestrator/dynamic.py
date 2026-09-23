@@ -33,6 +33,16 @@ def _has(text: str, *terms: str) -> bool:
     return False
 
 
+def _looks_like_external_entity_question(prompt: str) -> bool:
+    return bool(
+        re.search(r"(?i)\b(?:what\s+is|who\s+is|tell\s+me\s+about|information\s+about|details\s+about|where\s+is|where's)\b", prompt)
+        and (
+            re.search(r"\b[A-Z][A-Z0-9&.-]{2,}\b", prompt)
+            or re.search(r"(?i)\b(?:college|university|institute|company|organisation|organization|campus|hospital|school)\b", prompt)
+        )
+    )
+
+
 def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool = False) -> dict[str, Any]:
     text = prompt.casefold()
     steps: list[dict[str, str]] = []
@@ -64,7 +74,7 @@ def plan_dynamic(prompt: str, has_attachments: bool = False, has_workspace: bool
         "recent", "recently", "trending", "price", "prices", "update", "updates", "version",
         "versions", "current events", "breaking", "who is", "what is the current", "2025", "2026",
         "score", "scores", "winner", "weather", "forecast",
-    ) or is_shopping
+    ) or is_shopping or _looks_like_external_entity_question(prompt)
     is_notes = _has(
         text, "note", "notes", "revision", "study guide", "study guides", "exam notes",
         "summarize", "summarise", "summary", "summaries",
