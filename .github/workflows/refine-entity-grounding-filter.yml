@@ -35,11 +35,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Apply per-source entity filter
-        run: python .github/scripts/refine_entity_grounding_filter.py
+      - name: Apply search and entity grounding repair
+        run: |
+          # Correct a quoting typo in the temporary patch generator itself.
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('.github/scripts/refine_entity_grounding_filter.py')
+          text = p.read_text(encoding='utf-8')
+          text, count = re.subn(
+              r'snippet = [^\n]*?\.join\(current_snippet\)\.strip\(\)',
+              'snippet = \\" \\".join(current_snippet).strip()',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit('temporary generator quote repair did not match')
+          p.write_text(text, encoding='utf-8')
+          PY
+          python .github/scripts/refine_entity_grounding_filter.py
       - name: Check syntax and whitespace
         run: |
-          python -m py_compile backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
+          python -m py_compile backend/src/adk/tools.py backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
           git diff --check
       - name: Install backend dependencies
         working-directory: backend
@@ -51,27 +68,47 @@ jobs:
           MONGODB_URL: mongodb://localhost:27017
           MONGODB_DB: multi_agent_test
         run: pytest -q tests/test_entity_grounding_resolution.py tests/test_grounding_search_reliability.py tests/test_entity_alias_grounding.py tests/test_chat_quality_runtime.py
-      - name: Live PCCE source filtering smoke
+      - name: Live PCCE multi-query grounding smoke
         working-directory: backend
         env:
           SECRET_KEY: github-actions-live-search-validation-key-20260923
         run: |
           python - <<'PY'
           import asyncio
-          from src.adk.tools import web_search
+          from src.adk.tools import web_search, _web_search_cache
           from src.api.routes._chat_quality import _filter_entity_evidence
 
+          QUERIES = [
+              'PCCE Goa',
+              'PCCE Goa official',
+              'PCCE Goa full form',
+              'PCCE Goa address',
+              'PCCE Goa college',
+              '"PCCE" Goa',
+          ]
+
           async def main():
-              raw = await web_search('"PCCE" Goa official site', for_research=True, max_items=8)
-              filtered = _filter_entity_evidence('Where is PCCE Goa?', raw)
-              print('RAW:\n', raw[:6000])
-              print('\nFILTERED:\n', filtered[:6000])
-              low = filtered.lower()
-              assert 'https://pccegoa.edu.in' in low, 'Official PCCE source was not retained'
-              assert 'verna' in low and 'goa' in low, 'Location evidence missing after filtering'
+              _web_search_cache.clear()
+              outputs = await asyncio.gather(*(
+                  web_search(query, for_research=True, max_items=8)
+                  for query in QUERIES
+              ))
+              filtered_parts = []
+              for query, raw in zip(QUERIES, outputs):
+                  filtered = _filter_entity_evidence('Where is PCCE Goa?', raw)
+                  print(f'\n=== {query} RAW ===\n{raw[:3500]}')
+                  print(f'\n=== {query} FILTERED ===\n{filtered[:3500]}')
+                  if filtered:
+                      filtered_parts.append(filtered)
+
+              combined = '\n\n'.join(filtered_parts)
+              low = combined.lower()
+              assert 'https://pccegoa.edu.in' in low, 'Official PCCE source was not found across query variants'
+              assert 'verna' in low and 'goa' in low, 'PCCE location evidence missing after filtering'
               assert 'myshilingstar' not in low, 'Unrelated game PCCE result leaked through'
               assert 'paralegal' not in low, 'Unrelated certification PCCE result leaked through'
               assert 'guangzhou' not in low, 'Unrelated conference PCCE result leaked through'
+              assert 'seattle itinerary' not in low, 'Ranker-rejected search garbage leaked through'
 
           asyncio.run(main())
           PY
@@ -86,6 +123,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
-          git commit -m "fix: filter acronym grounding evidence per source"
+          git add backend/src/adk/tools.py backend/src/api/routes/_chat_quality.py backend/tests/test_entity_grounding_resolution.py
+          git commit -m "fix: reject irrelevant search results in entity grounding"
           git push
