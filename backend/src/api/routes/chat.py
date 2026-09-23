@@ -77,12 +77,21 @@ async def _word_chunks(text: str):
 
 
 def _use_compact_adk_boss(body: "ChatRequest", dynamic_plan: dict | None, automatic_mode: bool) -> bool:
-    """Use the low-latency ADK Boss when no tools or delegation are needed."""
+    """Use the low-latency direct stream for ordinary conversational turns."""
     simple_greeting = bool(re.fullmatch(
         r"(?i)\s*(?:hi|hello|hey|hiya|howdy|good\s+(?:morning|afternoon|evening)|namaste)[!?.\s]*",
         body.message,
     ))
     direct_boss_mode = body.agent_id in (None, "auto", "boss_agent") and not body.team_agents
+    steps = (dynamic_plan or {}).get("steps", [])
+    planned_agent = steps[0].get("agent_id") if steps else None
+    general_turn = planned_agent in (None, "knowledge")
+    needs_full_runtime = bool(re.search(
+        r"(?i)\b(?:research|latest|current|search|calculate|calendar|drive|file|pdf|web|"
+        r"image|weather|news|price|stock|crypto|email|gmail|contact|task|schedule|"
+        r"code|debug|python|javascript|typescript|medical|health|finance)\b",
+        body.message,
+    ))
     return bool(
         direct_boss_mode
         and not body.attachments
@@ -91,13 +100,12 @@ def _use_compact_adk_boss(body: "ChatRequest", dynamic_plan: dict | None, automa
             simple_greeting
             or (
                 automatic_mode
-                and not body.conversation_id
-                and len((dynamic_plan or {}).get("steps", [])) <= 1
-                and not re.search(r"(?i)\b(research|latest|current|search|calculate|calendar|drive|file|pdf|web)\b", body.message)
+                and len(steps) <= 1
+                and general_turn
+                and not needs_full_runtime
             )
         )
     )
-
 
 async def _await_with_heartbeats(awaitable, http_request: Request, timeout_seconds: float):
     """Await non-streaming work while keeping SSE alive and cancellable."""
@@ -940,7 +948,16 @@ async def chat_stream(
             context_started_at = time.perf_counter()
             _chat_log(request_id, "context", "start", fast_path=fast_path)
             if fast_path:
-                memory_context, attachment_context, history_snippet = "", "", ""
+                memory_context, attachment_context = "", ""
+                history_snippet = ""
+                if body.conversation_id:
+                    try:
+                        async with asyncio.timeout(min(settings.chat_context_timeout_seconds, 1.5)):
+                            history_snippet = await _build_full_conversation_history(
+                                body.conversation_id, max_messages=12, max_chars=12_000
+                            )
+                    except TimeoutError:
+                        history_snippet = ""
             else:
                 try:
                     async with asyncio.timeout(settings.chat_context_timeout_seconds):
