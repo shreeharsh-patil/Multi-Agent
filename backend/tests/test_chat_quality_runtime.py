@@ -17,6 +17,27 @@ def test_quality_helpers_fail_closed_for_live_queries():
     assert quality._requires_live_verification("Explain binary search with an example") is False
 
 
+def test_injected_current_time_does_not_make_ordinary_chat_live():
+    augmented = (
+        "SYSTEM TIME CONTEXT: Current server time is Wednesday, 23 September 2026 04:00 UTC.\n\n"
+        "Explain binary search with an example"
+    )
+    assert quality._requires_live_verification(augmented) is False
+    assert quality._requires_live_verification(
+        "SYSTEM TIME CONTEXT: Current server time is Wednesday.\n\nWho is the current president of India?"
+    ) is True
+    assert quality._requires_live_verification("Make me a study schedule for this week") is False
+
+
+def test_attachment_request_marker_is_used_for_freshness_detection():
+    augmented = (
+        "SYSTEM TIME CONTEXT: Current server time is Wednesday.\n\n"
+        "The attachment mentions latest news and current weather as examples.\n\n"
+        "User's request:\nExplain the second paragraph in simple English"
+    )
+    assert quality._requires_live_verification(augmented) is False
+
+
 def test_compact_prompt_keeps_prefix_and_latest_turn():
     text = "SYSTEM PREFIX\n" + ("old context " * 5000) + "\nLATEST USER REQUEST"
     compacted = quality._compact_prompt(text, limit=12_000)
