@@ -351,6 +351,31 @@ def _evidence_matches_entity(request_text: str, evidence: str) -> bool:
     return hits >= min(2, len(meaningful))
 
 
+def _filter_entity_evidence(request_text: str, evidence: str) -> str:
+    """Keep only individual search source blocks that match the requested entity.
+
+    A search engine can return several unrelated expansions for the same acronym.
+    Matching the aggregate result string is not sufficient because one correct
+    source would otherwise admit every unrelated source into final synthesis.
+    """
+    rendered = str(evidence or "").strip()
+    if not rendered or not _is_entity_lookup_request(request_text):
+        return rendered
+
+    blocks = [
+        block.strip()
+        for block in re.split(r"(?=^###\s+Source\s+\d+:)", rendered, flags=re.I | re.M)
+        if block.strip()
+    ]
+    # If a provider changed away from the normal structured Source format, keep
+    # the payload only when it still passes the same entity+qualifier check.
+    if len(blocks) <= 1 and not re.search(r"^###\s+Source\s+\d+:", rendered, re.I | re.M):
+        return rendered if _evidence_matches_entity(request_text, rendered) else ""
+
+    matched = [block for block in blocks if _evidence_matches_entity(request_text, block)]
+    return "\n\n".join(matched)
+
+
 def _grounding_resolution_queries(request_text: str) -> list[str]:
     """Build targeted second-stage queries without inventing an answer."""
     acronym, qualifiers, _ = _entity_terms(request_text)
@@ -520,8 +545,10 @@ async def _grounded_rescue(message: str) -> dict[str, Any] | None:
             rendered = str(result or "").strip()
             if not rendered or rendered.lower().startswith("no live search results found"):
                 continue
-            if entity_lookup and not _evidence_matches_entity(request_text, rendered):
-                continue
+            if entity_lookup:
+                rendered = _filter_entity_evidence(request_text, rendered)
+                if not rendered:
+                    continue
             evidence_parts.append(f"SEARCH QUERY: {query}\n{rendered}")
 
     await run_batch(queries)
