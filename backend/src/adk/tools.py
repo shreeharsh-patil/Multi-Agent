@@ -413,6 +413,43 @@ async def _ddg_html_search(query: str, max_items: int = 8) -> List[Dict[str, str
     return results
 
 
+async def _bing_html_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
+    """Independent Bing HTML fallback for hosts where DDG/Jina are blocked."""
+    import urllib.parse
+
+    client = _get_firecrawl_client()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    results: List[Dict[str, str]] = []
+    try:
+        resp = await client.get(
+            "https://www.bing.com/search",
+            params={"q": query, "count": max_items},
+            headers=headers,
+            follow_redirects=True,
+            timeout=8.0,
+        )
+        if resp.status_code == 200 and resp.text:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for item in soup.select("li.b_algo")[:max_items]:
+                link = item.select_one("h2 a")
+                if not link:
+                    continue
+                title = link.get_text(" ", strip=True)
+                url = (link.get("href") or "").strip()
+                snippet_node = item.select_one(".b_caption p") or item.select_one("p")
+                snippet = snippet_node.get_text(" ", strip=True) if snippet_node else ""
+                if title and url and snippet and _validate_outbound_url(url):
+                    results.append({"title": title, "url": url, "snippet": snippet, "source": "Bing Web"})
+    except Exception as exc:
+        logger.warning(f"Bing HTML search failed for '{query}': {exc}")
+    return results
+
+
 async def _duckduckgo_search(query: str, max_items: int = 8) -> List[Dict[str, str]]:
     """Execute DuckDuckGo Web & News search using python package or HTML fallback."""
     results = []
@@ -531,6 +568,7 @@ async def web_search(
     tasks = [
         _duckduckgo_search(clean_query, max_items=min(result_limit, 8)),
         _jina_search_items(clean_query, max_items=min(result_limit, 6)),
+        _bing_html_search(clean_query, max_items=min(result_limit, 8)),
     ]
     if needs_news:
         tasks.append(_google_news_search(clean_query, max_items=min(result_limit, 6)))
@@ -546,8 +584,13 @@ async def web_search(
         searx_items = await _searxng_search_items(clean_query, max_items=min(result_limit, 6))
         raw_items.extend(searx_items)
 
-    # 4. Academic/Encyclopedic fallbacks if live web results are sparse
-    if len(raw_items) < 3:
+    # 4. Academic/Encyclopedic fallback. Primary engines can return malformed
+    # placeholders, so count usable items rather than raw responses.
+    usable_before_fallback = [
+        item for item in raw_items
+        if str(item.get("title", "")).strip() and str(item.get("snippet", "")).strip()
+    ]
+    if len(usable_before_fallback) < 3:
         try:
             wiki_res = await _wikipedia_search(clean_query)
             if wiki_res and len(wiki_res.strip()) > 30:
