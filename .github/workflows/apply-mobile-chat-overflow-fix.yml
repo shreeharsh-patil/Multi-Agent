@@ -50,11 +50,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            frontend/src/app/(dashboard)/chat/page.tsx \
-            frontend/src/components/ui/scroll-area.tsx \
-            frontend/src/components/markdown-renderer.tsx \
-            frontend/src/components/image-preview-card.tsx \
-            frontend/src/app/shared/chat/[token]/page.tsx
+          git add -- \
+            'frontend/src/app/(dashboard)/chat/page.tsx' \
+            'frontend/src/components/ui/scroll-area.tsx' \
+            'frontend/src/components/markdown-renderer.tsx' \
+            'frontend/src/components/image-preview-card.tsx' \
+            'frontend/src/app/shared/chat/[token]/page.tsx'
           git commit -m "fix: keep mobile chat content inside viewport" || exit 0
           git push origin HEAD:${GITHUB_REF_NAME}
