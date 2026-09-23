@@ -87,9 +87,13 @@ def _use_compact_adk_boss(body: "ChatRequest", dynamic_plan: dict | None, automa
     planned_agent = steps[0].get("agent_id") if steps else None
     general_turn = planned_agent in (None, "knowledge")
     needs_full_runtime = bool(re.search(
-        r"(?i)\b(?:research|latest|current|search|calculate|calendar|drive|file|pdf|web|"
+        r"(?ix)(?:"
+        r"\b(?:research|latest|current|calculate|calendar|drive|file|pdf|web|"
         r"image|weather|news|price|stock|crypto|email|gmail|contact|task|schedule|"
-        r"code|debug|python|javascript|typescript|medical|health|finance)\b",
+        r"code|debug|python|javascript|typescript|medical|health|finance)\b|"
+        r"\bsearch\s+(?:the\s+)?(?:web|internet|google)\b|"
+        r"\bweb\s+search\b|\blook\s+up\b|\bfind\s+online\b"
+        r")",
         body.message,
     ))
     return bool(
