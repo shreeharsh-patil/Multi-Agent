@@ -32,6 +32,9 @@ jobs:
       - name: Apply shared UI fixes
         run: python .github/scripts/apply_shadcn_ui_quality_sweep.py
 
+      - name: Enforce accessible mobile viewport
+        run: python .github/scripts/fix_mobile_viewport_zoom.py
+
       - name: Restore Tailwind v3 compatibility tokens
         run: python .github/scripts/apply_tailwind_compat_tokens.py
 
