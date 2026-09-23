@@ -39,8 +39,6 @@ const courierPrime = Courier_Prime({
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 }
 
 export const metadata: Metadata = {
@@ -79,7 +77,7 @@ export default function RootLayout({
           <SessionProvider>
             {children}
           </SessionProvider>
-          <Toaster richColors position="top-right" />
+          <Toaster richColors closeButton position="top-right" />
         </ThemeProvider>
       </body>
     </html>

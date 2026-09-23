@@ -18,6 +18,24 @@ const config: Config = {
       },
     },
     extend: {
+      // Compatibility tokens used throughout the existing UI. These names are
+      // first-class in newer Tailwind/shadcn stacks but need explicit values
+      // while this app remains on Tailwind CSS v3.
+      spacing: {
+        '4.5': '1.125rem',
+      },
+      fontSize: {
+        '4.5xl': ['2.75rem', { lineHeight: '1' }],
+      },
+      boxShadow: {
+        xs: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+      },
+      transitionDuration: {
+        '350': '350ms',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
       fontFamily: {
         sans: ['var(--font-sans)', 'var(--font-ibm-plex)', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         serif: ['var(--font-serif)', 'Georgia', 'serif'],

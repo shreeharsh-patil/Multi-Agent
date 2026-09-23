@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -37,7 +37,12 @@ import {
   X,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Skeleton } from '@/components/ui/skeleton'
 import { openCommandPalette } from '@/components/command-palette'
+import { toast } from 'sonner'
 
 // Map existing functional routes to standard names from prompt style
 const navigation = [
@@ -72,13 +77,13 @@ export function Sidebar() {
   const { data: session } = useSession()
   const { isCollapsed, toggle, mobileMenuOpen, setMobileMenuOpen } = useSidebar()
   const collapsed = isCollapsed && !mobileMenuOpen
-  const mobileDrawerRef = useRef<HTMLElement>(null)
   
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
   const [conversationSearch, setConversationSearch] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [activeWorkspace, setActiveWorkspace] = useState('all')
+  const [deleteTarget, setDeleteTarget] = useState<SidebarConversation | null>(null)
 
   const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/')
   const [documents, setDocuments] = useState<any[]>([])
@@ -158,25 +163,6 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggle])
 
-  useEffect(() => {
-    if (!mobileMenuOpen) return
-
-    const previousOverflow = document.body.style.overflow
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
-    mobileDrawerRef.current?.focus()
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileMenuOpen(false)
-    }
-    window.addEventListener('keydown', handleEscape)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleEscape)
-      previouslyFocused?.focus()
-    }
-  }, [mobileMenuOpen, setMobileMenuOpen])
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -233,19 +219,19 @@ export function Sidebar() {
     setMobileMenuOpen(false)
   }
 
-  const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    e.preventDefault()
-    if (confirm('Delete this conversation?')) {
-      const res = await api.chat.deleteConversation(id)
-      if (res.success) {
-        setConversations(prev => prev.filter(c => c.id !== id))
-        if (pathname === `/chat` || pathname.startsWith(`/chat/`)) {
-          router.push('/chat')
-        }
-      } else {
-        console.error('Failed to delete conversation:', res.error)
+  const handleDeleteConversation = async () => {
+    if (!deleteTarget) return
+    const id = deleteTarget.id
+    const res = await api.chat.deleteConversation(id)
+    if (res.success) {
+      setConversations(prev => prev.filter(c => c.id !== id))
+      setDeleteTarget(null)
+      if (pathname === `/chat` || pathname.startsWith(`/chat/`)) {
+        router.push('/chat')
       }
+      toast.success('Conversation deleted')
+    } else {
+      toast.error(res.error || 'Failed to delete conversation')
     }
   }
 
@@ -329,7 +315,7 @@ export function Sidebar() {
                         <Pencil className="h-3 w-3 stroke-[1.5]" />
                       </button>
                       <button
-                        onClick={(e) => handleDeleteConversation(conv.id, e)}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDeleteTarget(conv) }}
                         className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground cursor-pointer"
                         title="Delete"
                         aria-label={`Delete ${conv.title}`}
@@ -437,6 +423,7 @@ export function Sidebar() {
                   href={item.href}
                   prefetch={true}
                   onClick={() => setMobileMenuOpen(false)}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     "flex items-center rounded-[8px] font-semibold text-sm transition-all duration-200 relative h-10",
                     (collapsed && !isMobile)
@@ -479,8 +466,10 @@ export function Sidebar() {
             
             <div className="px-1 max-h-[220px] overflow-y-auto scrollbar-thin">
               {loadingDocuments ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <div className="space-y-2 px-1 py-2" aria-label="Loading documents">
+                  <Skeleton className="h-8 w-full rounded-md" />
+                  <Skeleton className="h-8 w-11/12 rounded-md" />
+                  <Skeleton className="h-8 w-4/5 rounded-md" />
                 </div>
               ) : documents.length === 0 ? (
                 <div className="text-center py-6 text-[10px] text-muted-foreground px-2">
@@ -584,26 +573,36 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile Drawer (Fixed Overlay — Never affects or shrinks background layout) */}
-      {mobileMenuOpen && (
-        <>
-          <div 
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs lg:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-hidden="true"
-          />
-          <aside
-            ref={mobileDrawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation menu"
-            tabIndex={-1}
-            className="fixed inset-y-0 left-0 z-50 flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh w-[min(85vw,280px)] flex-col overflow-hidden border-r border-border bg-secondary pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-2xl outline-none animate-in slide-in-from-left duration-200 lg:hidden"
-          >
+      {/* Mobile navigation uses the shadcn Sheet primitive for focus trapping,
+          Escape handling, scroll locking, and accessible dialog semantics. */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent
+          side="left"
+          className="w-[min(88vw,20rem)] max-w-[20rem] gap-0 overflow-hidden border-r border-border bg-secondary p-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] [&>button]:hidden"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation menu</SheetTitle>
+          </SheetHeader>
+          <div className="flex h-full min-h-0 flex-col">
             {renderSidebarContent(true)}
-          </aside>
-        </>
-      )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete conversation?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? `“${deleteTarget.title}” will be permanently removed. This action cannot be undone.` : 'This conversation will be permanently removed.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteConversation}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Desktop Sidebar (In-flow flex layout item strictly for lg+ screens) */}
       <aside 
