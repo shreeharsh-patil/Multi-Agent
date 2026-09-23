@@ -362,6 +362,28 @@ async def _grounded_rescue(message: str) -> dict[str, Any] | None:
     search_results = "\n\n---\n\n".join(evidence_parts)
     citations = _citations_from_search_text(search_results)
     if not citations:
+        # Be tolerant to search-provider formatting changes. Only URLs returned
+        # by the actual search tool count as evidence; model text is never used
+        # to manufacture citations.
+        seen_urls: set[str] = set()
+        fallback_citations: list[dict[str, str]] = []
+        current_title = "Web source"
+        for raw_line in search_results.splitlines():
+            line = raw_line.strip()
+            heading = re.match(r"^###(?:\s+Source\s+\d+:|\s+\[[^]]+\])?\s*(.+)$", line, re.I)
+            if heading:
+                current_title = heading.group(1).strip() or "Web source"
+            for url in re.findall(r"https?://[^\s)<>\]\"']+", line, re.I):
+                clean_url = url.rstrip(".,;:")
+                if clean_url and clean_url not in seen_urls:
+                    seen_urls.add(clean_url)
+                    fallback_citations.append({
+                        "file_name": current_title,
+                        "text": clean_url,
+                        "url": clean_url,
+                    })
+        citations = fallback_citations
+    if not citations:
         return None
 
     prompt = (
