@@ -54,6 +54,7 @@ jobs:
       - name: Live PCCE Goa search smoke
         working-directory: backend
         env:
+          SECRET_KEY: github-actions-live-search-validation-key-20260923
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
         run: |
           python - <<'PY'
