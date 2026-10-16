@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { Download, Maximize2, X, RefreshCw, AlertCircle } from 'lucide-react'
+import { Download, Maximize2, RefreshCw, AlertCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { downloadSecureFile } from '@/lib/download'
 import { getAccessToken } from '@/lib/auth-store'
 
@@ -155,22 +157,14 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
               <p className="text-[11px] text-muted-foreground max-w-xs">{errorMessage}</p>
             )}
             <div className="mt-2 flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors cursor-pointer"
-              >
+              <Button type="button" variant="secondary" size="sm" onClick={handleRetry}>
                 <RefreshCw className="h-3.5 w-3.5" />
-                <span>Retry Loading</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors cursor-pointer"
-              >
+                Retry Loading
+              </Button>
+              <Button type="button" size="sm" onClick={handleDownload}>
                 <Download className="h-3.5 w-3.5" />
-                <span>Download File</span>
-              </button>
+                Download File
+              </Button>
             </div>
           </div>
         ) : (
@@ -231,47 +225,31 @@ export const ImagePreviewCard = React.memo(function ImagePreviewCard({ src, alt 
         )}
       </div>
 
-      {/* ChatGPT Style Fullscreen Lightbox Modal */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-50 flex h-screen h-[100svh] supports-[height:100dvh]:h-dvh items-center justify-center bg-black/85 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))] backdrop-blur-md animate-fade-in sm:p-4"
-          onClick={() => setIsOpen(false)}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent
+          className="flex h-[min(92dvh,900px)] max-w-5xl items-center justify-center border-white/10 bg-black/90 p-3 text-white sm:p-5"
+          showCloseButton
         >
-          <div
-            className="relative flex h-full max-h-full w-full max-w-4xl min-w-0 flex-col items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
+          <DialogTitle className="sr-only">{alt}</DialogTitle>
+          <DialogDescription className="sr-only">Full-size generated image preview.</DialogDescription>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            onClick={handleDownload}
+            className="absolute right-14 top-3 z-10 rounded-full bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            aria-label="Download image"
+            title="Download image"
           >
-            {/* Top Modal Toolbar */}
-            <div className="absolute right-0 top-0 z-10 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 cursor-pointer"
-                title="Download"
-                aria-label="Download image"
-              >
-                <Download className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 cursor-pointer"
-                title="Close"
-                aria-label="Close image preview"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* High Res Image */}
-            <img
-              src={activeImageSrc}
-              alt={alt}
-              className="max-h-full w-auto max-w-full rounded-xl border border-white/10 object-contain shadow-2xl"
-            />
-          </div>
-        </div>
-      )}
+            <Download className="h-5 w-5" />
+          </Button>
+          <img
+            src={activeImageSrc}
+            alt={alt}
+            className="max-h-full w-auto max-w-full rounded-xl border border-white/10 object-contain shadow-2xl"
+          />
+        </DialogContent>
+      </Dialog>
     </>
   )
 })

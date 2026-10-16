@@ -18,7 +18,6 @@ import {
   LogOut,
   User,
   Settings,
-  Bell,
   Menu,
 } from 'lucide-react'
 
@@ -42,15 +41,13 @@ export function TopBar() {
         </Button>
       </div>
 
-
+      <Link href="/dashboard" className="min-w-0 flex-1 truncate px-1 text-sm font-semibold tracking-tight text-foreground" aria-label="Go to dashboard">
+        Agentic
+      </Link>
 
       {/* Right Side Header Items */}
       <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
 
-        <Button variant="ghost" size="icon" className="relative hidden h-11 w-11 rounded-lg text-muted-foreground hover:bg-accent min-[360px]:inline-flex" aria-label="Notifications" title="Notifications">
-          <Bell className="h-4.5 w-4.5 stroke-[1.5] text-muted-foreground" />
-          <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-[#5db872]" />
-        </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
