@@ -5,6 +5,8 @@ import { Bot, MessageSquare, FileText, BookOpen, Sparkles, Loader2, Compass, Arr
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -234,10 +236,10 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-[8px] border border-red-200 bg-red-50 text-xs text-red-700">
-          {error}
-          <span className="text-[10px] ml-2 font-mono opacity-80">(Some stats may be incomplete)</span>
-        </div>
+        <Alert variant="destructive">
+          <AlertTitle>Dashboard data is partially unavailable</AlertTitle>
+          <AlertDescription>{error}. Some workspace totals may be incomplete.</AlertDescription>
+        </Alert>
       )}
 
       {/* Stats Grid using premium border-heavy cards */}
@@ -256,7 +258,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-4.5xl font-sans font-normal tracking-tight text-[#26251e]">
                 {loading ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <Skeleton className="h-9 w-16 rounded-md" />
                 ) : (
                   stats[stat.key]
                 )}
@@ -296,8 +298,17 @@ export default function DashboardPage() {
         </div>
 
         {loading ? (
-          <div className="flex h-40 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading recent work
+          <div className="space-y-1 p-3" aria-label="Loading recent work">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2 py-3">
+                <Skeleton className="h-8 w-8 rounded-md" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-2/5" />
+                  <Skeleton className="h-2.5 w-3/4" />
+                </div>
+                <Skeleton className="h-7 w-7 rounded-md" />
+              </div>
+            ))}
           </div>
         ) : visibleActivity.length > 0 ? (
           <div className="divide-y divide-border">
